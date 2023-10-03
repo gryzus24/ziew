@@ -30,18 +30,16 @@ pub const ProcStat = struct {
 
 pub fn widget(
     stream: anytype,
+    proc_stat: *const fs.File,
     prev: *ProcStat,
     cf: *const cfg.ConfigFormat,
     fg: *const cfg.ColorUnion,
     bg: *const cfg.ColorUnion,
 ) []const u8 {
-    const file = fs.cwd().openFileZ("/proc/stat", .{}) catch |err|
-        utl.fatal("CPU: open: {}", .{err});
-
-    defer file.close();
-
     var stat_buf: [128]u8 = undefined;
-    const nread = file.read(&stat_buf) catch |err|
+
+    proc_stat.seekTo(0) catch unreachable;
+    const nread = proc_stat.read(&stat_buf) catch |err|
         utl.fatal("CPU: read: {}", .{err});
 
     var state_fields = mem.tokenizeScalar(

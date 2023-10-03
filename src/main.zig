@@ -58,6 +58,27 @@ fn debugCC(config: *const cfg.Config) void {
     std.debug.print("\n", .{});
 }
 
+fn openProcFiles(dest: *[typ.WIDGETS_MAX]fs.File, widget_ids: []const typ.WidgetId) void {
+    const wid_to_path = blk: {
+        var w: [typ.WIDGETS_MAX][:0]const u8 = undefined;
+        w[@intFromEnum(typ.WidgetId.TIME)] = "";
+        w[@intFromEnum(typ.WidgetId.MEM)] = "/proc/meminfo";
+        w[@intFromEnum(typ.WidgetId.CPU)] = "/proc/stat";
+        w[@intFromEnum(typ.WidgetId.LOAD)] = "/proc/loadavg";
+        w[@intFromEnum(typ.WidgetId.DISK)] = "";
+        break :blk w;
+    };
+
+    for (widget_ids) |wid| {
+        const path = wid_to_path[@intFromEnum(wid)];
+        if (path.len > 0) {
+            dest[@intFromEnum(wid)] = fs.cwd().openFileZ(path, .{}) catch |err| {
+                utl.fatal("{s} open: {}", .{ path, err });
+            };
+        }
+    }
+}
+
 pub fn main() void {
     var _config_buf: [cfg.CONFIG_FILE_BYTES_MAX]u8 = undefined;
     var _config_mem: cfg.ConfigMem = undefined;
@@ -82,6 +103,24 @@ pub fn main() void {
     };
     if (err)
         config = cfg.defaultConfig(&_config_mem);
+
+    const sleep_intrvl = blk: {
+        // NOTE: gcd is the obvious choice here, but it might prove
+        //       disastrous if the interval is misconfigured...
+        var min = config.intervals[0];
+        for (config.intervals[1..]) |intrvl| if (intrvl < min) {
+            min = intrvl;
+        };
+        break :blk min;
+    };
+    const sleep_s = sleep_intrvl / 10;
+    const sleep_ns = (sleep_intrvl % 10) * time.ns_per_s / 10;
+
+    const wid_to_procfile = blk: {
+        var w: [typ.WIDGETS_MAX]fs.File = undefined;
+        openProcFiles(&w, config.widget_ids);
+        break :blk w;
+    };
 
     var _strftime_fmt_buf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     const strftime_fmt: ?[:0]const u8 = blk: {
@@ -121,18 +160,6 @@ pub fn main() void {
     var cpu_state: w_cpu.ProcStat = .{ .fields = .{0} ** 10 };
     var refresh_lags: [typ.WIDGETS_MAX]typ.DeciSec = .{0} ** typ.WIDGETS_MAX;
 
-    const sleep_intrvl = blk: {
-        // NOTE: gcd is the obvious choice here, but it might prove
-        //       disastrous if the interval is misconfigured...
-        var min = config.intervals[0];
-        for (config.intervals[1..]) |intrvl| if (intrvl < min) {
-            min = intrvl;
-        };
-        break :blk min;
-    };
-    const sleep_s = sleep_intrvl / 10;
-    const sleep_ns = (sleep_intrvl % 10) * time.ns_per_s / 10;
-
     const header =
         \\{"version":1}
         \\[[]
@@ -149,14 +176,15 @@ pub fn main() void {
             if (refresh_lags[i] == 0) {
                 refresh_lags[i] = intrvl;
 
-                const fg = &(config.wid_fgs[@intFromEnum(wid)]);
-                const bg = &(config.wid_bgs[@intFromEnum(wid)]);
+                const fg = &config.wid_fgs[@intFromEnum(wid)];
+                const bg = &config.wid_bgs[@intFromEnum(wid)];
+                const pf = &wid_to_procfile[@intFromEnum(wid)];
 
                 bufviews[i] = switch (wid) {
                     .TIME => w_time.widget(&timefbs, strftime_fmt.?, fg, bg),
-                    .MEM => w_mem.widget(&memfbs, &format, fg, bg),
-                    .CPU => w_cpu.widget(&cpufbs, &cpu_state, &format, fg, bg),
-                    .LOAD => w_load.widget(&loadfbs, &format, fg, bg),
+                    .MEM => w_mem.widget(&memfbs, pf, &format, fg, bg),
+                    .CPU => w_cpu.widget(&cpufbs, pf, &cpu_state, &format, fg, bg),
+                    .LOAD => w_load.widget(&loadfbs, pf, &format, fg, bg),
                     .DISK => w_dysk.widget(&diskfbs, &format, fg, bg),
                 };
             }

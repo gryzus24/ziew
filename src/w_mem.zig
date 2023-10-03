@@ -51,17 +51,15 @@ fn checkManyColors(
 
 pub fn widget(
     stream: anytype,
+    proc_meminfo: *const fs.File,
     cf: *const cfg.ConfigFormat,
     fg: *const cfg.ColorUnion,
     bg: *const cfg.ColorUnion,
 ) []const u8 {
-    const file = fs.cwd().openFileZ("/proc/meminfo", .{}) catch |err| {
-        utl.fatal("MEM: open: {}", .{err});
-    };
-    defer file.close();
-
     var meminfo_buf: [MEMINFO_BUF_SIZE]u8 = undefined;
-    _ = file.read(&meminfo_buf) catch |err| {
+
+    proc_meminfo.seekTo(0) catch unreachable;
+    _ = proc_meminfo.read(&meminfo_buf) catch |err| {
         utl.fatal("MEM: read: {}", .{err});
     };
 

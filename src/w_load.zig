@@ -7,17 +7,15 @@ const mem = std.mem;
 
 pub fn widget(
     stream: anytype,
+    proc_loadavg: *const fs.File,
     cf: *const cfg.ConfigFormat,
     fg: *const cfg.ColorUnion,
     bg: *const cfg.ColorUnion,
 ) []const u8 {
-    const file = fs.cwd().openFileZ("/proc/loadavg", .{}) catch |err|
-        utl.fatal("LOAD: open: {}", .{err});
-
-    defer file.close();
-
     var loadavg_buf: [64]u8 = undefined;
-    const nread = file.read(&loadavg_buf) catch |err|
+
+    proc_loadavg.seekTo(0) catch unreachable;
+    const nread = proc_loadavg.read(&loadavg_buf) catch |err|
         utl.fatal("LOAD: read: {}", .{err});
 
     var fields = mem.tokenizeScalar(u8, loadavg_buf[0..nread], ' ');
