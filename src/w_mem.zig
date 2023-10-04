@@ -58,9 +58,8 @@ pub fn widget(
 ) []const u8 {
     var meminfo_buf: [MEMINFO_BUF_SIZE]u8 = undefined;
 
-    proc_meminfo.seekTo(0) catch unreachable;
-    _ = proc_meminfo.read(&meminfo_buf) catch |err| {
-        utl.fatal("MEM: read: {}", .{err});
+    _ = proc_meminfo.pread(&meminfo_buf, 0) catch |err| {
+        utl.fatal("MEM: pread: {}", .{err});
     };
 
     var pos: usize = 0;

@@ -14,9 +14,8 @@ pub fn widget(
 ) []const u8 {
     var loadavg_buf: [64]u8 = undefined;
 
-    proc_loadavg.seekTo(0) catch unreachable;
-    const nread = proc_loadavg.read(&loadavg_buf) catch |err|
-        utl.fatal("LOAD: read: {}", .{err});
+    const nread = proc_loadavg.pread(&loadavg_buf, 0) catch |err|
+        utl.fatal("LOAD: pread: {}", .{err});
 
     var fields = mem.tokenizeScalar(u8, loadavg_buf[0..nread], ' ');
 

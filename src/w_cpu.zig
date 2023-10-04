@@ -38,9 +38,8 @@ pub fn widget(
 ) []const u8 {
     var stat_buf: [128]u8 = undefined;
 
-    proc_stat.seekTo(0) catch unreachable;
-    const nread = proc_stat.read(&stat_buf) catch |err|
-        utl.fatal("CPU: read: {}", .{err});
+    const nread = proc_stat.pread(&stat_buf, 0) catch |err|
+        utl.fatal("CPU: pread: {}", .{err});
 
     var state_fields = mem.tokenizeScalar(
         u8,
