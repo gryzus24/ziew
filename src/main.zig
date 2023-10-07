@@ -2,7 +2,7 @@ const std = @import("std");
 const cfg = @import("config.zig");
 const w_cpu = @import("w_cpu.zig");
 const w_dysk = @import("w_dysk.zig");
-const w_eth = @import("w_eth.zig");
+const w_net = @import("w_net.zig");
 const w_load = @import("w_load.zig");
 const w_mem = @import("w_mem.zig");
 const w_time = @import("w_time.zig");
@@ -144,6 +144,7 @@ pub fn main() void {
     var _loadbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _diskbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _ethbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
+    var _wlanbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
 
     var timefbs = io.fixedBufferStream(&_timebuf);
     var memfbs = io.fixedBufferStream(&_membuf);
@@ -151,6 +152,7 @@ pub fn main() void {
     var loadfbs = io.fixedBufferStream(&_loadbuf);
     var diskfbs = io.fixedBufferStream(&_diskbuf);
     var ethfbs = io.fixedBufferStream(&_ethbuf);
+    var wlanfbs = io.fixedBufferStream(&_wlanbuf);
 
     var bufviews: [typ.WIDGETS_MAX][]const u8 = undefined;
     var write_buffer: [2 + typ.WIDGETS_MAX * typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
@@ -187,7 +189,8 @@ pub fn main() void {
                     .CPU => w_cpu.widget(&cpufbs, pf, &cpu_state, &format, fg, bg),
                     .LOAD => w_load.widget(&loadfbs, pf, &format, fg, bg),
                     .DISK => w_dysk.widget(&diskfbs, &format, fg, bg),
-                    .ETH => w_eth.widget(&ethfbs, &format, fg, bg),
+                    .ETH => w_net.widget(&ethfbs, &format, fg, bg),
+                    .WLAN => w_net.widget(&wlanfbs, &format, fg, bg),
                 };
             }
         }

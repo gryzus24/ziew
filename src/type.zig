@@ -2,7 +2,7 @@ const std = @import("std");
 const utl = @import("util.zig");
 const mem = std.mem;
 
-pub const WidgetId = enum { TIME, MEM, CPU, LOAD, DISK, ETH };
+pub const WidgetId = enum { TIME, MEM, CPU, LOAD, DISK, ETH, WLAN };
 pub const WIDGETS_MAX = @typeInfo(WidgetId).Enum.fields.len;
 pub const WIDGET_BUF_BYTES_MAX = 128;
 
@@ -35,7 +35,14 @@ pub const DiskOpt = enum {
     @"-",
 };
 pub const EthOpt = enum { ifname, inet, flags, state, @"-" };
-pub const OPT_TYPES = .{ TimeOpt, MemOpt, CpuOpt, LoadOpt, DiskOpt, EthOpt };
+pub const WlanOpt = enum { ifname, inet, flags, state, @"-" };
+
+pub const OPT_TYPES = blk: {
+    const w = .{ TimeOpt, MemOpt, CpuOpt, LoadOpt, DiskOpt, EthOpt, WlanOpt };
+    if (w.len != WIDGETS_MAX)
+        @compileError("adjust OPT_TYPES");
+    break :blk w;
+};
 pub const OPTS_MAX = blk: {
     var max: usize = 0;
     for (OPT_TYPES) |t| {
@@ -89,7 +96,7 @@ pub fn strStartToWidEnum(str: []const u8) ?WidgetId {
 
 pub fn knobSupportsManyColors(wid: WidgetId) bool {
     return switch (wid) {
-        .MEM, .CPU, .DISK, .ETH => true,
+        .MEM, .CPU, .DISK, .ETH, .WLAN => true,
         .TIME, .LOAD => false,
     };
 }
@@ -98,16 +105,17 @@ pub fn knobValidManyColorsOptname(wid: WidgetId, optname: []const u8) bool {
     return switch (wid) {
         .TIME, .LOAD => false,
         .MEM, .CPU, .DISK => optname[0] == '%',
-        .ETH => mem.eql(u8, optname, "state"),
+        .ETH, .WLAN => mem.eql(u8, optname, "state"),
     };
 }
 
 pub fn knobVerifyArgs(wid: WidgetId, opts: [*]const u8, nparts: u8) void {
     switch (wid) {
-        .DISK, .ETH => {
+        .DISK, .ETH, .WLAN => {
             const sep_enum_value = switch (wid) {
                 .DISK => @intFromEnum(DiskOpt.@"-"),
                 .ETH => @intFromEnum(EthOpt.@"-"),
+                .WLAN => @intFromEnum(WlanOpt.@"-"),
                 else => unreachable,
             };
             const nargs = blk: {
@@ -120,7 +128,7 @@ pub fn knobVerifyArgs(wid: WidgetId, opts: [*]const u8, nparts: u8) void {
             if (nargs == 0 or opts[0] != sep_enum_value) {
                 const argname = switch (wid) {
                     .DISK => "<mountpoint>",
-                    .ETH => "<interface>",
+                    .ETH, .WLAN => "<interface>",
                     else => unreachable,
                 };
                 utl.fatal("config: {s}: requires argument {s}", .{ @tagName(wid), argname });

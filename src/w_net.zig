@@ -15,7 +15,7 @@ fn getIoctlSocket() os.socket_t {
         return sock;
     } else {
         const sock = os.socket(os.AF.INET, os.SOCK.DGRAM, 0) catch |err| {
-            utl.fatal("ETH: socket: {}", .{err});
+            utl.fatal("NET: socket: {}", .{err});
         };
         _ioctl_sock = sock;
         return sock;
@@ -47,7 +47,7 @@ fn getInet(
         },
         .ADDRNOTAVAIL => "<unavailable>",
         .NODEV => "<no device>",
-        else => utl.fatal("ETH: inet: {}", .{e}),
+        else => utl.fatal("NET: inet: {}", .{e}),
     };
 }
 
@@ -95,7 +95,7 @@ fn getFlags(
             flagsbuf[0] = '-';
             break :blk flagsbuf[0..1];
         },
-        else => utl.fatal("ETH: flags: {}", .{e}),
+        else => utl.fatal("NET: flags: {}", .{e}),
     };
 }
 
@@ -119,7 +119,7 @@ pub fn widget(
     const ifname: [:0]u8 = blk: {
         const arg = cf.parts[0];
         if (arg.len >= ifr.ifrn.name.len)
-            utl.fatal("ETH: interface name too long: '{s}'", .{arg});
+            utl.fatal("NET: interface name too long: '{s}'", .{arg});
         @memcpy(ifr.ifrn.name[0..arg.len], arg);
         ifr.ifrn.name[arg.len] = '\x00';
         break :blk ifr.ifrn.name[0..arg.len :0];
