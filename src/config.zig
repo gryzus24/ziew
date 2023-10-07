@@ -7,11 +7,6 @@ const io = std.io;
 const mem = std.mem;
 const os = std.os;
 
-const INTERVAL_DEFAULT: typ.DeciSec = 50;
-const INTERVAL_MAX = 1 << (@sizeOf(typ.DeciSec) * 8 - 1);
-
-const COLORS_MAX = 10;
-
 pub const Color = struct {
     thresh: u8,
     hex: [7]u8,
@@ -28,11 +23,7 @@ pub const ColorUnion = union(enum) {
     color: ManyColors,
 };
 
-pub const Alignment = enum {
-    none,
-    right,
-    left,
-};
+pub const Alignment = enum { none, right, left };
 
 pub const ConfigFormatMem = struct {
     parts: [typ.PARTS_MAX][]const u8,
@@ -121,6 +112,166 @@ pub fn readFile(buf: *[CONFIG_FILE_BYTES_MAX]u8) error{FileNotFound}![]const u8 
     };
     return buf[0..nread];
 }
+
+pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
+    var nwidgets: u32 = 0;
+    var lines = mem.tokenizeScalar(u8, buf, '\n');
+    var seen: [typ.WIDGETS_MAX]bool = .{false} ** typ.WIDGETS_MAX;
+    var errpos: usize = 0;
+
+    for (0..typ.WIDGETS_MAX) |i| {
+        config_mem.wid_fg_buf[i] = .{ .nocolor = {} };
+        config_mem.wid_bg_buf[i] = .{ .nocolor = {} };
+    }
+
+    while (lines.next()) |line| {
+        if (line[0] == '#')
+            continue;
+
+        if (mem.startsWith(u8, line, "FG") or mem.startsWith(u8, line, "BG")) {
+            const isfg = mem.startsWith(u8, line, "FG");
+            const fg_colors = &config_mem.wid_fg_colors_buf;
+            const bg_colors = &config_mem.wid_bg_colors_buf;
+
+            var wid: u8 = undefined;
+            const config_color = parseColorLine(
+                line,
+                2,
+                &wid,
+                if (isfg) fg_colors else bg_colors,
+                &errpos,
+            ) catch |err| {
+                utl.fatalPos(
+                    "config: {}: {s}",
+                    .{ err, line },
+                    fmt.count("config: {}: ", .{err}) + errpos,
+                );
+            };
+            if (isfg) {
+                config_mem.wid_fg_buf[wid] = config_color;
+            } else {
+                config_mem.wid_bg_buf[wid] = config_color;
+            }
+            continue;
+        }
+
+        const wid = typ.strStartToWidEnum(line) orelse {
+            utl.warn("config: unknown widget: '{s}'", .{line});
+            continue;
+        };
+
+        const wid_int = @intFromEnum(wid);
+        if (!seen[wid_int]) {
+            parseWidgetLine(
+                line,
+                @tagName(wid).len,
+                wid_int,
+                nwidgets,
+                config_mem,
+                &errpos,
+            ) catch |err| {
+                utl.fatalPos(
+                    "config: {}: {s}",
+                    .{ err, line },
+                    fmt.count("config: {}: ", .{err}) + errpos,
+                );
+            };
+
+            seen[wid_int] = true;
+            config_mem.widget_ids_buf[nwidgets] = wid;
+            typ.knobVerifyArgs(
+                wid,
+                config_mem.formats_buf[nwidgets].opts,
+                config_mem.formats_buf[nwidgets].nparts,
+            );
+            nwidgets += 1;
+        }
+    }
+    return .{
+        .widget_ids = config_mem.widget_ids_buf[0..nwidgets],
+        .intervals = config_mem.intervals_buf[0..nwidgets],
+        .formats = config_mem.formats_buf[0..nwidgets],
+        .wid_fgs = &config_mem.wid_fg_buf,
+        .wid_bgs = &config_mem.wid_bg_buf,
+    };
+}
+
+test "config parse" {
+    const t = std.testing;
+
+    var buf = "LOAD 10 \"{1}{5}{15}\"";
+    var cm: ConfigMem = undefined;
+
+    var conf = parse(buf, &cm);
+    try t.expect(conf.widget_ids.len == 1);
+    try t.expect(conf.widget_ids[0] == .LOAD);
+    try t.expect(conf.intervals.len == 1);
+    try t.expect(conf.intervals[0] == 10);
+    try t.expect(conf.formats.len == 1);
+    // t.expectEqualSlices does not work
+    for (conf.formats[0].parts) |part| {
+        if (!mem.eql(u8, part, ""))
+            return error.TestUnexpectedResult;
+    }
+    try t.expectEqualSlices(u8, conf.formats[0].opts, &[3]u8{
+        @intFromEnum(typ.LoadOpt.@"1"),
+        @intFromEnum(typ.LoadOpt.@"5"),
+        @intFromEnum(typ.LoadOpt.@"15"),
+    });
+    try t.expect(conf.formats[0].flags == 0x07);
+
+    conf = defaultConfig(&cm);
+    try t.expect(conf.widget_ids.len == 3);
+    try t.expect(conf.widget_ids[0] == .CPU);
+    try t.expect(conf.widget_ids[1] == .MEM);
+    try t.expect(conf.widget_ids[2] == .TIME);
+    try t.expect(conf.intervals.len == 3);
+    try t.expect(conf.intervals[0] == 30);
+    try t.expect(conf.intervals[1] == 30);
+    try t.expect(conf.intervals[2] == 10);
+    try t.expect(conf.formats.len == 3);
+
+    try t.expect(conf.formats[0].parts.len == 2);
+    try t.expect(mem.eql(u8, conf.formats[0].parts[0], "CPU: "));
+    try t.expect(mem.eql(u8, conf.formats[0].parts[1], "%"));
+    try t.expect(conf.formats[0].opts.len == 1);
+    try t.expect(conf.formats[0].opts[0] == @intFromEnum(typ.CpuOpt.all));
+    try t.expect(conf.formats[0].flags == 0x01);
+
+    try t.expect(conf.formats[1].parts.len == 4);
+    try t.expect(mem.eql(u8, conf.formats[1].parts[0], "MEM: "));
+    try t.expect(mem.eql(u8, conf.formats[1].parts[1], " : "));
+    try t.expect(mem.eql(u8, conf.formats[1].parts[2], " [+"));
+    try t.expect(mem.eql(u8, conf.formats[1].parts[3], "]"));
+    try t.expect(conf.formats[1].opts.len == 3);
+    try t.expect(conf.formats[1].opts[0] == @intFromEnum(typ.MemOpt.used));
+    try t.expect(conf.formats[1].opts[1] == @intFromEnum(typ.MemOpt.free));
+    try t.expect(conf.formats[1].opts[2] == @intFromEnum(typ.MemOpt.cached));
+    try t.expect(conf.formats[1].flags == 0x25);
+
+    try t.expect(conf.formats[2].parts.len == 1);
+    try t.expect(mem.eql(u8, conf.formats[2].parts[0], "%A  %d.%m ~ %H:%M:%S"));
+    try t.expect(conf.formats[2].opts.len == 0);
+    try t.expect(conf.formats[2].flags == 0x00);
+}
+
+pub fn defaultConfig(config_mem: *ConfigMem) Config {
+    const default_config =
+        \\ETH  10 "enp5s0{-}{ifname}: {inet} {flags}"
+        \\DISK 10 "/home{-}/home {free}"
+        \\CPU  10 "CPU{%all.1>}"
+        \\MEM  10 "MEM {used} : {free} [{cached.0}]"
+        \\TIME 10 "%A %d.%m ~ %H:%M:%S"
+    ;
+    return parse(default_config, config_mem);
+}
+
+// == private ==
+
+const INTERVAL_DEFAULT: typ.DeciSec = 50;
+const INTERVAL_MAX = 1 << (@sizeOf(typ.DeciSec) * 8 - 1);
+
+const COLORS_MAX = 10;
 
 fn parseConfigFormat(
     str: []const u8,
@@ -357,7 +508,7 @@ fn parseColorLine(
     while (fields.next()) |field| : (nfields += 1) {
         switch (nfields) {
             0 => {
-                if (typ.widStrToEnum(field)) |ret| {
+                if (typ.strToWidEnum(field)) |ret| {
                     wid_out.* = @intFromEnum(ret);
                 } else {
                     return error.UnknownWidget;
@@ -365,8 +516,8 @@ fn parseColorLine(
             },
             1 => {
                 const _wid = @as(typ.WidgetId, @enumFromInt(wid_out.*));
-                if (_wid == .MEM or _wid == .CPU or _wid == .DISK) {
-                    if (field[0] == '%') {
+                if (typ.knobSupportsManyColors(_wid)) {
+                    if (typ.knobValidManyColorsOptname(_wid, field)) {
                         for (typ.WID_TO_OPT_NAMES[wid_out.*], 0..) |name, j| {
                             if (mem.eql(u8, field, name)) {
                                 opt = @intCast(j);
@@ -423,178 +574,4 @@ fn parseColorLine(
             .colors = colors[wid_out.*][0..ncolors],
         },
     };
-}
-
-pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
-    var nwidgets: u32 = 0;
-    var lines = mem.tokenizeScalar(u8, buf, '\n');
-    var seen: [typ.WIDGETS_MAX]bool = .{false} ** typ.WIDGETS_MAX;
-    var errpos: usize = 0;
-
-    for (0..typ.WIDGETS_MAX) |i| {
-        config_mem.wid_fg_buf[i] = .{ .nocolor = {} };
-        config_mem.wid_bg_buf[i] = .{ .nocolor = {} };
-    }
-
-    while (lines.next()) |line| {
-        if (line[0] == '#')
-            continue;
-
-        if (mem.startsWith(u8, line, "FG") or mem.startsWith(u8, line, "BG")) {
-            const isfg = mem.startsWith(u8, line, "FG");
-            const fg_colors = &config_mem.wid_fg_colors_buf;
-            const bg_colors = &config_mem.wid_bg_colors_buf;
-
-            var wid: u8 = undefined;
-            const config_color = parseColorLine(
-                line,
-                2,
-                &wid,
-                if (isfg) fg_colors else bg_colors,
-                &errpos,
-            ) catch |err| {
-                utl.fatalPos(
-                    "config: {}: {s}",
-                    .{ err, line },
-                    fmt.count("config: {}: ", .{err}) + errpos,
-                );
-            };
-            if (isfg) {
-                config_mem.wid_fg_buf[wid] = config_color;
-            } else {
-                config_mem.wid_bg_buf[wid] = config_color;
-            }
-            continue;
-        }
-
-        var wid: typ.WidgetId = undefined;
-        if (mem.startsWith(u8, line, "TIME")) {
-            wid = typ.WidgetId.TIME;
-        } else if (mem.startsWith(u8, line, "MEM")) {
-            wid = typ.WidgetId.MEM;
-        } else if (mem.startsWith(u8, line, "CPU")) {
-            wid = typ.WidgetId.CPU;
-        } else if (mem.startsWith(u8, line, "LOAD")) {
-            wid = typ.WidgetId.LOAD;
-        } else if (mem.startsWith(u8, line, "DISK")) {
-            wid = typ.WidgetId.DISK;
-        } else {
-            utl.warn("config: unknown widget: '{s}'", .{line});
-            continue;
-        }
-
-        const wid_int = @intFromEnum(wid);
-        if (!seen[wid_int]) {
-            parseWidgetLine(
-                line,
-                @tagName(wid).len,
-                wid_int,
-                nwidgets,
-                config_mem,
-                &errpos,
-            ) catch |err| {
-                utl.fatalPos(
-                    "config: {}: {s}",
-                    .{ err, line },
-                    fmt.count("config: {}: ", .{err}) + errpos,
-                );
-            };
-
-            seen[wid_int] = true;
-            config_mem.widget_ids_buf[nwidgets] = wid;
-
-            if (wid == typ.WidgetId.DISK) {
-                const opts = config_mem.formats_buf[nwidgets].opts;
-                const nopts = config_mem.formats_buf[nwidgets].nparts - 1;
-                const nargs = blk: {
-                    var n: u8 = 0;
-                    for (0..nopts) |i| if (opts[i] == @intFromEnum(typ.DiskOpt.@"-")) {
-                        n += 1;
-                    };
-                    break :blk n;
-                };
-                if (nargs == 0 or opts[0] != @intFromEnum(typ.DiskOpt.@"-"))
-                    utl.fatal("config: DISK: requires argument <mountpoint>", .{});
-                if (nargs > 1)
-                    utl.fatal("config: DISK: too many arguments", .{});
-            }
-            nwidgets += 1;
-        }
-    }
-    return .{
-        .widget_ids = config_mem.widget_ids_buf[0..nwidgets],
-        .intervals = config_mem.intervals_buf[0..nwidgets],
-        .formats = config_mem.formats_buf[0..nwidgets],
-        .wid_fgs = &config_mem.wid_fg_buf,
-        .wid_bgs = &config_mem.wid_bg_buf,
-    };
-}
-
-test "config parse" {
-    const t = std.testing;
-
-    var buf = "LOAD 10 \"{1}{5}{15}\"";
-    var cm: ConfigMem = undefined;
-
-    var conf = parse(buf, &cm);
-    try t.expect(conf.widget_ids.len == 1);
-    try t.expect(conf.widget_ids[0] == .LOAD);
-    try t.expect(conf.intervals.len == 1);
-    try t.expect(conf.intervals[0] == 10);
-    try t.expect(conf.formats.len == 1);
-    // t.expectEqualSlices does not work
-    for (conf.formats[0].parts) |part| {
-        if (!mem.eql(u8, part, ""))
-            return error.TestUnexpectedResult;
-    }
-    try t.expectEqualSlices(u8, conf.formats[0].opts, &[3]u8{
-        @intFromEnum(typ.LoadOpt.@"1"),
-        @intFromEnum(typ.LoadOpt.@"5"),
-        @intFromEnum(typ.LoadOpt.@"15"),
-    });
-    try t.expect(conf.formats[0].flags == 0x07);
-
-    conf = defaultConfig(&cm);
-    try t.expect(conf.widget_ids.len == 3);
-    try t.expect(conf.widget_ids[0] == .CPU);
-    try t.expect(conf.widget_ids[1] == .MEM);
-    try t.expect(conf.widget_ids[2] == .TIME);
-    try t.expect(conf.intervals.len == 3);
-    try t.expect(conf.intervals[0] == 30);
-    try t.expect(conf.intervals[1] == 30);
-    try t.expect(conf.intervals[2] == 10);
-    try t.expect(conf.formats.len == 3);
-
-    try t.expect(conf.formats[0].parts.len == 2);
-    try t.expect(mem.eql(u8, conf.formats[0].parts[0], "CPU: "));
-    try t.expect(mem.eql(u8, conf.formats[0].parts[1], "%"));
-    try t.expect(conf.formats[0].opts.len == 1);
-    try t.expect(conf.formats[0].opts[0] == @intFromEnum(typ.CpuOpt.all));
-    try t.expect(conf.formats[0].flags == 0x01);
-
-    try t.expect(conf.formats[1].parts.len == 4);
-    try t.expect(mem.eql(u8, conf.formats[1].parts[0], "MEM: "));
-    try t.expect(mem.eql(u8, conf.formats[1].parts[1], " : "));
-    try t.expect(mem.eql(u8, conf.formats[1].parts[2], " [+"));
-    try t.expect(mem.eql(u8, conf.formats[1].parts[3], "]"));
-    try t.expect(conf.formats[1].opts.len == 3);
-    try t.expect(conf.formats[1].opts[0] == @intFromEnum(typ.MemOpt.used));
-    try t.expect(conf.formats[1].opts[1] == @intFromEnum(typ.MemOpt.free));
-    try t.expect(conf.formats[1].opts[2] == @intFromEnum(typ.MemOpt.cached));
-    try t.expect(conf.formats[1].flags == 0x25);
-
-    try t.expect(conf.formats[2].parts.len == 1);
-    try t.expect(mem.eql(u8, conf.formats[2].parts[0], "%A  %d.%m ~ %H:%M:%S"));
-    try t.expect(conf.formats[2].opts.len == 0);
-    try t.expect(conf.formats[2].flags == 0x00);
-}
-
-pub fn defaultConfig(config_mem: *ConfigMem) Config {
-    const default_config =
-        \\DISK 10 "/home{-}/home {free}"
-        \\CPU  10 "CPU{%all.1>}%"
-        \\MEM  10 "MEM {used.1} : {available.1} [{cached.0}]"
-        \\TIME 10 "%A %d.%m ~ %H:%M:%S"
-    ;
-    return parse(default_config, config_mem);
 }

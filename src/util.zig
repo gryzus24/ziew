@@ -5,8 +5,10 @@ const io = std.io;
 const os = std.os;
 
 pub const c = @cImport({
-    @cInclude("sys/statfs.h");
-    @cInclude("time.h");
+    @cInclude("net/if.h"); // IFF_* definitions
+    @cInclude("sys/ioctl.h"); // SIOCGIFADDR, SIOCGIFFLAGS definitions
+    @cInclude("sys/statfs.h"); // statfs()
+    @cInclude("time.h"); // strftime() etc.
 });
 
 pub const NumUnit = struct {

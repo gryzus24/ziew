@@ -2,6 +2,7 @@ const std = @import("std");
 const cfg = @import("config.zig");
 const w_cpu = @import("w_cpu.zig");
 const w_dysk = @import("w_dysk.zig");
+const w_eth = @import("w_eth.zig");
 const w_load = @import("w_load.zig");
 const w_mem = @import("w_mem.zig");
 const w_time = @import("w_time.zig");
@@ -60,12 +61,10 @@ fn debugCC(config: *const cfg.Config) void {
 
 fn openProcFiles(dest: *[typ.WIDGETS_MAX]fs.File, widget_ids: []const typ.WidgetId) void {
     const wid_to_path = blk: {
-        var w: [typ.WIDGETS_MAX][:0]const u8 = undefined;
-        w[@intFromEnum(typ.WidgetId.TIME)] = "";
+        var w: [typ.WIDGETS_MAX][:0]const u8 = .{""} ** typ.WIDGETS_MAX;
         w[@intFromEnum(typ.WidgetId.MEM)] = "/proc/meminfo";
         w[@intFromEnum(typ.WidgetId.CPU)] = "/proc/stat";
         w[@intFromEnum(typ.WidgetId.LOAD)] = "/proc/loadavg";
-        w[@intFromEnum(typ.WidgetId.DISK)] = "";
         break :blk w;
     };
 
@@ -144,12 +143,14 @@ pub fn main() void {
     var _cpubuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _loadbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _diskbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
+    var _ethbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
 
     var timefbs = io.fixedBufferStream(&_timebuf);
     var memfbs = io.fixedBufferStream(&_membuf);
     var cpufbs = io.fixedBufferStream(&_cpubuf);
     var loadfbs = io.fixedBufferStream(&_loadbuf);
     var diskfbs = io.fixedBufferStream(&_diskbuf);
+    var ethfbs = io.fixedBufferStream(&_ethbuf);
 
     var bufviews: [typ.WIDGETS_MAX][]const u8 = undefined;
     var write_buffer: [2 + typ.WIDGETS_MAX * typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
@@ -186,6 +187,7 @@ pub fn main() void {
                     .CPU => w_cpu.widget(&cpufbs, pf, &cpu_state, &format, fg, bg),
                     .LOAD => w_load.widget(&loadfbs, pf, &format, fg, bg),
                     .DISK => w_dysk.widget(&diskfbs, &format, fg, bg),
+                    .ETH => w_eth.widget(&ethfbs, &format, fg, bg),
                 };
             }
         }
