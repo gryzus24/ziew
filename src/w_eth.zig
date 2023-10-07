@@ -51,7 +51,12 @@ fn getInet(
     };
 }
 
-fn getFlags(sock: os.socket_t, ifr: *const os.linux.ifreq, flagsbuf: *[6]u8) []const u8 {
+fn getFlags(
+    sock: os.socket_t,
+    ifr: *const os.linux.ifreq,
+    flagsbuf: *[6]u8,
+    ok: *bool,
+) []const u8 {
     // interestingly, the SIOCGIF*P*FLAGS ioctl is not implemented for INET?
     // check switch prong of: v6.6-rc3/source/net/ipv4/af_inet.c#L974
     const e = os.linux.getErrno(os.linux.ioctl(sock, c.SIOCGIFFLAGS, @intFromPtr(ifr)));
@@ -76,6 +81,7 @@ fn getFlags(sock: os.socket_t, ifr: *const os.linux.ifreq, flagsbuf: *[6]u8) []c
                 n += 1;
             }
             if (ifr.ifru.flags & c.IFF_RUNNING == c.IFF_RUNNING) {
+                ok.* = true;
                 flagsbuf[n] = 'R';
                 n += 1;
             }
@@ -125,22 +131,20 @@ pub fn widget(
     var inet: []const u8 = undefined;
     var flags: []const u8 = undefined;
     var state_up: bool = false;
+    var wants_state: bool = false;
 
     for (1..cf.nparts - 1) |i| {
         switch (@as(typ.EthOpt, @enumFromInt(cf.opts[i]))) {
             .ifname => {},
-            .inet => {
-                inet = getInet(sock, &ifr, &_inetbuf, &state_up);
-            },
-            .flags => {
-                flags = getFlags(sock, &ifr, &_flagsbuf);
-                if (flags[flags.len - 1] == 'U')
-                    state_up = true;
-            },
-            .state => {},
+            .inet => inet = getInet(sock, &ifr, &_inetbuf, &state_up),
+            .flags => flags = getFlags(sock, &ifr, &_flagsbuf, &state_up),
+            .state => wants_state = true,
             .@"-" => unreachable,
         }
     }
+    // neither inet nor flags got polled - get state only
+    if (wants_state and _inetbuf[0] == 0 and _flagsbuf[0] == 0)
+        _ = getInet(sock, &ifr, &_inetbuf, &state_up);
 
     const fg_hex = switch (fg.*) {
         .nocolor => null,
@@ -162,12 +166,7 @@ pub fn widget(
             .ifname => utl.writeStr(writer, ifname),
             .inet => utl.writeStr(writer, inet),
             .flags => utl.writeStr(writer, flags),
-            .state => {
-                // neither inet nor flags got polled - get state only
-                if (_inetbuf[0] == 0 and _flagsbuf[0] == 0)
-                    _ = getInet(sock, &ifr, &_inetbuf, &state_up);
-                utl.writeStr(writer, if (state_up) "up" else "down");
-            },
+            .state => utl.writeStr(writer, if (state_up) "up" else "down"),
             .@"-" => unreachable,
         }
         utl.writeStr(writer, cf.parts[1 + i]);
