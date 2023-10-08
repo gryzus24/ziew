@@ -199,60 +199,53 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
 test "config parse" {
     const t = std.testing;
 
-    var buf = "LOAD 10 \"{1}{5}{15}\"";
+    var buf =
+        \\CPU 0 "{%user}{%sys}"
+        \\FG CPU %all 0:fff 10:#999
+        \\BG CPU 282828
+    ;
     var cm: ConfigMem = undefined;
 
     var conf = parse(buf, &cm);
     try t.expect(conf.widget_ids.len == 1);
-    try t.expect(conf.widget_ids[0] == .LOAD);
-    try t.expect(conf.intervals.len == 1);
-    try t.expect(conf.intervals[0] == 10);
-    try t.expect(conf.formats.len == 1);
-    // t.expectEqualSlices does not work
-    for (conf.formats[0].parts) |part| {
-        if (!mem.eql(u8, part, ""))
-            return error.TestUnexpectedResult;
-    }
-    try t.expectEqualSlices(u8, conf.formats[0].opts, &[3]u8{
-        @intFromEnum(typ.LoadOpt.@"1"),
-        @intFromEnum(typ.LoadOpt.@"5"),
-        @intFromEnum(typ.LoadOpt.@"15"),
-    });
-    try t.expect(conf.formats[0].flags == 0x07);
-
-    conf = defaultConfig(&cm);
-    try t.expect(conf.widget_ids.len == 3);
     try t.expect(conf.widget_ids[0] == .CPU);
-    try t.expect(conf.widget_ids[1] == .MEM);
-    try t.expect(conf.widget_ids[2] == .TIME);
-    try t.expect(conf.intervals.len == 3);
-    try t.expect(conf.intervals[0] == 30);
-    try t.expect(conf.intervals[1] == 30);
-    try t.expect(conf.intervals[2] == 10);
-    try t.expect(conf.formats.len == 3);
 
-    try t.expect(conf.formats[0].parts.len == 2);
-    try t.expect(mem.eql(u8, conf.formats[0].parts[0], "CPU: "));
-    try t.expect(mem.eql(u8, conf.formats[0].parts[1], "%"));
-    try t.expect(conf.formats[0].opts.len == 1);
-    try t.expect(conf.formats[0].opts[0] == @intFromEnum(typ.CpuOpt.all));
-    try t.expect(conf.formats[0].flags == 0x01);
+    try t.expect(conf.intervals.len == 1);
+    try t.expect(conf.intervals[0] == INTERVAL_MAX);
 
-    try t.expect(conf.formats[1].parts.len == 4);
-    try t.expect(mem.eql(u8, conf.formats[1].parts[0], "MEM: "));
-    try t.expect(mem.eql(u8, conf.formats[1].parts[1], " : "));
-    try t.expect(mem.eql(u8, conf.formats[1].parts[2], " [+"));
-    try t.expect(mem.eql(u8, conf.formats[1].parts[3], "]"));
-    try t.expect(conf.formats[1].opts.len == 3);
-    try t.expect(conf.formats[1].opts[0] == @intFromEnum(typ.MemOpt.used));
-    try t.expect(conf.formats[1].opts[1] == @intFromEnum(typ.MemOpt.free));
-    try t.expect(conf.formats[1].opts[2] == @intFromEnum(typ.MemOpt.cached));
-    try t.expect(conf.formats[1].flags == 0x25);
+    try t.expect(conf.formats.len == 1);
+    try t.expect(conf.formats[0].nparts == 3);
+    try t.expect(mem.eql(u8, conf.formats[0].parts[0], ""));
+    try t.expect(mem.eql(u8, conf.formats[0].parts[1], ""));
+    try t.expect(mem.eql(u8, conf.formats[0].parts[2], ""));
 
-    try t.expect(conf.formats[2].parts.len == 1);
-    try t.expect(mem.eql(u8, conf.formats[2].parts[0], "%A  %d.%m ~ %H:%M:%S"));
-    try t.expect(conf.formats[2].opts.len == 0);
-    try t.expect(conf.formats[2].flags == 0x00);
+    try t.expect(conf.formats[0].opts[0] == @intFromEnum(typ.CpuOpt.@"%user"));
+    try t.expect(conf.formats[0].opts[1] == @intFromEnum(typ.CpuOpt.@"%sys"));
+
+    try t.expect(conf.formats[0].opts_precision[0] == OPT_PRECISION_DEFAULT);
+    try t.expect(conf.formats[0].opts_precision[1] == OPT_PRECISION_DEFAULT);
+
+    try t.expect(conf.formats[0].opts_alignment[0] == OPT_ALIGNMENT_DEFAULT);
+    try t.expect(conf.formats[0].opts_alignment[1] == OPT_ALIGNMENT_DEFAULT);
+
+    switch (conf.wid_fgs[@intFromEnum(typ.WidgetId.CPU)]) {
+        .nocolor, .default => return error.TestUnexpectedResult,
+        .color => |w| {
+            try t.expect(w.opt == @intFromEnum(typ.CpuOpt.@"%all"));
+            try t.expect(w.colors.len == 2);
+            try t.expect(w.colors[0].thresh == 0);
+            try t.expect(mem.eql(u8, &w.colors[0].hex, "#ffffff"));
+            try t.expect(w.colors[1].thresh == 10);
+            try t.expect(mem.eql(u8, &w.colors[1].hex, "#999999"));
+        },
+    }
+    switch (conf.wid_bgs[@intFromEnum(typ.WidgetId.CPU)]) {
+        .nocolor, .color => return error.TestUnexpectedResult,
+        .default => |w| {
+            try t.expect(w.thresh == 0);
+            try t.expect(mem.eql(u8, &w.hex, "#282828"));
+        },
+    }
 }
 
 pub fn defaultConfig(config_mem: *ConfigMem) Config {
@@ -270,6 +263,9 @@ pub fn defaultConfig(config_mem: *ConfigMem) Config {
 
 const INTERVAL_DEFAULT: typ.DeciSec = 50;
 const INTERVAL_MAX = 1 << (@sizeOf(typ.DeciSec) * 8 - 1);
+
+const OPT_PRECISION_DEFAULT = 1;
+const OPT_ALIGNMENT_DEFAULT = .none;
 
 const COLORS_MAX = 10;
 
@@ -316,8 +312,8 @@ fn parseConfigFormat(
                             continue;
 
                         // defaults
-                        format_mem.opts_precision[nparts - 1] = 1;
-                        format_mem.opts_alignment[nparts - 1] = .none;
+                        format_mem.opts_precision[nparts - 1] = OPT_PRECISION_DEFAULT;
+                        format_mem.opts_alignment[nparts - 1] = OPT_ALIGNMENT_DEFAULT;
 
                         // has any specifiers?
                         if (end + 1 < optbuf_i) {
