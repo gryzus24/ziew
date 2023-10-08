@@ -3,7 +3,6 @@ const cfg = @import("config.zig");
 const w_cpu = @import("w_cpu.zig");
 const w_dysk = @import("w_dysk.zig");
 const w_net = @import("w_net.zig");
-const w_load = @import("w_load.zig");
 const w_mem = @import("w_mem.zig");
 const w_time = @import("w_time.zig");
 const typ = @import("type.zig");
@@ -64,7 +63,6 @@ fn openProcFiles(dest: *[typ.WIDGETS_MAX]fs.File, widget_ids: []const typ.Widget
         var w: [typ.WIDGETS_MAX][:0]const u8 = .{""} ** typ.WIDGETS_MAX;
         w[@intFromEnum(typ.WidgetId.MEM)] = "/proc/meminfo";
         w[@intFromEnum(typ.WidgetId.CPU)] = "/proc/stat";
-        w[@intFromEnum(typ.WidgetId.LOAD)] = "/proc/loadavg";
         break :blk w;
     };
 
@@ -141,7 +139,6 @@ pub fn main() void {
     var _timebuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _membuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _cpubuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
-    var _loadbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _diskbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _ethbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _wlanbuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
@@ -149,7 +146,6 @@ pub fn main() void {
     var timefbs = io.fixedBufferStream(&_timebuf);
     var memfbs = io.fixedBufferStream(&_membuf);
     var cpufbs = io.fixedBufferStream(&_cpubuf);
-    var loadfbs = io.fixedBufferStream(&_loadbuf);
     var diskfbs = io.fixedBufferStream(&_diskbuf);
     var ethfbs = io.fixedBufferStream(&_ethbuf);
     var wlanfbs = io.fixedBufferStream(&_wlanbuf);
@@ -187,7 +183,6 @@ pub fn main() void {
                     .TIME => w_time.widget(&timefbs, strftime_fmt.?, fg, bg),
                     .MEM => w_mem.widget(&memfbs, pf, &format, fg, bg),
                     .CPU => w_cpu.widget(&cpufbs, pf, &cpu_state, &format, fg, bg),
-                    .LOAD => w_load.widget(&loadfbs, pf, &format, fg, bg),
                     .DISK => w_dysk.widget(&diskfbs, &format, fg, bg),
                     .ETH => w_net.widget(&ethfbs, &format, fg, bg),
                     .WLAN => w_net.widget(&wlanfbs, &format, fg, bg),

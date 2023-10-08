@@ -2,7 +2,7 @@ const std = @import("std");
 const utl = @import("util.zig");
 const mem = std.mem;
 
-pub const WidgetId = enum { TIME, MEM, CPU, LOAD, DISK, ETH, WLAN };
+pub const WidgetId = enum { TIME, MEM, CPU, DISK, ETH, WLAN };
 pub const WIDGETS_MAX = @typeInfo(WidgetId).Enum.fields.len;
 pub const WIDGET_BUF_BYTES_MAX = 128;
 
@@ -22,7 +22,6 @@ pub const MemOpt = enum {
     cached,
 };
 pub const CpuOpt = enum { @"%all", @"%user", @"%sys" };
-pub const LoadOpt = enum { @"1", @"5", @"15" };
 pub const DiskOpt = enum {
     @"%used",
     // total
@@ -38,7 +37,7 @@ pub const EthOpt = enum { ifname, inet, flags, state, @"-" };
 pub const WlanOpt = enum { ifname, inet, flags, state, @"-" };
 
 pub const OPT_TYPES = blk: {
-    const w = .{ TimeOpt, MemOpt, CpuOpt, LoadOpt, DiskOpt, EthOpt, WlanOpt };
+    const w = .{ TimeOpt, MemOpt, CpuOpt, DiskOpt, EthOpt, WlanOpt };
     if (w.len != WIDGETS_MAX)
         @compileError("adjust OPT_TYPES");
     break :blk w;
@@ -97,13 +96,13 @@ pub fn strStartToWidEnum(str: []const u8) ?WidgetId {
 pub fn knobSupportsManyColors(wid: WidgetId) bool {
     return switch (wid) {
         .MEM, .CPU, .DISK, .ETH, .WLAN => true,
-        .TIME, .LOAD => false,
+        .TIME => false,
     };
 }
 
 pub fn knobValidManyColorsOptname(wid: WidgetId, optname: []const u8) bool {
     return switch (wid) {
-        .TIME, .LOAD => false,
+        .TIME => false,
         .MEM, .CPU, .DISK => optname[0] == '%',
         .ETH, .WLAN => mem.eql(u8, optname, "state"),
     };
@@ -136,7 +135,7 @@ pub fn knobVerifyArgs(wid: WidgetId, opts: [*]const u8, nparts: u8) void {
             if (nargs > 1)
                 utl.fatal("config: {s}: too many arguments", .{@tagName(wid)});
         },
-        .TIME, .MEM, .CPU, .LOAD => {},
+        .TIME, .MEM, .CPU => {},
     }
 }
 
