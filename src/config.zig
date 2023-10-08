@@ -62,7 +62,7 @@ pub const Config = struct {
     wid_bgs: *const [typ.WIDGETS_MAX]ColorUnion,
 };
 
-pub const CONFIG_FILE_BYTES_MAX = 4096;
+pub const CONFIG_FILE_BYTES_MAX = 2048;
 
 pub fn readFile(buf: *[CONFIG_FILE_BYTES_MAX]u8) error{FileNotFound}![]const u8 {
     @setRuntimeSafety(true);
@@ -476,16 +476,35 @@ fn parseWidgetLine(
     }
 }
 
-fn isValidHex(str: []const u8) bool {
-    if (str.len != 7)
+fn checkFixColorHex(str: []const u8, buf: *[7]u8) bool {
+    if (str.len == 0)
         return false;
-    if (str[0] != '#')
+
+    const hashash = @intFromBool(str[0] == '#');
+    const ismini = (str.len - hashash) == 3;
+    const isnormal = (str.len - hashash) == 6;
+
+    if (!isnormal and !ismini)
         return false;
-    for (str[1..]) |ch| {
+
+    for (str[hashash..]) |ch| {
         switch (ch) {
             '0'...'9', 'a'...'f', 'A'...'F' => {},
             else => return false,
         }
+    }
+
+    buf[0] = '#';
+    if (ismini) {
+        var i: u8 = 1;
+        for (str[hashash..]) |ch| {
+            buf[i] = ch;
+            i += 1;
+            buf[i] = ch;
+            i += 1;
+        }
+    } else {
+        @memcpy(buf[1..], str[hashash..]);
     }
     return true;
 }
@@ -530,14 +549,11 @@ fn parseColorLine(
                     }
                     // fallthrough
                 }
-                if (isValidHex(field)) {
-                    var default: Color = .{ .thresh = 0, .hex = undefined };
-                    @memcpy(default.hex[0..7], field);
+                var default: Color = .{ .thresh = 0, .hex = undefined };
+                if (!checkFixColorHex(field, &default.hex))
+                    return error.BadColor;
 
-                    return .{ .default = default };
-                } else {
-                    return error.BadColorHex;
-                }
+                return .{ .default = default };
             },
             2...2 + COLORS_MAX - 1 => {
                 var thresh: u8 = 0;
@@ -548,21 +564,19 @@ fn parseColorLine(
                     if (thresh > 100)
                         return error.BadThreshold;
 
-                    const hex_str = field[sep_i + 1 ..];
-                    if (isValidHex(hex_str)) {
-                        colors[wid_out.*][ncolors].thresh = thresh;
-                        @memcpy(colors[wid_out.*][ncolors].hex[0..7], hex_str);
-                        ncolors += 1;
-                    } else {
-                        return error.BadColorHex;
-                    }
+                    colors[wid_out.*][ncolors].thresh = thresh;
+
+                    const colorstr = field[sep_i + 1 ..];
+                    if (!checkFixColorHex(colorstr, &colors[wid_out.*][ncolors].hex))
+                        return error.BadColor;
+
+                    ncolors += 1;
                 } else {
                     return error.NoDelimiter;
                 }
             },
             else => return error.TooManyColors,
         }
-        // nfields += 1;
     }
 
     if (nfields < 3)
