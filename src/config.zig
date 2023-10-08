@@ -250,11 +250,14 @@ test "config parse" {
 
 pub fn defaultConfig(config_mem: *ConfigMem) Config {
     const default_config =
-        \\ETH  10 "enp5s0{-}{ifname}: {inet} {flags}"
-        \\DISK 10 "/home{-}/home {free}"
-        \\CPU  10 "CPU{%all.1>}"
-        \\MEM  10 "MEM {used} : {free} [{cached.0}]"
-        \\TIME 10 "%A %d.%m ~ %H:%M:%S"
+        \\ETH  20  "enp5s0{-}{ifname}: {inet} {flags}"
+        \\DISK 200 "/{-}/ {available}"
+        \\CPU  20  "CPU{%all.1>}"
+        \\MEM  20  "MEM {used} : {free} [{cached.0}]"
+        \\TIME 20  "%A %d.%m ~ %H:%M:%S "
+        \\FG ETH state 0:a22 1:2a2
+        \\FG CPU %all  60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+        \\FG MEM %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
     ;
     return parse(default_config, config_mem);
 }
