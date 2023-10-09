@@ -5,6 +5,7 @@ const io = std.io;
 const os = std.os;
 
 pub const c = @cImport({
+    @cInclude("errno.h"); // errno constants
     @cInclude("net/if.h"); // IFF_* definitions
     @cInclude("sys/ioctl.h"); // SIOCGIFADDR, SIOCGIFFLAGS definitions
     @cInclude("sys/statfs.h"); // statfs()

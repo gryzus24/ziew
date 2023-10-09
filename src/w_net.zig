@@ -5,33 +5,37 @@ const typ = @import("type.zig");
 const c = utl.c;
 const fmt = std.fmt;
 const io = std.io;
-const os = std.os;
+const linux = std.os.linux;
 
-const INET_BUF_SIZE = 4 * "255".len + 3;
+const INET_BUF_SIZE = (4 * "255".len) + 3;
 
-var _ioctl_sock: ?os.socket_t = null;
-fn getIoctlSocket() os.socket_t {
-    if (_ioctl_sock) |sock| {
-        return sock;
-    } else {
-        const sock = os.socket(os.AF.INET, os.SOCK.DGRAM, 0) catch |err| {
-            utl.fatal("NET: socket: {}", .{err});
-        };
-        _ioctl_sock = sock;
-        return sock;
+// the std.os.linux.E enum adds over 15kB of bloat to the executable,
+// use the libc errno constants instead.
+inline fn errnoInt(r: usize) isize {
+    return @as(isize, @bitCast(r));
+}
+
+var _ioctl_sock: linux.fd_t = 0;
+fn getIoctlSocket() linux.fd_t {
+    if (_ioctl_sock == 0) {
+        const ret = errnoInt(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
+        if (ret <= 0)
+            utl.fatal("NET: socket errno: {}", .{ret});
+        _ioctl_sock = @as(linux.fd_t, @intCast(ret));
     }
+    return _ioctl_sock;
 }
 
 fn getInet(
-    sock: os.socket_t,
-    ifr: *const os.linux.ifreq,
+    sock: linux.fd_t,
+    ifr: *const linux.ifreq,
     inetbuf: *[INET_BUF_SIZE]u8,
     ok: *bool,
 ) []const u8 {
-    const e = os.linux.getErrno(os.linux.ioctl(sock, c.SIOCGIFADDR, @intFromPtr(ifr)));
+    const e = errnoInt(linux.ioctl(sock, c.SIOCGIFADDR, @intFromPtr(ifr)));
     return switch (e) {
-        .SUCCESS => blk: {
-            const addr: os.linux.sockaddr.in = @bitCast(ifr.ifru.addr);
+        0 => blk: {
+            const addr: linux.sockaddr.in = @bitCast(ifr.ifru.addr);
             var inetfbs = io.fixedBufferStream(inetbuf);
             const writer = inetfbs.writer();
 
@@ -45,23 +49,23 @@ fn getInet(
             utl.writeInt(writer, @intCast((addr.addr >> 24) & 0xff));
             break :blk inetfbs.getWritten();
         },
-        .ADDRNOTAVAIL => "<unavailable>",
-        .NODEV => "<no device>",
-        else => utl.fatal("NET: inet: {}", .{e}),
+        -c.EADDRNOTAVAIL => "<unavailable>",
+        -c.ENODEV => "<no device>",
+        else => utl.fatal("NET: inet errno: {}", .{e}),
     };
 }
 
 fn getFlags(
-    sock: os.socket_t,
-    ifr: *const os.linux.ifreq,
+    sock: linux.fd_t,
+    ifr: *const linux.ifreq,
     flagsbuf: *[6]u8,
     ok: *bool,
 ) []const u8 {
     // interestingly, the SIOCGIF*P*FLAGS ioctl is not implemented for INET?
     // check switch prong of: v6.6-rc3/source/net/ipv4/af_inet.c#L974
-    const e = os.linux.getErrno(os.linux.ioctl(sock, c.SIOCGIFFLAGS, @intFromPtr(ifr)));
+    const e = errnoInt(linux.ioctl(sock, c.SIOCGIFFLAGS, @intFromPtr(ifr)));
     return switch (e) {
-        .SUCCESS => blk: {
+        0 => blk: {
             var n: u8 = 0;
 
             if (ifr.ifru.flags & c.IFF_ALLMULTI == c.IFF_ALLMULTI) {
@@ -91,11 +95,11 @@ fn getFlags(
             }
             break :blk flagsbuf[0..n];
         },
-        .NODEV => blk: {
+        -c.ENODEV => blk: {
             flagsbuf[0] = '-';
             break :blk flagsbuf[0..1];
         },
-        else => utl.fatal("NET: flags: {}", .{e}),
+        else => utl.fatal("NET: flags errno: {}", .{e}),
     };
 }
 
@@ -107,6 +111,7 @@ fn checkColor(up: bool, mc: *const cfg.ManyColors) ?*const [7]u8 {
     return null;
 }
 
+// takes in one required argument in cf.parts[0]: <interface>
 pub fn widget(
     stream: anytype,
     cf: *const cfg.ConfigFormat,
@@ -115,7 +120,7 @@ pub fn widget(
 ) []const u8 {
     const sock = getIoctlSocket();
 
-    var ifr: os.linux.ifreq = undefined;
+    var ifr: linux.ifreq = undefined;
     const ifname: [:0]u8 = blk: {
         const arg = cf.parts[0];
         if (arg.len >= ifr.ifrn.name.len)

@@ -10,8 +10,8 @@ const utl = @import("util.zig");
 const fmt = std.fmt;
 const fs = std.fs;
 const io = std.io;
+const linux = std.os.linux;
 const mem = std.mem;
-const os = std.os;
 const time = std.time;
 
 fn debugCF(cf: *const cfg.ConfigFormat) void {
@@ -163,7 +163,7 @@ pub fn main() void {
         \\{"version":1}
         \\[[]
     ;
-    _ = os.linux.write(1, header, header.len);
+    _ = linux.write(1, header, header.len);
     while (true) {
         for (
             config.widget_ids,
@@ -198,8 +198,8 @@ pub fn main() void {
         // get rid of the trailing comma
         write_buffer[pos - 1] = ']';
 
-        _ = os.linux.write(1, &write_buffer, pos);
-        os.nanosleep(sleep_s, sleep_ns);
+        _ = linux.write(1, &write_buffer, pos);
+        std.os.nanosleep(sleep_s, sleep_ns);
     }
 
     unreachable;
