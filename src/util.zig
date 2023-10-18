@@ -1,6 +1,7 @@
 const std = @import("std");
 const cfg = @import("config.zig");
 const fmt = std.fmt;
+const fs = std.fs;
 const io = std.io;
 const os = std.os;
 
@@ -165,17 +166,35 @@ pub fn writeBlockEnd_GetWritten(fbs: anytype) []const u8 {
     return ret;
 }
 
+inline fn makeMsg(buf: *[512]u8, comptime full_format: []const u8, args: anytype) []const u8 {
+    return fmt.bufPrint(buf, full_format, args) catch |err| {
+        std.debug.panic("bufprint: {}", .{err});
+    };
+}
+
+fn writeLog(msg: []const u8) void {
+    const file = fs.cwd().createFileZ(
+        "/tmp/ziew.log",
+        .{ .truncate = false },
+    ) catch |err| switch (err) {
+        error.AccessDenied => {
+            writeStr(io.getStdErr(), "open: /tmp/ziew.log: probably sticky, only author can modify\n");
+            return;
+        },
+        else => return,
+    };
+    file.seekFromEnd(0) catch return;
+    writeStr(file, msg);
+}
+
 pub fn fatal(comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
     var buf: [512]u8 = undefined;
-    out: {
-        const msg = fmt.bufPrint(
-            &buf,
-            "fatal: " ++ format ++ "\n",
-            args,
-        ) catch break :out;
-        _ = io.getStdErr().write(msg) catch break :out;
-    }
+
+    const msg = makeMsg(&buf, "fatal: " ++ format ++ "\n", args);
+    writeStr(io.getStdErr(), msg);
+    writeLog(msg);
+
     os.exit(1);
 }
 
@@ -183,30 +202,25 @@ pub fn fatalPos(comptime format: []const u8, args: anytype, errpos: usize) noret
     @setCold(true);
     var buf: [512]u8 = undefined;
     const stderr = io.getStdErr();
-    out: {
-        const msg = fmt.bufPrint(
-            &buf,
-            "fatal: " ++ format ++ "\n",
-            args,
-        ) catch break :out;
-        _ = stderr.write(msg) catch break :out;
-        for (0.."fatal: ".len + errpos) |_| {
-            _ = stderr.write(" ") catch break :out;
-        }
-        _ = stderr.write("^\n") catch break :out;
+
+    const msg = makeMsg(&buf, "fatal: " ++ format ++ "\n", args);
+    writeStr(stderr, msg);
+    writeLog(msg);
+
+    writeStr(stderr, " " ** "fatal: ".len);
+    for (0..errpos) |_| {
+        writeStr(stderr, " ");
     }
+    writeStr(stderr, "^\n");
+
     os.exit(1);
 }
 
 pub fn warn(comptime format: []const u8, args: anytype) void {
     @setCold(true);
     var buf: [512]u8 = undefined;
-    out: {
-        const msg = fmt.bufPrint(
-            &buf,
-            "warning: " ++ format ++ "\n",
-            args,
-        ) catch break :out;
-        _ = io.getStdErr().write(msg) catch break :out;
-    }
+
+    const msg = makeMsg(&buf, "warning: " ++ format ++ "\n", args);
+    writeStr(io.getStdErr(), msg);
+    writeLog(msg);
 }
