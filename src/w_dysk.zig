@@ -11,7 +11,7 @@ fn checkManyColors(
     total_kb: u64,
     mc: cfg.ManyColors,
 ) ?*const [7]u8 {
-    return utl.checkColor(
+    return utl.checkColorAboveThreshold(
         switch (@as(typ.DiskOpt, @enumFromInt(mc.opt))) {
             .@"%used" => utl.percentOf(used_kb, total_kb),
             .@"%free" => utl.percentOf(free_kb, total_kb),
@@ -88,21 +88,10 @@ pub fn widget(
     utl.writeBlockStart(writer, fg_hex, bg_hex);
     utl.writeStr(writer, cf.parts[1]);
     for (1..cf.nparts - 1) |i| {
-        var value_type: utl.AlignmentValueType = .size;
-
         const nu = switch (@as(typ.DiskOpt, @enumFromInt(cf.opts[i]))) {
-            .@"%used" => blk: {
-                value_type = .percent;
-                break :blk utl.percentOf(used_kb, total_kb);
-            },
-            .@"%free" => blk: {
-                value_type = .percent;
-                break :blk utl.percentOf(free_kb, total_kb);
-            },
-            .@"%available" => blk: {
-                value_type = .percent;
-                break :blk utl.percentOf(avail_kb, total_kb);
-            },
+            .@"%used" => utl.percentOf(used_kb, total_kb),
+            .@"%free" => utl.percentOf(free_kb, total_kb),
+            .@"%available" => utl.percentOf(avail_kb, total_kb),
             .used => utl.kbToHuman(used_kb),
             .total => utl.kbToHuman(total_kb),
             .free => utl.kbToHuman(free_kb),
@@ -110,22 +99,7 @@ pub fn widget(
             .@"-" => unreachable,
         };
 
-        const prec = cf.opts_precision[i];
-        const ali = cf.opts_alignment[i];
-
-        if (ali == .right)
-            utl.writeAlignment(writer, value_type, nu.val, prec);
-
-        if (prec == 0) {
-            utl.writeInt(writer, @intFromFloat(@round(nu.val)));
-        } else {
-            utl.writeFloat(writer, nu.val, prec);
-        }
-        utl.writeStr(writer, &[1]u8{nu.unit});
-
-        if (ali == .left)
-            utl.writeAlignment(writer, value_type, nu.val, prec);
-
+        utl.writeNumUnit(writer, nu, cf.opts_alignment[i], cf.opts_precision[i]);
         utl.writeStr(writer, cf.parts[1 + i]);
     }
     return utl.writeBlockEnd_GetWritten(stream);

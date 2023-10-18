@@ -59,7 +59,11 @@ pub inline fn writeInt(writer: anytype, value: u64) void {
 }
 
 pub inline fn writeFloat(writer: anytype, value: f64, precision: u8) void {
-    fmt.formatFloatDecimal(value, .{ .precision = precision }, writer) catch {};
+    if (precision == 0) {
+        writeInt(writer, @intFromFloat(@round(value)));
+    } else {
+        fmt.formatFloatDecimal(value, .{ .precision = precision }, writer) catch {};
+    }
 }
 
 pub const PRECISION_ROUND_EPS: [10]f64 = .{
@@ -111,7 +115,25 @@ pub fn writeAlignment(
     writeStr(with_write, spaces[0..len]);
 }
 
-pub fn checkColor(value: f64, colors: []const cfg.Color) ?*const [7]u8 {
+pub fn writeNumUnit(
+    with_write: anytype,
+    nu: NumUnit,
+    alignment: cfg.Alignment,
+    precision: u8,
+) void {
+    const value_type: AlignmentValueType = if (nu.unit == '%') .percent else .size;
+
+    if (alignment == .right)
+        writeAlignment(with_write, value_type, nu.val, precision);
+
+    writeFloat(with_write, nu.val, precision);
+    writeStr(with_write, &[1]u8{nu.unit});
+
+    if (alignment == .left)
+        writeAlignment(with_write, value_type, nu.val, precision);
+}
+
+pub fn checkColorAboveThreshold(value: f64, colors: []const cfg.Color) ?*const [7]u8 {
     var result: ?*const [7]u8 = null;
     for (colors) |*color| {
         if (value >= @as(f64, @floatFromInt(color.thresh))) {

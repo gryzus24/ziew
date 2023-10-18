@@ -75,12 +75,12 @@ pub fn widget(
     const fg_hex = switch (fg.*) {
         .nocolor => null,
         .default => |t| &t.hex,
-        .color => |t| utl.checkColor(slots[t.opt], t.colors),
+        .color => |t| utl.checkColorAboveThreshold(slots[t.opt], t.colors),
     };
     const bg_hex = switch (bg.*) {
         .nocolor => null,
         .default => |t| &t.hex,
-        .color => |t| utl.checkColor(slots[t.opt], t.colors),
+        .color => |t| utl.checkColorAboveThreshold(slots[t.opt], t.colors),
     };
 
     const writer = stream.writer();
@@ -95,11 +95,7 @@ pub fn widget(
         if (ali == .right)
             utl.writeAlignment(writer, .percent, value, prec);
 
-        if (prec == 0) {
-            utl.writeInt(writer, @intFromFloat(@round(value)));
-        } else {
-            utl.writeFloat(writer, value, prec);
-        }
+        utl.writeFloat(writer, value, prec);
         utl.writeStr(writer, "%");
 
         if (ali == .left)

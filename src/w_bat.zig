@@ -53,8 +53,8 @@ fn checkManyColors(
     mc: cfg.ManyColors,
 ) ?*const [7]u8 {
     switch (@as(typ.BatOpt, @enumFromInt(mc.opt))) {
-        .@"%capacity" => return utl.checkColor(pcapacity.val, mc.colors),
-        .@"%charge" => return utl.checkColor(pcharge.val, mc.colors),
+        .@"%capacity" => return utl.checkColorAboveThreshold(pcapacity.val, mc.colors),
+        .@"%charge" => return utl.checkColorAboveThreshold(pcharge.val, mc.colors),
         .state => {
             var statusbuf: [64]u8 = undefined;
 
@@ -121,32 +121,14 @@ pub fn widget(
     utl.writeBlockStart(writer, fg_hex, bg_hex);
     utl.writeStr(writer, cf.parts[0]);
     for (0..cf.nparts - 1) |i| {
-        const nu = switch (@as(typ.BatOpt, @enumFromInt(cf.opts[i]))) {
-            .@"%capacity" => pcapacity,
-            .@"%charge" => pcharge,
-            .state => {
-                utl.writeStr(writer, status.?);
-                utl.writeStr(writer, cf.parts[1 + i]);
-                continue;
-            },
-        };
-
         const prec = cf.opts_precision[i];
         const ali = cf.opts_alignment[i];
 
-        if (ali == .right)
-            utl.writeAlignment(writer, .percent, nu.val, prec);
-
-        if (prec == 0) {
-            utl.writeInt(writer, @intFromFloat(@round(nu.val)));
-        } else {
-            utl.writeFloat(writer, nu.val, prec);
+        switch (@as(typ.BatOpt, @enumFromInt(cf.opts[i]))) {
+            .@"%capacity" => utl.writeNumUnit(writer, pcapacity, ali, prec),
+            .@"%charge" => utl.writeNumUnit(writer, pcharge, ali, prec),
+            .state => utl.writeStr(writer, status.?),
         }
-        utl.writeStr(writer, &[1]u8{nu.unit});
-
-        if (ali == .left)
-            utl.writeAlignment(writer, .percent, nu.val, prec);
-
         utl.writeStr(writer, cf.parts[1 + i]);
     }
     return utl.writeBlockEnd_GetWritten(stream);
