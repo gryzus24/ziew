@@ -1,10 +1,9 @@
-# ziew(1) -- boring status generator for i3bar
+# ziew - boring status generator for i3bar
 
 ## Description
 *ziew* is a more minimal and less wasteful alternative to *i3status*.
 
 ## Aspirations
-
   ziew wants:
   * to implement useful widgets using the least amount of syscalls and instruction,
   * to have a small, predictable and at-a-glance understandable configuration file,
@@ -17,14 +16,16 @@ The configuration file of *ziew* resides at $XDG_CONFIG_HOME/ziew/config.
 ## Widgets
 Widget | Data source
 ------ | -----------
+| TIME | strftime(3)
 | MEM  | /proc/meminfo
 | CPU  | /proc/stat
 | DISK | statfs(2)
 | ETH  | netdevice(7), ioctl(2)
 | WLAN | netdevice(7), ioctl(2)
+| BAT  | /sys/class/power_supply/*
 
 ## Configuration
-The configuration file consists of *Widget* lines and *Color* lines. Lines consist of fields separated by tabs or spaces:
+The configuration file consists of *Widget* lines and *Color* lines. Lines consist of fields separated by tabs or spaces. The order of *Widget* lines in the configuration file is reflected in the final status output.
 
 ### Widget line
 
@@ -57,11 +58,14 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
     FG|BG     - either FG for foreground color or BG for background color,
     WIDGET    - uppercase name of the widget,
     OPTION    - name of the option that can be compared (widget specific),
-    THRESHOLD - if OPTION's value is greater than or equal to THRESHOLD,
-    COLOR     - WIDGET's FG|BG color should be set to COLOR.
+    THRESHOLD - if OPTION's value is greater than or equal to THRESHOLD
+                WIDGET's color (FG or BG) will be set to COLOR,
+    COLOR     - hexadecimal RGB color value or either left blank or "default"
+                for the default color.
 
     Example
       BG CPU %all 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+      FG CPU %user 0:22a 10:default 60:aa2
 
 All widget format options, specifiers and color options are documented below.
 
@@ -179,7 +183,7 @@ All widget format options, specifiers and color options are documented below.
                      * valid (B)roadcast address set,
                      * supports (M)ulticast,
                      * interface is in (P)romiscuous mode,
-                     * (R)resources allocated),
+                     * (R)resources allocated,
                      * interface is (U)p/running.
         * state  - interface state, either "up" or "down".
 
@@ -199,13 +203,40 @@ All widget format options, specifiers and color options are documented below.
       Example color line
         FG ETH state 0:888 1:eee
 
+**BAT**
+
+    Format
+      Options
+        * %capacity - battery charge relative to the current battery capacity,
+        * %charge   - battery charge relative to the original battery capacity,
+        * state     - battery state, either "Discharging", "Charging" or "Full".
+
+      Optional specifiers
+        * precision - number from 0 to 9 inclusive,
+        * alignment - either < for left alignment or > for right alignment.
+
+      Example format
+        "BAT: {%charge} {state}"
+
+    Colors
+      [x] default
+      [x] conditional
+
+      state: 0 - battery is discharging
+             1 - battery is charging
+             2 - battery is full
+             3 - unknown state
+
+      Example color line
+        BG BAT %charge 0:a00 15:220 25:
+
 ## Notes and caveats
 This is an opinionated piece of software that doesn't even use heap memory, not all widgets implemented by i3status are available.
 
 If you want:
-- speaker volume,
+- sink volume and control,
 - file monitoring,
-- executing script,
+- executing scripts,
 - non-English weekday names,
 - portability ... etc.,
 
