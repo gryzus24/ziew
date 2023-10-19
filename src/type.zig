@@ -106,7 +106,7 @@ pub fn knobValidManyColorsOptname(wid: WidgetId, optname: []const u8) bool {
         .TIME => false,
         .MEM, .CPU, .DISK => optname[0] == '%',
         .ETH, .WLAN => mem.eql(u8, optname, "state"),
-        .BAT => true,
+        .BAT => optname[0] == '%' or mem.eql(u8, optname, "state"),
     };
 }
 
