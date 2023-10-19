@@ -11,7 +11,7 @@
   * to make you yawn once you understand all the puns.
 
 ## Files
-The configuration file of *ziew* resides at $XDG_CONFIG_HOME/ziew/config.
+The configuration file of *ziew* resides at `$XDG_CONFIG_HOME/ziew/config` (usually `~/.config/ziew/config`). See the example configuration file (config) and copy it to this location.
 
 ## Widgets
 Widget | Data source
