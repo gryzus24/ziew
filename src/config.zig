@@ -1,4 +1,5 @@
 const std = @import("std");
+const color = @import("color.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
@@ -6,22 +7,6 @@ const fs = std.fs;
 const io = std.io;
 const mem = std.mem;
 const os = std.os;
-
-pub const Color = struct {
-    thresh: u8,
-    hex: [7]u8,
-};
-
-pub const ManyColors = struct {
-    opt: u8,
-    colors: []const Color,
-};
-
-pub const ColorUnion = union(enum) {
-    nocolor,
-    default: Color,
-    color: ManyColors,
-};
 
 pub const Alignment = enum { none, right, left };
 
@@ -48,18 +33,18 @@ pub const ConfigMem = struct {
     intervals_buf: [typ.WIDGETS_MAX]typ.DeciSec,
     formats_mem_buf: [typ.WIDGETS_MAX]ConfigFormatMem,
     formats_buf: [typ.WIDGETS_MAX]ConfigFormat,
-    wid_fg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]Color,
-    wid_bg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]Color,
-    wid_fg_buf: [typ.WIDGETS_MAX]ColorUnion,
-    wid_bg_buf: [typ.WIDGETS_MAX]ColorUnion,
+    wid_fg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]color.Color,
+    wid_bg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]color.Color,
+    wid_fg_buf: [typ.WIDGETS_MAX]color.ColorUnion,
+    wid_bg_buf: [typ.WIDGETS_MAX]color.ColorUnion,
 };
 
 pub const Config = struct {
     widget_ids: []const typ.WidgetId,
     intervals: []const typ.DeciSec,
     formats: []const ConfigFormat,
-    wid_fgs: *const [typ.WIDGETS_MAX]ColorUnion,
-    wid_bgs: *const [typ.WIDGETS_MAX]ColorUnion,
+    wid_fgs: *const [typ.WIDGETS_MAX]color.ColorUnion,
+    wid_bgs: *const [typ.WIDGETS_MAX]color.ColorUnion,
 };
 
 pub const CONFIG_FILE_BYTES_MAX = 2048;
@@ -230,20 +215,20 @@ test "config parse" {
 
     switch (conf.wid_fgs[@intFromEnum(typ.WidgetId.CPU)]) {
         .nocolor, .default => return error.TestUnexpectedResult,
-        .color => |w| {
+        .color => |*w| {
             try t.expect(w.opt == @intFromEnum(typ.CpuOpt.@"%all"));
             try t.expect(w.colors.len == 2);
             try t.expect(w.colors[0].thresh == 0);
-            try t.expect(mem.eql(u8, &w.colors[0].hex, "#ffffff"));
+            try t.expect(mem.eql(u8, w.colors[0].getHex().?, "#ffffff"));
             try t.expect(w.colors[1].thresh == 10);
-            try t.expect(mem.eql(u8, &w.colors[1].hex, "#999999"));
+            try t.expect(mem.eql(u8, w.colors[1].getHex().?, "#999999"));
         },
     }
     switch (conf.wid_bgs[@intFromEnum(typ.WidgetId.CPU)]) {
         .nocolor, .color => return error.TestUnexpectedResult,
-        .default => |w| {
+        .default => |*w| {
             try t.expect(w.thresh == 0);
-            try t.expect(mem.eql(u8, &w.hex, "#282828"));
+            try t.expect(mem.eql(u8, w.getHex().?, "#282828"));
         },
     }
 }
@@ -251,13 +236,16 @@ test "config parse" {
 pub fn defaultConfig(config_mem: *ConfigMem) Config {
     const default_config =
         \\ETH  20  "enp5s0{-}{ifname}: {inet} {flags}"
-        \\DISK 200 "/{-}/ {available}"
+        \\DISK 240 "/{-}/ {available}"
         \\CPU  20  "CPU{%all.1>}"
-        \\MEM  20  "MEM {used} : {free} [{cached.0}]"
+        \\MEM  20  "MEM {used} : {free} +{cached.0}"
+        \\BAT  120 "BAT {%charge.2} {state}"
         \\TIME 20  "%A %d.%m ~ %H:%M:%S "
-        \\FG ETH state 0:a22 1:2a2
-        \\FG CPU %all  60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-        \\FG MEM %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+        \\FG ETH state   0:a22 1:2a2
+        \\FG CPU %all    60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+        \\FG MEM %used   60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+        \\FG BAT state   1:2a2 2:2a2
+        \\BG BAT %charge 0:a00 15:220 25:
     ;
     return parse(default_config, config_mem);
 }
@@ -475,46 +463,13 @@ fn parseWidgetLine(
     }
 }
 
-fn checkFixColorHex(str: []const u8, buf: *[7]u8) bool {
-    if (str.len == 0)
-        return false;
-
-    const hashash = @intFromBool(str[0] == '#');
-    const ismini = (str.len - hashash) == 3;
-    const isnormal = (str.len - hashash) == 6;
-
-    if (!isnormal and !ismini)
-        return false;
-
-    for (str[hashash..]) |ch| {
-        switch (ch) {
-            '0'...'9', 'a'...'f', 'A'...'F' => {},
-            else => return false,
-        }
-    }
-
-    buf[0] = '#';
-    if (ismini) {
-        var i: u8 = 1;
-        for (str[hashash..]) |ch| {
-            buf[i] = ch;
-            i += 1;
-            buf[i] = ch;
-            i += 1;
-        }
-    } else {
-        @memcpy(buf[1..], str[hashash..]);
-    }
-    return true;
-}
-
 fn parseColorLine(
     line: []const u8,
     start: usize,
     wid_out: *u8,
-    colors: *[typ.WIDGETS_MAX][COLORS_MAX]Color,
+    colors: *[typ.WIDGETS_MAX][COLORS_MAX]color.Color,
     errpos: *usize,
-) !ColorUnion {
+) !color.ColorUnion {
     var fields = mem.tokenizeAny(u8, line[start..], " \t");
 
     // 0: widget, 1: hex OR opt, 2...: thresh:hex
@@ -548,8 +503,8 @@ fn parseColorLine(
                     }
                     // fallthrough
                 }
-                var default: Color = .{ .thresh = 0, .hex = undefined };
-                if (!checkFixColorHex(field, &default.hex))
+                var default: color.Color = .{ .thresh = 0, ._hex = undefined };
+                if (!default.checkSetHex(field))
                     return error.BadColor;
 
                 return .{ .default = default };
@@ -566,7 +521,7 @@ fn parseColorLine(
                     colors[wid_out.*][ncolors].thresh = thresh;
 
                     const colorstr = field[sep_i + 1 ..];
-                    if (!checkFixColorHex(colorstr, &colors[wid_out.*][ncolors].hex))
+                    if (!colors[wid_out.*][ncolors].checkSetHex(colorstr))
                         return error.BadColor;
 
                     ncolors += 1;

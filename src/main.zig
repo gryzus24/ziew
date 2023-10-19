@@ -132,9 +132,8 @@ pub fn main() void {
                 _strftime_fmt_buf[plen] = '\x00';
                 break :blk _strftime_fmt_buf[0..plen :0];
             }
-        } else {
-            break :blk null;
         }
+        break :blk null;
     };
 
     var _timebuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;

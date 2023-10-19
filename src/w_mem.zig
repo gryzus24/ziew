@@ -1,5 +1,6 @@
 const std = @import("std");
 const cfg = @import("config.zig");
+const color = @import("color.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
@@ -29,32 +30,33 @@ fn parseMemInfoLine(line: []const u8) u64 {
     return fmt.parseUnsigned(u64, value_str, 10) catch unreachable;
 }
 
-fn checkManyColors(
+const ColorHandler = struct {
     used_kb: u64,
     free_kb: u64,
     avail_kb: u64,
     cached_kb: u64,
     total_kb: u64,
-    mc: cfg.ManyColors,
-) ?*const [7]u8 {
-    return utl.checkColorAboveThreshold(
-        switch (@as(typ.MemOpt, @enumFromInt(mc.opt))) {
-            .@"%used" => utl.percentOf(used_kb, total_kb),
-            .@"%free" => utl.percentOf(free_kb, total_kb),
-            .@"%available" => utl.percentOf(avail_kb, total_kb),
-            .@"%cached" => utl.percentOf(cached_kb, total_kb),
-            .used, .total, .free, .available, .buffers, .cached => unreachable,
-        }.val,
-        mc.colors,
-    );
-}
+
+    pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
+        return color.firstColorAboveThreshold(
+            switch (@as(typ.MemOpt, @enumFromInt(mc.opt))) {
+                .@"%used" => utl.percentOf(self.used_kb, self.total_kb),
+                .@"%free" => utl.percentOf(self.free_kb, self.total_kb),
+                .@"%available" => utl.percentOf(self.avail_kb, self.total_kb),
+                .@"%cached" => utl.percentOf(self.cached_kb, self.total_kb),
+                .used, .total, .free, .available, .buffers, .cached => unreachable,
+            }.val,
+            mc.colors,
+        );
+    }
+};
 
 pub fn widget(
     stream: anytype,
     proc_meminfo: *const fs.File,
     cf: *const cfg.ConfigFormat,
-    fg: *const cfg.ColorUnion,
-    bg: *const cfg.ColorUnion,
+    fg: *const color.ColorUnion,
+    bg: *const color.ColorUnion,
 ) []const u8 {
     var meminfo_buf: [MEMINFO_BUF_SIZE]u8 = undefined;
 
@@ -86,20 +88,20 @@ pub fn widget(
 
     const used_kb = total_kb - avail_kb;
 
-    const fg_hex = switch (fg.*) {
-        .nocolor => null,
-        .default => |t| &t.hex,
-        .color => |t| checkManyColors(used_kb, free_kb, avail_kb, cached_kb, total_kb, t),
-    };
-    const bg_hex = switch (bg.*) {
-        .nocolor => null,
-        .default => |t| &t.hex,
-        .color => |t| checkManyColors(used_kb, free_kb, avail_kb, cached_kb, total_kb, t),
-    };
-
     const writer = stream.writer();
+    const color_handler = ColorHandler{
+        .used_kb = used_kb,
+        .free_kb = free_kb,
+        .avail_kb = avail_kb,
+        .cached_kb = cached_kb,
+        .total_kb = total_kb,
+    };
 
-    utl.writeBlockStart(writer, fg_hex, bg_hex);
+    utl.writeBlockStart(
+        writer,
+        color.colorFromColorUnion(fg, color_handler),
+        color.colorFromColorUnion(bg, color_handler),
+    );
     utl.writeStr(writer, cf.parts[0]);
     for (0..cf.nparts - 1) |i| {
         const nu = switch (@as(typ.MemOpt, @enumFromInt(cf.opts[i]))) {

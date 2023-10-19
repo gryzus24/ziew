@@ -1,5 +1,6 @@
 const std = @import("std");
 const cfg = @import("config.zig");
+const color = @import("color.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
@@ -28,13 +29,21 @@ pub const ProcStat = struct {
     }
 };
 
+const ColorHandler = struct {
+    slots: *const [3]f64,
+
+    pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
+        return color.firstColorAboveThreshold(self.slots[mc.opt], mc.colors);
+    }
+};
+
 pub fn widget(
     stream: anytype,
     proc_stat: *const fs.File,
     prev: *ProcStat,
     cf: *const cfg.ConfigFormat,
-    fg: *const cfg.ColorUnion,
-    bg: *const cfg.ColorUnion,
+    fg: *const color.ColorUnion,
+    bg: *const color.ColorUnion,
 ) []const u8 {
     var stat_buf: [128]u8 = undefined;
 
@@ -72,20 +81,14 @@ pub fn widget(
         break :blk w;
     };
 
-    const fg_hex = switch (fg.*) {
-        .nocolor => null,
-        .default => |t| &t.hex,
-        .color => |t| utl.checkColorAboveThreshold(slots[t.opt], t.colors),
-    };
-    const bg_hex = switch (bg.*) {
-        .nocolor => null,
-        .default => |t| &t.hex,
-        .color => |t| utl.checkColorAboveThreshold(slots[t.opt], t.colors),
-    };
-
     const writer = stream.writer();
+    const color_handler = ColorHandler{ .slots = &slots };
 
-    utl.writeBlockStart(writer, fg_hex, bg_hex);
+    utl.writeBlockStart(
+        writer,
+        color.colorFromColorUnion(fg, color_handler),
+        color.colorFromColorUnion(bg, color_handler),
+    );
     utl.writeStr(writer, cf.parts[0]);
     for (0..cf.nparts - 1) |j| {
         const value = slots[cf.opts[j]];

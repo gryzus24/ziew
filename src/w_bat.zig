@@ -1,5 +1,6 @@
 const std = @import("std");
 const cfg = @import("config.zig");
+const color = @import("color.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
@@ -46,32 +47,31 @@ fn readStatusFile(buf: *[64]u8) []const u8 {
     return buf[0 .. nread - 1];
 }
 
-fn checkManyColors(
+const ColorHandler = struct {
     pcapacity: utl.NumUnit,
     pcharge: utl.NumUnit,
     status: ?[]const u8,
-    mc: cfg.ManyColors,
-) ?*const [7]u8 {
-    switch (@as(typ.BatOpt, @enumFromInt(mc.opt))) {
-        .@"%capacity" => return utl.checkColorAboveThreshold(pcapacity.val, mc.colors),
-        .@"%charge" => return utl.checkColorAboveThreshold(pcharge.val, mc.colors),
-        .state => {
-            var statusbuf: [64]u8 = undefined;
 
-            const t = status orelse readStatusFile(&statusbuf);
-            const statusid: u8 = switch (t[0] & (0xff - 0x20)) {
-                'D' => 0, // Discharging
-                'C' => 1, // Charging
-                'F' => 2, // Full
-                else => 3,
-            };
-            for (mc.colors) |*color| if (color.thresh == statusid) {
-                return &color.hex;
-            };
-            return null;
-        },
+    pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
+        return switch (@as(typ.BatOpt, @enumFromInt(mc.opt))) {
+            .@"%capacity" => color.firstColorAboveThreshold(self.pcapacity.val, mc.colors),
+            .@"%charge" => color.firstColorAboveThreshold(self.pcharge.val, mc.colors),
+            .state => blk: {
+                var statusbuf: [64]u8 = undefined;
+
+                const t = self.status orelse readStatusFile(&statusbuf);
+                // make sure the first character is uppercase
+                const statusid: u8 = switch (t[0] & (0xff - 0x20)) {
+                    'D' => 0, // Discharging
+                    'C' => 1, // Charging
+                    'F' => 2, // Full
+                    else => 3,
+                };
+                break :blk color.firstColorEqualThreshold(statusid, mc.colors);
+            },
+        };
     }
-}
+};
 
 var _charge_full: u64 = 0;
 var _charge_full_design: u64 = 0;
@@ -80,8 +80,8 @@ var _charge_full_refresh_after: u32 = 0;
 pub fn widget(
     stream: anytype,
     cf: *const cfg.ConfigFormat,
-    fg: *const cfg.ColorUnion,
-    bg: *const cfg.ColorUnion,
+    fg: *const color.ColorUnion,
+    bg: *const color.ColorUnion,
 ) []const u8 {
     if (_charge_full_refresh_after == 0) {
         _charge_full = readChargeFile(CHARGE_FULL_PATH);
@@ -105,20 +105,18 @@ pub fn widget(
         }
     }
 
-    const fg_hex = switch (fg.*) {
-        .nocolor => null,
-        .default => |t| &t.hex,
-        .color => |t| checkManyColors(pcapacity, pcharge, status, t),
-    };
-    const bg_hex = switch (bg.*) {
-        .nocolor => null,
-        .default => |t| &t.hex,
-        .color => |t| checkManyColors(pcapacity, pcharge, status, t),
-    };
-
     const writer = stream.writer();
+    const color_handler = ColorHandler{
+        .pcapacity = pcapacity,
+        .pcharge = pcharge,
+        .status = status,
+    };
 
-    utl.writeBlockStart(writer, fg_hex, bg_hex);
+    utl.writeBlockStart(
+        writer,
+        color.colorFromColorUnion(fg, color_handler),
+        color.colorFromColorUnion(bg, color_handler),
+    );
     utl.writeStr(writer, cf.parts[0]);
     for (0..cf.nparts - 1) |i| {
         const prec = cf.opts_precision[i];

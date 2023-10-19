@@ -133,18 +133,6 @@ pub fn writeNumUnit(
         writeAlignment(with_write, value_type, nu.val, precision);
 }
 
-pub fn checkColorAboveThreshold(value: f64, colors: []const cfg.Color) ?*const [7]u8 {
-    var result: ?*const [7]u8 = null;
-    for (colors) |*color| {
-        if (value >= @as(f64, @floatFromInt(color.thresh))) {
-            result = &color.hex;
-        } else {
-            break;
-        }
-    }
-    return result;
-}
-
 pub fn writeBlockStart(
     with_write: anytype,
     fg_color: ?*const [7]u8,

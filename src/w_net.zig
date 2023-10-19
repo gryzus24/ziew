@@ -1,7 +1,8 @@
 const std = @import("std");
 const cfg = @import("config.zig");
-const utl = @import("util.zig");
+const color = @import("color.zig");
 const typ = @import("type.zig");
+const utl = @import("util.zig");
 const c = utl.c;
 const fmt = std.fmt;
 const io = std.io;
@@ -103,20 +104,20 @@ fn getFlags(
     };
 }
 
-fn checkColor(up: bool, mc: *const cfg.ManyColors) ?*const [7]u8 {
-    for (mc.colors) |*color| {
-        if (color.thresh == @intFromBool(up))
-            return &color.hex;
+const ColorHandler = struct {
+    isup: bool,
+
+    pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
+        return color.firstColorEqualThreshold(@intFromBool(self.isup), mc.colors);
     }
-    return null;
-}
+};
 
 // takes in one required argument in cf.parts[0]: <interface>
 pub fn widget(
     stream: anytype,
     cf: *const cfg.ConfigFormat,
-    fg: *const cfg.ColorUnion,
-    bg: *const cfg.ColorUnion,
+    fg: *const color.ColorUnion,
+    bg: *const color.ColorUnion,
 ) []const u8 {
     const sock = getIoctlSocket();
 
@@ -135,43 +136,37 @@ pub fn widget(
 
     var inet: []const u8 = undefined;
     var flags: []const u8 = undefined;
-    var state_up: bool = false;
+    var isup: bool = false;
     var wants_state: bool = false;
 
     for (1..cf.nparts - 1) |i| {
         switch (@as(typ.EthOpt, @enumFromInt(cf.opts[i]))) {
             .ifname => {},
-            .inet => inet = getInet(sock, &ifr, &_inetbuf, &state_up),
-            .flags => flags = getFlags(sock, &ifr, &_flagsbuf, &state_up),
+            .inet => inet = getInet(sock, &ifr, &_inetbuf, &isup),
+            .flags => flags = getFlags(sock, &ifr, &_flagsbuf, &isup),
             .state => wants_state = true,
             .@"-" => unreachable,
         }
     }
-    // neither inet nor flags got polled - get state only
+    // neither inet nor flags got polled - poll for isup only
     if (wants_state and _inetbuf[0] == 0 and _flagsbuf[0] == 0)
-        _ = getInet(sock, &ifr, &_inetbuf, &state_up);
-
-    const fg_hex = switch (fg.*) {
-        .nocolor => null,
-        .default => |t| &t.hex,
-        .color => |t| checkColor(state_up, &t),
-    };
-    const bg_hex = switch (bg.*) {
-        .nocolor => null,
-        .default => |t| &t.hex,
-        .color => |t| checkColor(state_up, &t),
-    };
+        _ = getInet(sock, &ifr, &_inetbuf, &isup);
 
     const writer = stream.writer();
+    const color_handler = ColorHandler{ .isup = isup };
 
-    utl.writeBlockStart(writer, fg_hex, bg_hex);
+    utl.writeBlockStart(
+        writer,
+        color.colorFromColorUnion(fg, color_handler),
+        color.colorFromColorUnion(bg, color_handler),
+    );
     utl.writeStr(writer, cf.parts[1]);
     for (1..cf.nparts - 1) |i| {
         switch (@as(typ.EthOpt, @enumFromInt(cf.opts[i]))) {
             .ifname => utl.writeStr(writer, ifname),
             .inet => utl.writeStr(writer, inet),
             .flags => utl.writeStr(writer, flags),
-            .state => utl.writeStr(writer, if (state_up) "up" else "down"),
+            .state => utl.writeStr(writer, if (isup) "up" else "down"),
             .@"-" => unreachable,
         }
         utl.writeStr(writer, cf.parts[1 + i]);
