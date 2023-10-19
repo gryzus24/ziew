@@ -1,12 +1,12 @@
-# ziew - boring status generator for i3bar
+# ziew -- boring status generator for i3bar
 
 ## Description
-*ziew* is a more minimal and less wasteful alternative to *i3status*.
+*ziew* is a more minimal alternative to *i3status*.
 
 ## Aspirations
-  ziew wants:
-  * to implement useful widgets using the least amount of syscalls and instruction,
-  * to have a small, predictable and at-a-glance understandable configuration file,
+  *ziew* wants:
+  * to implement useful widgets using the least amount of syscalls and instructions,
+  * to have a small and predictable configuration file,
   * to be compatible with any x86_64 Linux platform,
   * to make you yawn once you understand all the puns.
 
