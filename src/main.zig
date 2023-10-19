@@ -136,6 +136,14 @@ pub fn main() void {
         break :blk null;
     };
 
+    const has_battery = blk: {
+        for (config.widget_ids) |wid| {
+            if (wid == typ.WidgetId.BAT)
+                break :blk w_bat.hasBattery();
+        }
+        break :blk false;
+    };
+
     var _timebuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _membuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _cpubuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
@@ -188,7 +196,10 @@ pub fn main() void {
                     .DISK => w_dysk.widget(&diskfbs, &format, fg, bg),
                     .ETH => w_net.widget(&ethfbs, &format, fg, bg),
                     .WLAN => w_net.widget(&wlanfbs, &format, fg, bg),
-                    .BAT => w_bat.widget(&batfbs, &format, fg, bg),
+                    .BAT => if (has_battery)
+                        w_bat.widget(&batfbs, &format, fg, bg)
+                    else
+                        w_bat.widget_no_battery(&batfbs),
                 };
             }
         }

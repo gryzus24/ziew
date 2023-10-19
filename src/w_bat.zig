@@ -131,3 +131,22 @@ pub fn widget(
     }
     return utl.writeBlockEnd_GetWritten(stream);
 }
+
+pub fn hasBattery() bool {
+    const file = fs.cwd().openFileZ(CHARGE_NOW_PATH, .{}) catch |err| switch (err) {
+        error.FileNotFound => return false,
+        else => {
+            utl.warn("BAT: check: {}", .{err});
+            return false;
+        },
+    };
+    file.close();
+
+    return true;
+}
+
+pub fn widget_no_battery(stream: anytype) []const u8 {
+    utl.writeBlockStart(stream, null, null);
+    utl.writeStr(stream, "<no battery>");
+    return utl.writeBlockEnd_GetWritten(stream);
+}
