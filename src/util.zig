@@ -234,3 +234,13 @@ pub fn warn(comptime format: []const u8, args: anytype) void {
     writeStr(io.getStdErr(), msg);
     writeLog(msg);
 }
+
+pub fn repr(str: ?[]const u8) void {
+    const stderr = io.getStdErr().writer();
+    if (str) |s| {
+        std.zig.fmtEscapes(s).format("", .{}, stderr) catch {};
+        writeStr(stderr, "\n");
+    } else {
+        writeStr(stderr, "<null>\n");
+    }
+}

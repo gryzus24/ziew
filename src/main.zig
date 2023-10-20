@@ -77,13 +77,58 @@ fn openProcFiles(dest: *[typ.WIDGETS_MAX]fs.File, widget_ids: []const typ.Widget
     }
 }
 
+fn showHelp() void {
+    utl.writeStr(io.getStdOut(), "usage: ziew [c <config file>] [h] [v]\n");
+}
+
+fn showVersion() void {
+    utl.writeStr(io.getStdOut(), "ziew 0.0.1\n");
+}
+
 pub fn main() void {
+    const argv = std.os.argv;
+
+    var config_path: ?[*:0]const u8 = null;
+    var get_config_path = false;
+
+    var argi: usize = 1;
+    while (argi < argv.len) : (argi += 1) {
+        const arg = argv[argi];
+        const len = mem.len(arg);
+        if (len == 1 or (len == 2 and arg[0] == '-')) {
+            switch (arg[len - 1]) {
+                'c' => {
+                    get_config_path = true;
+                    argi += 1;
+                },
+                'h' => return showHelp(),
+                'v' => return showVersion(),
+                else => {
+                    utl.writeStr(io.getStdOut(), "unknown option\n");
+                    return showHelp();
+                },
+            }
+        }
+        if (argi < argv.len) {
+            if (get_config_path) {
+                config_path = argv[argi];
+                get_config_path = false;
+            }
+        } else {
+            const stdout = io.getStdOut();
+            utl.writeStr(stdout, "required argument: ");
+            utl.writeStr(stdout, arg[0..len]);
+            utl.writeStr(stdout, " <arg>\n");
+            return showHelp();
+        }
+    }
+
     var _config_buf: [cfg.CONFIG_FILE_BYTES_MAX]u8 = undefined;
     var _config_mem: cfg.ConfigMem = undefined;
     var config: cfg.Config = undefined;
 
     const err = blk: {
-        if (cfg.readFile(&_config_buf)) |config_file_view| {
+        if (cfg.readFile(&_config_buf, config_path)) |config_file_view| {
             config = cfg.parse(config_file_view, &_config_mem);
             if (config.widget_ids.len == 0) {
                 utl.warn("no widgets loaded: using defaults...", .{});

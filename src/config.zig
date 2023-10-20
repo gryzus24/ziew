@@ -49,34 +49,39 @@ pub const Config = struct {
 
 pub const CONFIG_FILE_BYTES_MAX = 2048;
 
-pub fn readFile(buf: *[CONFIG_FILE_BYTES_MAX]u8) error{FileNotFound}![]const u8 {
-    @setRuntimeSafety(true);
+fn defaultConfigPath(
+    buf: *[CONFIG_FILE_BYTES_MAX]u8,
+) error{ FileNotFound, PathTooLong }![*:0]const u8 {
+    var fbs = io.fixedBufferStream(buf);
+    if (os.getenvZ("XDG_CONFIG_HOME")) |xdg| {
+        _ = fbs.write(xdg) catch return error.PathTooLong;
+        _ = fbs.write("/ziew/config") catch return error.PathTooLong;
+    } else if (os.getenvZ("HOME")) |home| {
+        _ = fbs.write(home) catch return error.PathTooLong;
+        _ = fbs.write("/.config/ziew/config") catch return error.PathTooLong;
+    } else {
+        utl.warn("config: $HOME and $XDG_CONFIG_HOME not set", .{});
+        return error.FileNotFound;
+    }
+    _ = fbs.write("\x00") catch return error.PathTooLong;
 
-    const null_terminated_config_path_aliasing_buf = blk: {
-        if (os.getenvZ("XDG_CONFIG_HOME")) |xdg| {
-            // use some of that buffer over there
-            @memcpy(buf[0..xdg.len], xdg);
-            const t = "/ziew/config" ++ .{0};
-            @memcpy(buf[xdg.len .. xdg.len + t.len], t);
-        } else if (os.getenvZ("HOME")) |home| {
-            @memcpy(buf[0..home.len], home);
-            const t = "/.config/ziew/config" ++ .{0};
-            @memcpy(buf[home.len .. home.len + t.len], t);
-        } else {
-            utl.warn("config: $HOME and $XDG_CONFIG_HOME not set", .{});
-            return error.FileNotFound;
-        }
-        break :blk buf;
-    };
+    const ret = fbs.getWritten();
+    return ret[0 .. ret.len - 1 :0];
+}
 
-    const file = fs.cwd().openFileZ(
-        @ptrCast(null_terminated_config_path_aliasing_buf),
-        .{},
-    ) catch |err| switch (err) {
+pub fn readFile(
+    buf: *[CONFIG_FILE_BYTES_MAX]u8,
+    path: ?[*:0]const u8,
+) error{FileNotFound}![]const u8 {
+    const config_path = path orelse (defaultConfigPath(buf) catch |err| switch (err) {
+        error.FileNotFound => return error.FileNotFound,
+        error.PathTooLong => utl.fatal("config: {}", .{err}),
+    });
+
+    const file = fs.cwd().openFileZ(config_path, .{}) catch |err| switch (err) {
         error.FileNotFound => return error.FileNotFound,
         else => utl.fatal("config: open: {}", .{err}),
     };
-
     defer file.close();
 
     const nread = nread_blk: {
