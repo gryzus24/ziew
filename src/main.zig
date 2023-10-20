@@ -82,21 +82,20 @@ pub fn main() void {
     var _config_mem: cfg.ConfigMem = undefined;
     var config: cfg.Config = undefined;
 
-    const err = err_blk: {
+    const err = blk: {
         if (cfg.readFile(&_config_buf)) |config_file_view| {
             config = cfg.parse(config_file_view, &_config_mem);
             if (config.widget_ids.len == 0) {
                 utl.warn("no widgets loaded: using defaults...", .{});
-                break :err_blk true;
+                break :blk true;
             } else {
-                break :err_blk false;
+                break :blk false;
             }
         } else |err| switch (err) {
             error.FileNotFound => {
                 utl.warn("no config file: using defaults...", .{});
-                break :err_blk true;
+                break :blk true;
             },
-            else => unreachable,
         }
     };
     if (err)

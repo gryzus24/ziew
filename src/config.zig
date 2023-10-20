@@ -110,19 +110,22 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
     }
 
     while (lines.next()) |line| {
-        if (line[0] == '#')
-            continue;
-
-        if (mem.startsWith(u8, line, "FG") or mem.startsWith(u8, line, "BG")) {
-            const isfg = mem.startsWith(u8, line, "FG");
+        if (line[0] == '#') {
+            // zig fmt: off
+        } else if (
+            line.len >= 2
+            and (line[0] == 'F' or line[0] == 'B')
+            and line[1] == 'G'
+        ) {
+            // zig fmt: on
+            const isfg = line[0] == 'F';
             const fg_colors = &config_mem.wid_fg_colors_buf;
             const bg_colors = &config_mem.wid_bg_colors_buf;
 
-            var wid: u8 = undefined;
+            var wid_int: u8 = undefined;
             const config_color = parseColorLine(
                 line,
-                2,
-                &wid,
+                &wid_int,
                 if (isfg) fg_colors else bg_colors,
                 &errpos,
             ) catch |err| {
@@ -133,43 +136,38 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
                 );
             };
             if (isfg) {
-                config_mem.wid_fg_buf[wid] = config_color;
+                config_mem.wid_fg_buf[wid_int] = config_color;
             } else {
-                config_mem.wid_bg_buf[wid] = config_color;
+                config_mem.wid_bg_buf[wid_int] = config_color;
             }
-            continue;
-        }
+        } else if (typ.strStartToWidEnum(line)) |wid| {
+            const wid_int = @intFromEnum(wid);
+            if (!seen[wid_int]) {
+                parseWidgetLine(
+                    line,
+                    wid,
+                    nwidgets,
+                    config_mem,
+                    &errpos,
+                ) catch |err| {
+                    utl.fatalPos(
+                        "config: {}: {s}",
+                        .{ err, line },
+                        fmt.count("config: {}: ", .{err}) + errpos,
+                    );
+                };
 
-        const wid = typ.strStartToWidEnum(line) orelse {
-            utl.warn("config: unknown widget: '{s}'", .{line});
-            continue;
-        };
-
-        const wid_int = @intFromEnum(wid);
-        if (!seen[wid_int]) {
-            parseWidgetLine(
-                line,
-                @tagName(wid).len,
-                wid_int,
-                nwidgets,
-                config_mem,
-                &errpos,
-            ) catch |err| {
-                utl.fatalPos(
-                    "config: {}: {s}",
-                    .{ err, line },
-                    fmt.count("config: {}: ", .{err}) + errpos,
+                seen[wid_int] = true;
+                config_mem.widget_ids_buf[nwidgets] = wid;
+                typ.knobVerifyArgs(
+                    wid,
+                    config_mem.formats_buf[nwidgets].opts,
+                    config_mem.formats_buf[nwidgets].nparts,
                 );
-            };
-
-            seen[wid_int] = true;
-            config_mem.widget_ids_buf[nwidgets] = wid;
-            typ.knobVerifyArgs(
-                wid,
-                config_mem.formats_buf[nwidgets].opts,
-                config_mem.formats_buf[nwidgets].nparts,
-            );
-            nwidgets += 1;
+                nwidgets += 1;
+            }
+        } else {
+            utl.warn("config: unknown widget: '{s}'", .{line});
         }
     }
     return .{
@@ -239,7 +237,7 @@ pub fn defaultConfig(config_mem: *ConfigMem) Config {
         \\DISK 240 "/{-}/ {available}"
         \\CPU  20  "CPU{%all.1>}"
         \\MEM  20  "MEM {used} : {free} +{cached.0}"
-        \\BAT  120 "BAT {%charge.2} {state}"
+        \\BAT  200 "BAT {%charge.2} {state}"
         \\TIME 20  "%A %d.%m ~ %H:%M:%S "
         \\FG ETH state   0:a22 1:2a2
         \\FG CPU %all    60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
@@ -262,7 +260,7 @@ const COLORS_MAX = 10;
 
 fn parseConfigFormat(
     str: []const u8,
-    wid: u8,
+    wid: typ.WidgetId,
     format_mem: *ConfigFormatMem,
     errpos: *usize,
 ) !ConfigFormat {
@@ -288,7 +286,7 @@ fn parseConfigFormat(
             switch (ch) {
                 '}' => {
                     format_mem.opts[nparts - 1] = for (
-                        typ.WID_TO_OPT_NAMES[wid],
+                        typ.WID_TO_OPT_NAMES[@intFromEnum(wid)],
                         0..,
                     ) |name, j| {
                         const end = blk: {
@@ -385,13 +383,13 @@ fn intervalFromBuf(buf: []u8) typ.DeciSec {
 
 fn parseWidgetLine(
     line: []const u8,
-    start: usize,
-    wid: u8,
+    wid: typ.WidgetId,
     windx: u32,
     config_mem: *ConfigMem,
     errpos: *usize,
 ) !void {
-    var pos = start;
+    var pos = @tagName(wid).len;
+
     var format_errpos: usize = 0;
     errdefer errpos.* = pos + format_errpos;
 
@@ -465,11 +463,15 @@ fn parseWidgetLine(
 
 fn parseColorLine(
     line: []const u8,
-    start: usize,
-    wid_out: *u8,
+    wid_int_out: *u8,
     colors: *[typ.WIDGETS_MAX][COLORS_MAX]color.Color,
     errpos: *usize,
 ) !color.ColorUnion {
+    // 'tis either FG or BG
+    const start = "FG".len;
+    if (line.len < start)
+        unreachable;
+
     var fields = mem.tokenizeAny(u8, line[start..], " \t");
 
     // 0: widget, 1: hex OR opt, 2...: thresh:hex
@@ -482,16 +484,16 @@ fn parseColorLine(
         switch (nfields) {
             0 => {
                 if (typ.strToWidEnum(field)) |ret| {
-                    wid_out.* = @intFromEnum(ret);
+                    wid_int_out.* = @intFromEnum(ret);
                 } else {
                     return error.UnknownWidget;
                 }
             },
             1 => {
-                const _wid = @as(typ.WidgetId, @enumFromInt(wid_out.*));
+                const _wid = @as(typ.WidgetId, @enumFromInt(wid_int_out.*));
                 if (typ.knobSupportsManyColors(_wid)) {
                     if (typ.knobValidManyColorsOptname(_wid, field)) {
-                        for (typ.WID_TO_OPT_NAMES[wid_out.*], 0..) |name, j| {
+                        for (typ.WID_TO_OPT_NAMES[wid_int_out.*], 0..) |name, j| {
                             if (mem.eql(u8, field, name)) {
                                 opt = @intCast(j);
                                 break;
@@ -518,10 +520,10 @@ fn parseColorLine(
                     if (thresh > 100)
                         return error.BadThreshold;
 
-                    colors[wid_out.*][ncolors].thresh = thresh;
+                    colors[wid_int_out.*][ncolors].thresh = thresh;
 
                     const colorstr = field[sep_i + 1 ..];
-                    if (!colors[wid_out.*][ncolors].checkSetHex(colorstr))
+                    if (!colors[wid_int_out.*][ncolors].checkSetHex(colorstr))
                         return error.BadColor;
 
                     ncolors += 1;
@@ -539,7 +541,7 @@ fn parseColorLine(
     return .{
         .color = .{
             .opt = opt.?,
-            .colors = colors[wid_out.*][0..ncolors],
+            .colors = colors[wid_int_out.*][0..ncolors],
         },
     };
 }

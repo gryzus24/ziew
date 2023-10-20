@@ -1,5 +1,11 @@
-# WIDGET    REFRESH INTERVAL (in 1/10ths of a second)    FORMAT STRING
+# Example ziew configuration. After editing, run ziew from the terminal
+# to see if there are any errors. Upon ignoring the advice above
+# you might want to consult the /tmp/ziew.log file.
 ##
+
+##
+# Widget line format
+# WIDGET  REFRESH-INTERVAL (in 1/10ths of a second)  FORMAT-STRING
 
 # You might want to adjust the interface name before the {-} symbol.
 WLAN  20    "wlp1s0{-}{ifname}: {inet} {flags}"
@@ -12,19 +18,28 @@ DISK  240   "/{-}/ {available}"
 CPU   20    "CPU{%all.1>}"
 MEM   20    "MEM {used} : {free} +{cached.0}"
 
-# Retrieving battery info might be expensive, do it every 12 seconds.
-BAT   120   "BAT {%charge.2} {state}"
+# Retrieving battery info might be expensive - do it every 20 seconds.
+BAT   200   "BAT {%charge.2} {state}"
 
-# To make widget timings accurate, make sure all intervals
-# are nicely divisible by the shortest interval.
 # See strftime(3) for details about the format.
 TIME  20    "%A %d.%m ~ %H:%M:%S "
 
-# 0 - interface up, 1 - interface down.
+# To make widget timings accurate, make sure all intervals
+# are nicely divisible by the shortest interval.
+# In this case 200 and 240 are all multiples of 20 so it's fine.
+##
+
+##
+# Color line format
+# FG or BG  WIDGET  OPTION  [THRESHOLD:RGB ...]
+
+# 0 - interface down, 1 - interface up.
+# Valid RGB value formats: a44, #a44, aa4444, #aa4444.
 FG WLAN state 0:a44 1:4a4
 FG ETH  state 0:a44 1:4a4
 
-# Yellow to red gradient.
+# Gradient of yellow (at 60% cpu usage) to red (at 90% and above).
+# Values must be in ascending order. 10 colors max.
 FG CPU %all  60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 FG MEM %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 
