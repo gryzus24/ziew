@@ -10,9 +10,6 @@
   * to be compatible with any x86_64 Linux platform,
   * to make you yawn once you understand all the puns.
 
-## Files
-The configuration file of *ziew* resides at `$XDG_CONFIG_HOME/ziew/config` (usually `~/.config/ziew/config`). See the example configuration file (config) and copy it to this location.
-
 ## Widgets
 Widget | Data source
 ------ | -----------
@@ -23,6 +20,9 @@ Widget | Data source
 | ETH  | netdevice(7), ioctl(2)
 | WLAN | netdevice(7), ioctl(2)
 | BAT  | /sys/class/power_supply/*
+
+## Files
+The configuration file of *ziew* resides at `$XDG_CONFIG_HOME/ziew/config` (usually `~/.config/ziew/config`). See the example configuration file (config) and copy it to this location.
 
 ## Configuration
 The configuration file consists of *Widget* lines and *Color* lines. Lines consist of fields separated by tabs or spaces. The order of *Widget* lines in the configuration file is reflected in the final status output.
