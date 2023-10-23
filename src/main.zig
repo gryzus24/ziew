@@ -159,22 +159,22 @@ pub fn main() void {
     const sleep_ns = (sleep_intrvl % 10) * time.ns_per_s / 10;
 
     const wid_to_procfile = blk: {
-        var w: [typ.WIDGETS_MAX]fs.File = undefined;
-        openProcFiles(&w, config.widget_ids);
-        break :blk w;
+        var buf: [typ.WIDGETS_MAX]fs.File = undefined;
+        openProcFiles(&buf, config.widget_ids);
+        break :blk buf;
     };
 
-    var _strftime_fmt_buf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     const strftime_fmt: ?[:0]const u8 = blk: {
+        var buf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
         for (config.widget_ids, config.formats) |wid, f| {
             if (wid == typ.WidgetId.TIME) {
                 const plen = f.parts[0].len;
-                if (plen >= _strftime_fmt_buf.len)
+                if (plen >= buf.len)
                     utl.fatal("strftime format too long", .{});
 
-                @memcpy(_strftime_fmt_buf[0..plen], f.parts[0]);
-                _strftime_fmt_buf[plen] = '\x00';
-                break :blk _strftime_fmt_buf[0..plen :0];
+                @memcpy(buf[0..plen], f.parts[0]);
+                buf[plen] = '\x00';
+                break :blk buf[0..plen :0];
             }
         }
         break :blk null;

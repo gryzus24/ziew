@@ -11,22 +11,22 @@
 WLAN  20    "wlp1s0{-}{ifname}: {inet} {flags}"
 ETH   20    "enp5s0{-}{ifname}: {inet} {flags}"
 
-# Get space available on / every 24 seconds.
-DISK  240   "/{-}/ {available}"
+# Get space available on / every 20 seconds.
+DISK  200   "/{-}/ {available}"
 
 # .1: precision after a decimal point, >: aligned to the right.
 CPU   20    "CPU{%all.1>}"
 MEM   20    "MEM {used} : {free} +{cached.0}"
 
-# Retrieving battery info might be expensive - do it every 20 seconds.
-BAT   200   "BAT {%charge.2} {state}"
+# Retrieving battery info might be expensive - do it every 30 seconds.
+BAT   300   "BAT {%charge.2} {state}"
 
 # See strftime(3) for details about the format.
 TIME  20    "%A %d.%m ~ %H:%M:%S "
 
 # To make widget timings accurate, make sure all intervals
 # are nicely divisible by the shortest interval.
-# In this case 200 and 240 are all multiples of 20 so it's fine.
+# In this case 200 and 300 are all multiples of 20 so it's fine.
 ##
 
 ##
@@ -44,7 +44,7 @@ FG CPU %all  60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 FG MEM %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 
 # 0 - discharging, 1 - charging, 2 - full, 3 - unknown.
-FG BAT state   1:2a2 2:2a2
+FG BAT state   1:4a4 2:4a4
 
 # 0 to 15%: red, 15% to 25%: faint yellow, 25% and up: default color.
 BG BAT %charge 0:a00 15:220 25:

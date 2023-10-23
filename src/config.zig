@@ -239,15 +239,15 @@ test "config parse" {
 pub fn defaultConfig(config_mem: *ConfigMem) Config {
     const default_config =
         \\ETH  20  "enp5s0{-}{ifname}: {inet} {flags}"
-        \\DISK 240 "/{-}/ {available}"
+        \\DISK 200 "/{-}/ {available}"
         \\CPU  20  "CPU{%all.1>}"
         \\MEM  20  "MEM {used} : {free} +{cached.0}"
-        \\BAT  200 "BAT {%charge.2} {state}"
+        \\BAT  300 "BAT {%charge.2} {state}"
         \\TIME 20  "%A %d.%m ~ %H:%M:%S "
-        \\FG ETH state   0:a22 1:2a2
+        \\FG ETH state   0:a44 1:4a4
         \\FG CPU %all    60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
         \\FG MEM %used   60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-        \\FG BAT state   1:2a2 2:2a2
+        \\FG BAT state   1:4a4 2:4a4
         \\BG BAT %charge 0:a00 15:220 25:
     ;
     return parse(default_config, config_mem);
