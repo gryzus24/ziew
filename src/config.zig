@@ -28,9 +28,13 @@ pub const ConfigFormat = struct {
     opts_alignment: [*]Alignment,
 };
 
+pub const Widget = struct {
+    wid: typ.WidgetId,
+    interval: typ.DeciSec,
+};
+
 pub const ConfigMem = struct {
-    widget_ids_buf: [typ.WIDGETS_MAX]typ.WidgetId,
-    intervals_buf: [typ.WIDGETS_MAX]typ.DeciSec,
+    widgets_buf: [typ.WIDGETS_MAX]Widget,
     formats_mem_buf: [typ.WIDGETS_MAX]ConfigFormatMem,
     formats_buf: [typ.WIDGETS_MAX]ConfigFormat,
     wid_fg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]color.Color,
@@ -40,8 +44,7 @@ pub const ConfigMem = struct {
 };
 
 pub const Config = struct {
-    widget_ids: []const typ.WidgetId,
-    intervals: []const typ.DeciSec,
+    widgets: []const Widget,
     formats: []const ConfigFormat,
     wid_fgs: *const [typ.WIDGETS_MAX]color.ColorUnion,
     wid_bgs: *const [typ.WIDGETS_MAX]color.ColorUnion,
@@ -163,7 +166,7 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
                 };
 
                 seen[wid_int] = true;
-                config_mem.widget_ids_buf[nwidgets] = wid;
+                config_mem.widgets_buf[nwidgets].wid = wid;
                 typ.knobVerifyArgs(
                     wid,
                     config_mem.formats_buf[nwidgets].opts,
@@ -176,8 +179,7 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
         }
     }
     return .{
-        .widget_ids = config_mem.widget_ids_buf[0..nwidgets],
-        .intervals = config_mem.intervals_buf[0..nwidgets],
+        .widgets = config_mem.widgets_buf[0..nwidgets],
         .formats = config_mem.formats_buf[0..nwidgets],
         .wid_fgs = &config_mem.wid_fg_buf,
         .wid_bgs = &config_mem.wid_bg_buf,
@@ -458,7 +460,7 @@ fn parseWidgetLine(
         0 => return error.NoInterval,
         1, 2 => return error.NoFormat,
         3 => {
-            config_mem.intervals_buf[windx] = intrvl;
+            config_mem.widgets_buf[windx].interval = intrvl;
             config_mem.formats_buf[windx] = format;
             return;
         },

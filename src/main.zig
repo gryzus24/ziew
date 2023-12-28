@@ -59,7 +59,7 @@ fn debugCC(config: *const cfg.Config) void {
     std.debug.print("\n", .{});
 }
 
-fn openProcFiles(dest: *[typ.WIDGETS_MAX]fs.File, widget_ids: []const typ.WidgetId) void {
+fn openProcFiles(dest: *[typ.WIDGETS_MAX]fs.File, widgets: []const cfg.Widget) void {
     const wid_to_path = blk: {
         var w: [typ.WIDGETS_MAX][:0]const u8 = .{""} ** typ.WIDGETS_MAX;
         w[@intFromEnum(typ.WidgetId.MEM)] = "/proc/meminfo";
@@ -67,10 +67,11 @@ fn openProcFiles(dest: *[typ.WIDGETS_MAX]fs.File, widget_ids: []const typ.Widget
         break :blk w;
     };
 
-    for (widget_ids) |wid| {
-        const path = wid_to_path[@intFromEnum(wid)];
+    for (widgets) |*widget| {
+        const wid = @intFromEnum(widget.wid);
+        const path = wid_to_path[wid];
         if (path.len > 0) {
-            dest[@intFromEnum(wid)] = fs.cwd().openFileZ(path, .{}) catch |err| {
+            dest[wid] = fs.cwd().openFileZ(path, .{}) catch |err| {
                 utl.fatal("{s} open: {}", .{ path, err });
             };
         }
@@ -130,7 +131,7 @@ pub fn main() void {
     const err = blk: {
         if (cfg.readFile(&_config_buf, config_path)) |config_file_view| {
             config = cfg.parse(config_file_view, &_config_mem);
-            if (config.widget_ids.len == 0) {
+            if (config.widgets.len == 0) {
                 utl.warn("no widgets loaded: using defaults...", .{});
                 break :blk true;
             } else {
@@ -149,9 +150,9 @@ pub fn main() void {
     const sleep_intrvl = blk: {
         // NOTE: gcd is the obvious choice here, but it might prove
         //       disastrous if the interval is misconfigured...
-        var min = config.intervals[0];
-        for (config.intervals[1..]) |intrvl| if (intrvl < min) {
-            min = intrvl;
+        var min = config.widgets[0].interval;
+        for (config.widgets[1..]) |*widget| if (widget.interval < min) {
+            min = widget.interval;
         };
         break :blk min;
     };
@@ -160,14 +161,14 @@ pub fn main() void {
 
     const wid_to_procfile = blk: {
         var buf: [typ.WIDGETS_MAX]fs.File = undefined;
-        openProcFiles(&buf, config.widget_ids);
+        openProcFiles(&buf, config.widgets);
         break :blk buf;
     };
 
     const strftime_fmt: ?[:0]const u8 = blk: {
         var buf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
-        for (config.widget_ids, config.formats) |wid, f| {
-            if (wid == typ.WidgetId.TIME) {
+        for (config.widgets, config.formats) |*widget, f| {
+            if (widget.wid == typ.WidgetId.TIME) {
                 const plen = f.parts[0].len;
                 if (plen >= buf.len)
                     utl.fatal("strftime format too long", .{});
@@ -181,8 +182,8 @@ pub fn main() void {
     };
 
     const has_battery = blk: {
-        for (config.widget_ids) |wid| {
-            if (wid == typ.WidgetId.BAT)
+        for (config.widgets) |*widget| {
+            if (widget.wid == typ.WidgetId.BAT)
                 break :blk w_bat.hasBattery();
         }
         break :blk false;
@@ -219,21 +220,16 @@ pub fn main() void {
     ;
     _ = linux.write(1, header, header.len);
     while (true) {
-        for (
-            config.widget_ids,
-            config.intervals,
-            config.formats,
-            0..,
-        ) |wid, intrvl, format, i| {
+        for (config.widgets, config.formats, 0..) |*widget, format, i| {
             refresh_lags[i] -|= sleep_intrvl;
             if (refresh_lags[i] == 0) {
-                refresh_lags[i] = intrvl;
+                refresh_lags[i] = widget.interval;
 
-                const fg = &config.wid_fgs[@intFromEnum(wid)];
-                const bg = &config.wid_bgs[@intFromEnum(wid)];
-                const pf = &wid_to_procfile[@intFromEnum(wid)];
+                const fg = &config.wid_fgs[@intFromEnum(widget.wid)];
+                const bg = &config.wid_bgs[@intFromEnum(widget.wid)];
+                const pf = &wid_to_procfile[@intFromEnum(widget.wid)];
 
-                bufviews[i] = switch (wid) {
+                bufviews[i] = switch (widget.wid) {
                     .TIME => w_time.widget(&timefbs, strftime_fmt.?, fg, bg),
                     .MEM => w_mem.widget(&memfbs, pf, &format, fg, bg),
                     .CPU => w_cpu.widget(&cpufbs, pf, &cpu_state, &format, fg, bg),
@@ -249,7 +245,7 @@ pub fn main() void {
         }
 
         var pos: usize = 2;
-        for (bufviews[0..config.widget_ids.len]) |view| {
+        for (bufviews[0..config.widgets.len]) |view| {
             @memcpy(write_buffer[pos .. pos + view.len], view);
             pos += view.len;
         }
