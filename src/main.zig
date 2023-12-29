@@ -225,8 +225,8 @@ pub fn main() void {
             if (refresh_lags[i] == 0) {
                 refresh_lags[i] = widget.interval;
 
-                const fg = &config.wid_fgs[@intFromEnum(widget.wid)];
-                const bg = &config.wid_bgs[@intFromEnum(widget.wid)];
+                const fg = &widget.fgcu;
+                const bg = &widget.bgcu;
                 const pf = &wid_to_procfile[@intFromEnum(widget.wid)];
 
                 bufviews[i] = switch (widget.wid) {

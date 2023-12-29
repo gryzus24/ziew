@@ -10,21 +10,16 @@ const os = std.os;
 
 pub const Alignment = enum { none, right, left };
 
-// MEM 20 "MEM {used} : {free} +{cached.0}"
-//         ^^^^ ~~~~ ^^^ ~~~~ ^^ ~~~~~~~~ ^ (Empty string)
-// ^ - part
-// ~ - opt
-pub const ConfigFormatMem = struct {
-    parts: [typ.PARTS_MAX][]const u8,
-    opts: [typ.OPTS_MAX]Opt,
-};
-
 pub const Opt = struct {
     opt: u8,
     precision: u8, // value between 0-9
     alignment: Alignment,
 };
 
+// MEM 20 "MEM {used} : {free} +{cached.0}"
+//         ^^^^ ~~~~ ^^^ ~~~~ ^^ ~~~~~~~~ ^ (Empty string)
+// ^ - part
+// ~ - opt
 pub const ConfigFormat = struct {
     nparts: u8,
     parts: [*][]const u8,
@@ -40,25 +35,28 @@ pub const ConfigFormat = struct {
 };
 
 pub const Widget = struct {
-    wid: typ.WidgetId,
-    interval: typ.DeciSec,
+    wid: typ.WidgetId = typ.WidgetId.TIME,
+    interval: typ.DeciSec = INTERVAL_DEFAULT,
+    fgcu: color.ColorUnion = .{ .nocolor = {} },
+    bgcu: color.ColorUnion = .{ .nocolor = {} },
+};
+
+pub const ConfigFormatMem = struct {
+    parts: [typ.PARTS_MAX][]const u8,
+    opts: [typ.OPTS_MAX]Opt,
 };
 
 pub const ConfigMem = struct {
     widgets_buf: [typ.WIDGETS_MAX]Widget,
-    formats_mem_buf: [typ.WIDGETS_MAX]ConfigFormatMem,
     formats_buf: [typ.WIDGETS_MAX]ConfigFormat,
-    wid_fg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]color.Color,
-    wid_bg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]color.Color,
-    wid_fg_buf: [typ.WIDGETS_MAX]color.ColorUnion,
-    wid_bg_buf: [typ.WIDGETS_MAX]color.ColorUnion,
+    formats_mem_buf: [typ.WIDGETS_MAX]ConfigFormatMem,
+    fg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]color.Color,
+    bg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]color.Color,
 };
 
 pub const Config = struct {
     widgets: []const Widget,
     formats: []const ConfigFormat,
-    wid_fgs: *const [typ.WIDGETS_MAX]color.ColorUnion,
-    wid_bgs: *const [typ.WIDGETS_MAX]color.ColorUnion,
 };
 
 pub const CONFIG_FILE_BYTES_MAX = 2048;
@@ -124,8 +122,7 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
     var errpos: usize = 0;
 
     for (0..typ.WIDGETS_MAX) |i| {
-        config_mem.wid_fg_buf[i] = .{ .nocolor = {} };
-        config_mem.wid_bg_buf[i] = .{ .nocolor = {} };
+        config_mem.widgets_buf[i] = .{};
     }
 
     while (lines.next()) |line| {
@@ -138,8 +135,8 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
         ) {
             // zig fmt: on
             const isfg = line[0] == 'F';
-            const fg_colors = &config_mem.wid_fg_colors_buf;
-            const bg_colors = &config_mem.wid_bg_colors_buf;
+            const fg_colors = &config_mem.fg_colors_buf;
+            const bg_colors = &config_mem.bg_colors_buf;
 
             var wid_int: u8 = undefined;
             const config_color = parseColorLine(
@@ -154,10 +151,15 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
                     fmt.count("config: {}: ", .{err}) + errpos,
                 );
             };
-            if (isfg) {
-                config_mem.wid_fg_buf[wid_int] = config_color;
-            } else {
-                config_mem.wid_bg_buf[wid_int] = config_color;
+            for (config_mem.widgets_buf[0..nwidgets]) |*widget| {
+                if (@intFromEnum(widget.wid) == wid_int) {
+                    if (isfg) {
+                        widget.fgcu = config_color;
+                    } else {
+                        widget.bgcu = config_color;
+                    }
+                    break;
+                }
             }
         } else if (typ.strStartToWidEnum(line)) |wid| {
             const wid_int = @intFromEnum(wid);
@@ -188,8 +190,6 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
     return .{
         .widgets = config_mem.widgets_buf[0..nwidgets],
         .formats = config_mem.formats_buf[0..nwidgets],
-        .wid_fgs = &config_mem.wid_fg_buf,
-        .wid_bgs = &config_mem.wid_bg_buf,
     };
 }
 
