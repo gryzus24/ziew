@@ -90,21 +90,19 @@ pub fn widget(
         color.colorFromColorUnion(bg, color_handler),
     );
     utl.writeStr(writer, cf.parts[0]);
-    for (0..cf.nparts - 1) |j| {
-        const value = slots[cf.opts[j]];
-        const prec = cf.opts_precision[j];
-        const ali = cf.opts_alignment[j];
+    for (cf.iterOpts(), cf.iterParts()[1..]) |*opt, *part| {
+        const value = slots[opt.opt];
 
-        if (ali == .right)
-            utl.writeAlignment(writer, .percent, value, prec);
+        if (opt.alignment == .right)
+            utl.writeAlignment(writer, .percent, value, opt.precision);
 
-        utl.writeFloat(writer, value, prec);
+        utl.writeFloat(writer, value, opt.precision);
         utl.writeStr(writer, "%");
 
-        if (ali == .left)
-            utl.writeAlignment(writer, .percent, value, prec);
+        if (opt.alignment == .left)
+            utl.writeAlignment(writer, .percent, value, opt.precision);
 
-        utl.writeStr(writer, cf.parts[1 + j]);
+        utl.writeStr(writer, part.*);
     }
 
     @memcpy(&prev.fields, &cur.fields);

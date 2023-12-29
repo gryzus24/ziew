@@ -103,8 +103,8 @@ pub fn widget(
         color.colorFromColorUnion(bg, color_handler),
     );
     utl.writeStr(writer, cf.parts[0]);
-    for (0..cf.nparts - 1) |i| {
-        const nu = switch (@as(typ.MemOpt, @enumFromInt(cf.opts[i]))) {
+    for (cf.iterOpts(), cf.iterParts()[1..]) |*opt, *part| {
+        const nu = switch (@as(typ.MemOpt, @enumFromInt(opt.opt))) {
             .@"%used" => utl.percentOf(used_kb, total_kb),
             .@"%free" => utl.percentOf(free_kb, total_kb),
             .@"%available" => utl.percentOf(avail_kb, total_kb),
@@ -117,8 +117,8 @@ pub fn widget(
             .cached => utl.kbToHuman(cached_kb),
         };
 
-        utl.writeNumUnit(writer, nu, cf.opts_alignment[i], cf.opts_precision[i]);
-        utl.writeStr(writer, cf.parts[1 + i]);
+        utl.writeNumUnit(writer, nu, opt.alignment, opt.precision);
+        utl.writeStr(writer, part.*);
     }
     return utl.writeBlockEnd_GetWritten(stream);
 }

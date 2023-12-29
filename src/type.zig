@@ -1,3 +1,4 @@
+const cfg = @import("config.zig");
 const std = @import("std");
 const utl = @import("util.zig");
 const mem = std.mem;
@@ -110,7 +111,7 @@ pub fn knobValidManyColorsOptname(wid: WidgetId, optname: []const u8) bool {
     };
 }
 
-pub fn knobVerifyArgs(wid: WidgetId, opts: [*]const u8, nparts: u8) void {
+pub fn knobVerifyArgs(wid: WidgetId, cf: *const cfg.ConfigFormat) void {
     switch (wid) {
         .DISK, .ETH, .WLAN => {
             const sep_enum_value = switch (wid) {
@@ -121,12 +122,12 @@ pub fn knobVerifyArgs(wid: WidgetId, opts: [*]const u8, nparts: u8) void {
             };
             const nargs = blk: {
                 var n: u8 = 0;
-                for (0..nparts - 1) |i| if (opts[i] == sep_enum_value) {
+                for (cf.iterOpts()) |*opt| if (opt.opt == sep_enum_value) {
                     n += 1;
                 };
                 break :blk n;
             };
-            if (nargs == 0 or opts[0] != sep_enum_value) {
+            if (nargs == 0 or cf.opts[0].opt != sep_enum_value) {
                 const argname = switch (wid) {
                     .DISK => "<mountpoint>",
                     .ETH, .WLAN => "<interface>",

@@ -139,8 +139,8 @@ pub fn widget(
     var isup: bool = false;
     var wants_state: bool = false;
 
-    for (1..cf.nparts - 1) |i| {
-        switch (@as(typ.EthOpt, @enumFromInt(cf.opts[i]))) {
+    for (cf.iterOpts()[1..]) |*opt| {
+        switch (@as(typ.EthOpt, @enumFromInt(opt.opt))) {
             .ifname => {},
             .inet => inet = getInet(sock, &ifr, &_inetbuf, &isup),
             .flags => flags = getFlags(sock, &ifr, &_flagsbuf, &isup),
@@ -161,15 +161,15 @@ pub fn widget(
         color.colorFromColorUnion(bg, color_handler),
     );
     utl.writeStr(writer, cf.parts[1]);
-    for (1..cf.nparts - 1) |i| {
-        switch (@as(typ.EthOpt, @enumFromInt(cf.opts[i]))) {
+    for (cf.iterOpts()[1..], cf.iterParts()[2..]) |*opt, *part| {
+        switch (@as(typ.EthOpt, @enumFromInt(opt.opt))) {
             .ifname => utl.writeStr(writer, ifname),
             .inet => utl.writeStr(writer, inet),
             .flags => utl.writeStr(writer, flags),
             .state => utl.writeStr(writer, if (isup) "up" else "down"),
             .@"-" => unreachable,
         }
-        utl.writeStr(writer, cf.parts[1 + i]);
+        utl.writeStr(writer, part.*);
     }
     return utl.writeBlockEnd_GetWritten(stream);
 }

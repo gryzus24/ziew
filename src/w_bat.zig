@@ -98,8 +98,8 @@ pub fn widget(
     var statusbuf: [64]u8 = undefined;
     var status: ?[]const u8 = null;
 
-    for (0..cf.nparts - 1) |i| {
-        if (@as(typ.BatOpt, @enumFromInt(cf.opts[i])) == .state) {
+    for (cf.iterOpts()) |*opt| {
+        if (@as(typ.BatOpt, @enumFromInt(opt.opt)) == .state) {
             status = readStatusFile(&statusbuf);
             break;
         }
@@ -118,16 +118,23 @@ pub fn widget(
         color.colorFromColorUnion(bg, color_handler),
     );
     utl.writeStr(writer, cf.parts[0]);
-    for (0..cf.nparts - 1) |i| {
-        const prec = cf.opts_precision[i];
-        const ali = cf.opts_alignment[i];
-
-        switch (@as(typ.BatOpt, @enumFromInt(cf.opts[i]))) {
-            .@"%capacity" => utl.writeNumUnit(writer, pcapacity, ali, prec),
-            .@"%charge" => utl.writeNumUnit(writer, pcharge, ali, prec),
+    for (cf.iterOpts(), cf.iterParts()[1..]) |*opt, *part| {
+        switch (@as(typ.BatOpt, @enumFromInt(opt.opt))) {
+            .@"%capacity" => utl.writeNumUnit(
+                writer,
+                pcapacity,
+                opt.alignment,
+                opt.precision,
+            ),
+            .@"%charge" => utl.writeNumUnit(
+                writer,
+                pcharge,
+                opt.alignment,
+                opt.precision,
+            ),
             .state => utl.writeStr(writer, status.?),
         }
-        utl.writeStr(writer, cf.parts[1 + i]);
+        utl.writeStr(writer, part.*);
     }
     return utl.writeBlockEnd_GetWritten(stream);
 }

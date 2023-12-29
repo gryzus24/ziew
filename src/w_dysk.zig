@@ -88,8 +88,8 @@ pub fn widget(
         color.colorFromColorUnion(bg, color_handler),
     );
     utl.writeStr(writer, cf.parts[1]);
-    for (1..cf.nparts - 1) |i| {
-        const nu = switch (@as(typ.DiskOpt, @enumFromInt(cf.opts[i]))) {
+    for (cf.iterOpts()[1..], cf.iterParts()[2..]) |*opt, *part| {
+        const nu = switch (@as(typ.DiskOpt, @enumFromInt(opt.opt))) {
             .@"%used" => utl.percentOf(used_kb, total_kb),
             .@"%free" => utl.percentOf(free_kb, total_kb),
             .@"%available" => utl.percentOf(avail_kb, total_kb),
@@ -100,8 +100,8 @@ pub fn widget(
             .@"-" => unreachable,
         };
 
-        utl.writeNumUnit(writer, nu, cf.opts_alignment[i], cf.opts_precision[i]);
-        utl.writeStr(writer, cf.parts[1 + i]);
+        utl.writeNumUnit(writer, nu, opt.alignment, opt.precision);
+        utl.writeStr(writer, part.*);
     }
     return utl.writeBlockEnd_GetWritten(stream);
 }

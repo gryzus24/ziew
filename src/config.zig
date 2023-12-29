@@ -10,22 +10,33 @@ const os = std.os;
 
 pub const Alignment = enum { none, right, left };
 
+// MEM 20 "MEM {used} : {free} +{cached.0}"
+//         ^^^^ ~~~~ ^^^ ~~~~ ^^ ~~~~~~~~ ^ (Empty string)
+// ^ - part
+// ~ - opt
 pub const ConfigFormatMem = struct {
     parts: [typ.PARTS_MAX][]const u8,
-    opts: [typ.OPTS_MAX]u8,
-    opts_precision: [typ.OPTS_MAX]u8,
-    opts_alignment: [typ.OPTS_MAX]Alignment,
+    opts: [typ.OPTS_MAX]Opt,
+};
+
+pub const Opt = struct {
+    opt: u8,
+    precision: u8, // value between 0-9
+    alignment: Alignment,
 };
 
 pub const ConfigFormat = struct {
     nparts: u8,
-    parts: [*][]const u8, // strings between options
+    parts: [*][]const u8,
+    opts: [*]Opt,
 
-    // { } between strings, one less than nparts,
-    // points to the value of the widget's enum
-    opts: [*]const u8,
-    opts_precision: [*]u8, // value between 0-9
-    opts_alignment: [*]Alignment,
+    pub fn iterParts(self: @This()) []const []const u8 {
+        return self.parts[0..self.nparts];
+    }
+
+    pub fn iterOpts(self: @This()) []const Opt {
+        return self.opts[0 .. self.nparts - 1];
+    }
 };
 
 pub const Widget = struct {
@@ -167,11 +178,7 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
 
                 seen[wid_int] = true;
                 config_mem.widgets_buf[nwidgets].wid = wid;
-                typ.knobVerifyArgs(
-                    wid,
-                    config_mem.formats_buf[nwidgets].opts,
-                    config_mem.formats_buf[nwidgets].nparts,
-                );
+                typ.knobVerifyArgs(wid, &config_mem.formats_buf[nwidgets]);
                 nwidgets += 1;
             }
         } else {
@@ -292,7 +299,7 @@ fn parseConfigFormat(
         if (in) {
             switch (ch) {
                 '}' => {
-                    format_mem.opts[nparts - 1] = for (
+                    format_mem.opts[nparts - 1].opt = for (
                         typ.WID_TO_OPT_NAMES[@intFromEnum(wid)],
                         0..,
                     ) |name, j| {
@@ -308,21 +315,21 @@ fn parseConfigFormat(
                             continue;
 
                         // defaults
-                        format_mem.opts_precision[nparts - 1] = OPT_PRECISION_DEFAULT;
-                        format_mem.opts_alignment[nparts - 1] = OPT_ALIGNMENT_DEFAULT;
+                        format_mem.opts[nparts - 1].precision = OPT_PRECISION_DEFAULT;
+                        format_mem.opts[nparts - 1].alignment = OPT_ALIGNMENT_DEFAULT;
 
                         // has any specifiers?
                         if (end + 1 < optbuf_i) {
                             for (optbuf[end + 1 .. optbuf_i]) |spec_ch| {
                                 switch (spec_ch) {
                                     '0'...'9' => {
-                                        format_mem.opts_precision[nparts - 1] = spec_ch - '0';
+                                        format_mem.opts[nparts - 1].precision = spec_ch - '0';
                                     },
                                     '<' => {
-                                        format_mem.opts_alignment[nparts - 1] = .left;
+                                        format_mem.opts[nparts - 1].alignment = .left;
                                     },
                                     '>' => {
-                                        format_mem.opts_alignment[nparts - 1] = .right;
+                                        format_mem.opts[nparts - 1].alignment = .right;
                                     },
                                     else => return error.UnknownSpecifier,
                                 }
@@ -374,8 +381,6 @@ fn parseConfigFormat(
         .nparts = nparts,
         .parts = &format_mem.parts,
         .opts = &format_mem.opts,
-        .opts_precision = &format_mem.opts_precision,
-        .opts_alignment = &format_mem.opts_alignment,
     };
 }
 
