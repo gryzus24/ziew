@@ -177,7 +177,6 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
                         fmt.count("config: {}: ", .{err}) + errpos,
                     );
                 };
-
                 seen[wid_int] = true;
                 config_mem.widgets_buf[nwidgets].wid = wid;
                 typ.knobVerifyArgs(wid, &config_mem.formats_buf[nwidgets]);
@@ -272,32 +271,56 @@ const OPT_ALIGNMENT_DEFAULT = .none;
 
 const COLORS_MAX = 10;
 
-fn parseConfigFormat(
+fn skipWhitespace(str: []const u8) usize {
+    var i: usize = 0;
+    while (i < str.len and (str[i] == ' ' or str[i] == '\t')) : (i += 1) {}
+    return i;
+}
+
+fn acceptInterval(str: []const u8, pos: *usize) !typ.DeciSec {
+    const start = skipWhitespace(str);
+    if (start == str.len) return error.NoInterval;
+
+    var i: usize = start;
+    defer pos.* += i;
+
+    out: while (i < str.len) {
+        switch (str[i]) {
+            '0'...'9' => i += 1,
+            ' ', '\t' => break :out,
+            else => return error.BadInterval,
+        }
+    }
+    const ret = fmt.parseUnsigned(typ.DeciSec, str[start..i], 10) catch unreachable;
+    if (ret <= 0 or ret > INTERVAL_MAX) return INTERVAL_MAX;
+    return ret;
+}
+
+fn acceptConfigFormat(
     str: []const u8,
     wid: typ.WidgetId,
     format_mem: *ConfigFormatMem,
-    errpos: *usize,
+    pos: *usize,
 ) !ConfigFormat {
-    var i: usize = 0;
-    errdefer errpos.* = i;
+    const start = skipWhitespace(str);
+    pos.* += start;
 
-    if (str.len == 0)
-        return error.NoFormat;
-    if (str[0] != '"' or str[str.len - 1] != '"' or str.len == 1)
-        return error.MissingQuotes;
+    if (start == str.len) return error.NoFormat;
+    if (str.len - start == 1) return error.MissingQuotes; // one character
+    if (str[start] != '"') return error.MissingQuotes;
 
-    const line = str[1 .. str.len - 1];
-
+    var inside_brackets: bool = false;
+    var nparts: u8 = 0;
     var optbuf: [typ.OPT_NAME_BUF_MAX]u8 = undefined;
     var optbuf_i: usize = 0;
+    var part_i: usize = start + 1;
 
-    var nparts: u8 = 0;
+    var i: usize = start + 1;
+    defer pos.* += i - start - 1;
 
-    var in: bool = false;
-    var pos: usize = 0;
-    for (line) |ch| {
-        if (in) {
-            switch (ch) {
+    while (i < str.len and str[i] != '"') : (i += 1) {
+        if (inside_brackets) {
+            switch (str[i]) {
                 '}' => {
                     format_mem.opts[nparts - 1].opt = for (
                         typ.WID_TO_OPT_NAMES[@intFromEnum(wid)],
@@ -311,8 +334,7 @@ fn parseConfigFormat(
                             }
                         };
 
-                        if (!mem.eql(u8, name, optbuf[0..end]))
-                            continue;
+                        if (!mem.eql(u8, name, optbuf[0..end])) continue;
 
                         // defaults
                         format_mem.opts[nparts - 1].precision = OPT_PRECISION_DEFAULT;
@@ -341,40 +363,36 @@ fn parseConfigFormat(
                         return error.UnknownOption;
                     };
                     optbuf_i = 0;
-                    pos = i + 1;
-                    in = false;
+                    part_i = i + 1;
+                    inside_brackets = false;
                 },
                 '{' => return error.BracketMismatch,
                 else => {
                     if (optbuf_i == typ.OPT_NAME_BUF_MAX)
                         return error.UnknownOption;
 
-                    optbuf[optbuf_i] = ch;
+                    optbuf[optbuf_i] = str[i];
                     optbuf_i += 1;
                 },
             }
         } else {
-            switch (ch) {
+            switch (str[i]) {
                 '{' => {
-                    in = true;
-                    format_mem.parts[nparts] = line[pos..i];
+                    inside_brackets = true;
+                    format_mem.parts[nparts] = str[part_i..i];
                     nparts += 1;
-                    if (nparts == typ.PARTS_MAX)
-                        return error.RogueUser;
+                    if (nparts == typ.PARTS_MAX) return error.RogueUser;
                 },
                 '}' => return error.BracketMismatch,
                 else => {},
             }
         }
-        i += 1;
     }
 
-    if (in)
-        return error.BracketMismatch;
-    if (nparts == typ.PARTS_MAX)
-        return error.RogueUser;
+    if (inside_brackets) return error.BracketMismatch;
+    if (i == str.len) return error.MissingQuotes;
 
-    format_mem.parts[nparts] = line[pos..];
+    format_mem.parts[nparts] = str[part_i..i];
     nparts += 1;
 
     return .{
@@ -382,15 +400,6 @@ fn parseConfigFormat(
         .parts = &format_mem.parts,
         .opts = &format_mem.opts,
     };
-}
-
-fn intervalFromBuf(buf: []u8) typ.DeciSec {
-    const ret = fmt.parseUnsigned(typ.DeciSec, buf, 10) catch unreachable;
-    if (ret <= 0 or ret > INTERVAL_MAX) {
-        return INTERVAL_MAX;
-    } else {
-        return ret;
-    }
 }
 
 fn parseWidgetLine(
@@ -401,76 +410,15 @@ fn parseWidgetLine(
     errpos: *usize,
 ) !void {
     var pos = @tagName(wid).len;
+    errdefer errpos.* = pos;
 
-    var format_errpos: usize = 0;
-    errdefer errpos.* = pos + format_errpos;
-
-    if (line.len <= pos)
-        return error.NoInterval;
-    if (line[pos] != ' ' and line[pos] != '\t')
-        return error.NoInterval;
-
-    var _intrvlbuf: [fmt.count("{d}", .{INTERVAL_MAX})]u8 = undefined;
-    var intrvlfbs = io.fixedBufferStream(&_intrvlbuf);
-    var intrvl = INTERVAL_DEFAULT;
-
-    var format: ConfigFormat = undefined;
-
-    var state: u8 = 0;
-    for (line[pos..]) |ch| {
-        if (state == 0) {
-            switch (ch) {
-                ' ', '\t' => {},
-                '0'...'9' => {
-                    _ = intrvlfbs.write(&[1]u8{ch}) catch unreachable;
-                    state = 1;
-                },
-                else => return error.BadInterval,
-            }
-        } else if (state == 1) {
-            switch (ch) {
-                ' ', '\t' => {
-                    intrvl = intervalFromBuf(intrvlfbs.getWritten());
-                    state = 2;
-                },
-                '0'...'9' => {
-                    _ = intrvlfbs.write(&[1]u8{ch}) catch {
-                        return error.BadInterval;
-                    };
-                },
-                else => return error.BadInterval,
-            }
-        } else if (state == 2) {
-            switch (ch) {
-                ' ', '\t' => {},
-                '"' => {
-                    format = try parseConfigFormat(
-                        line[pos..],
-                        wid,
-                        &config_mem.formats_mem_buf[windx],
-                        &format_errpos,
-                    );
-                    state = 3;
-                    break;
-                },
-                else => {
-                    return error.MissingQuotes;
-                },
-            }
-        }
-        pos += 1;
-    }
-
-    switch (state) {
-        0 => return error.NoInterval,
-        1, 2 => return error.NoFormat,
-        3 => {
-            config_mem.widgets_buf[windx].interval = intrvl;
-            config_mem.formats_buf[windx] = format;
-            return;
-        },
-        else => unreachable,
-    }
+    config_mem.widgets_buf[windx].interval = try acceptInterval(line[pos..], &pos);
+    config_mem.formats_buf[windx] = try acceptConfigFormat(
+        line[pos..],
+        wid,
+        &config_mem.formats_mem_buf[windx],
+        &pos,
+    );
 }
 
 fn parseColorLine(
