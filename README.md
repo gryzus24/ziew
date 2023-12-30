@@ -205,29 +205,35 @@ All widget format options, specifiers and color options are documented below.
 
 **BAT**
 
+    Required argument at the start of the format text
+      <battery name>{-}
+
     Format
       Options
-        * %capacity - battery charge relative to the current battery capacity,
-        * %charge   - battery charge relative to the original battery capacity,
-        * state     - battery state, either "Discharging", "Charging" or "Full".
+        * %fullnow    - charge relative to the current battery capacity,
+        * %fulldesign - charge relative to the designed battery capacity,
+        * state       - battery state, either "Discharging", "Charging",
+                        "Full" or "Not-charging".
 
       Optional specifiers
         * precision - number from 0 to 9 inclusive,
         * alignment - either < for left alignment or > for right alignment.
 
       Example format
-        "BAT: {%charge} {state}"
+        "BAT0{-}BAT: {%fulldesign.2} {state}"
 
     Colors
       [x] default
       [x] conditional
 
-      state: 0 - battery is discharging
-             1 - battery is charging
-             2 - battery is full
-             3 - unknown state
+      state: 0 - battery is discharging,
+             1 - battery is charging,
+             2 - battery is full,
+             3 - battery is not-charging,
+             4 - unknown state.
 
-      Example color line
+      Example color lines
+        FG BAT state 1:4a4 2:4a4
         BG BAT %charge 0:a00 15:220 25:
 
 ## Notes and caveats

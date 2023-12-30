@@ -168,14 +168,6 @@ pub fn main() void {
         break :blk null;
     };
 
-    const has_battery = blk: {
-        for (config.widgets) |*widget| {
-            if (widget.wid == typ.WidgetId.BAT)
-                break :blk w_bat.hasBattery();
-        }
-        break :blk false;
-    };
-
     var _timebuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _membuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _cpubuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
@@ -207,7 +199,7 @@ pub fn main() void {
     ;
     _ = linux.write(1, header, header.len);
     while (true) {
-        for (config.widgets, config.formats, 0..) |*widget, format, i| {
+        for (config.widgets, config.formats, 0..) |*widget, *format, i| {
             refresh_lags[i] -|= sleep_intrvl;
             if (refresh_lags[i] == 0) {
                 refresh_lags[i] = widget.interval;
@@ -218,15 +210,12 @@ pub fn main() void {
 
                 bufviews[i] = switch (widget.wid) {
                     .TIME => w_time.widget(&timefbs, strftime_fmt.?, fg, bg),
-                    .MEM => w_mem.widget(&memfbs, pf, &format, fg, bg),
-                    .CPU => w_cpu.widget(&cpufbs, pf, &cpu_state, &format, fg, bg),
-                    .DISK => w_dysk.widget(&diskfbs, &format, fg, bg),
-                    .ETH => w_net.widget(&ethfbs, &format, fg, bg),
-                    .WLAN => w_net.widget(&wlanfbs, &format, fg, bg),
-                    .BAT => if (has_battery)
-                        w_bat.widget(&batfbs, &format, fg, bg)
-                    else
-                        w_bat.widget_no_battery(&batfbs),
+                    .MEM => w_mem.widget(&memfbs, pf, format, fg, bg),
+                    .CPU => w_cpu.widget(&cpufbs, pf, &cpu_state, format, fg, bg),
+                    .DISK => w_dysk.widget(&diskfbs, format, fg, bg),
+                    .ETH => w_net.widget(&ethfbs, format, fg, bg),
+                    .WLAN => w_net.widget(&wlanfbs, format, fg, bg),
+                    .BAT => w_bat.widget(&batfbs, format, fg, bg),
                 };
             }
         }

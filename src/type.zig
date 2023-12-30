@@ -36,7 +36,7 @@ pub const DiskOpt = enum {
 };
 pub const EthOpt = enum { ifname, inet, flags, state, @"-" };
 pub const WlanOpt = enum { ifname, inet, flags, state, @"-" };
-pub const BatOpt = enum { @"%capacity", @"%charge", state };
+pub const BatOpt = enum { @"%fullnow", @"%fulldesign", state, @"-" };
 
 pub const OPT_TYPES = blk: {
     const w = .{ TimeOpt, MemOpt, CpuOpt, DiskOpt, EthOpt, WlanOpt, BatOpt };
@@ -113,11 +113,12 @@ pub fn knobValidManyColorsOptname(wid: WidgetId, optname: []const u8) bool {
 
 pub fn knobVerifyArgs(wid: WidgetId, cf: *const cfg.ConfigFormat) void {
     switch (wid) {
-        .DISK, .ETH, .WLAN => {
+        .DISK, .ETH, .WLAN, .BAT => {
             const sep_enum_value = switch (wid) {
                 .DISK => @intFromEnum(DiskOpt.@"-"),
                 .ETH => @intFromEnum(EthOpt.@"-"),
                 .WLAN => @intFromEnum(WlanOpt.@"-"),
+                .BAT => @intFromEnum(BatOpt.@"-"),
                 else => unreachable,
             };
             const nargs = blk: {
@@ -131,6 +132,7 @@ pub fn knobVerifyArgs(wid: WidgetId, cf: *const cfg.ConfigFormat) void {
                 const argname = switch (wid) {
                     .DISK => "<mountpoint>",
                     .ETH, .WLAN => "<interface>",
+                    .BAT => "<battery name>",
                     else => unreachable,
                 };
                 utl.fatal("config: {s}: requires argument {s}", .{ @tagName(wid), argname });
@@ -138,7 +140,7 @@ pub fn knobVerifyArgs(wid: WidgetId, cf: *const cfg.ConfigFormat) void {
             if (nargs > 1)
                 utl.fatal("config: {s}: too many arguments", .{@tagName(wid)});
         },
-        .TIME, .MEM, .CPU, .BAT => {},
+        .TIME, .MEM, .CPU => {},
     }
 }
 

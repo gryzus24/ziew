@@ -18,8 +18,9 @@ DISK  200   "/{-}/ {available}"
 CPU   20    "CPU{%all.1>}"
 MEM   20    "MEM {used} : {free} +{cached.0}"
 
+# Get battery info from /sys/class/power_supply/BAT<n>.
 # Retrieving battery info might be expensive - do it every 30 seconds.
-BAT   300   "BAT {%charge.2} {state}"
+BAT   300   "BAT0{-}BAT {%fulldesign.2} {state}"
 
 # See strftime(3) for details about the format.
 TIME  20    "%A %d.%m ~ %H:%M:%S "
@@ -43,11 +44,11 @@ FG ETH  state 0:a44 1:4a4
 FG CPU %all  60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 FG MEM %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 
-# 0 - discharging, 1 - charging, 2 - full, 3 - unknown.
+# 0 - Discharging, 1 - Charging, 2 - Full, 3 - Not-charging, 4 - Unknown
 FG BAT state   1:4a4 2:4a4
 
 # 0 to 15%: red, 15% to 25%: faint yellow, 25% and up: default color.
-BG BAT %charge 0:a00 15:220 25:
+BG BAT %fulldesign 0:a00 15:220 25:
 
 # Set the default foreground color.
 FG TIME 9f9
