@@ -15,29 +15,6 @@ const linux = std.os.linux;
 const mem = std.mem;
 const time = std.time;
 
-fn debugCF(cf: *const cfg.ConfigFormat) void {
-    for (cf.formats) |format| {
-        std.debug.print("PARTS: ", .{});
-        for (format.parts) |part| {
-            std.debug.print("[{s}]  ", .{part});
-        }
-        std.debug.print("\n", .{});
-        std.debug.print("OPTS:  ", .{});
-        for (format.opts) |opt| {
-            std.debug.print("{d} ", .{opt});
-        }
-        std.debug.print("\n", .{});
-        std.debug.print("PRECI: {any}\n", .{format.opts_precision});
-        std.debug.print("ALIGN: {any}\n", .{format.opts_alignment});
-        std.debug.print("======\n", .{});
-    }
-    std.debug.print("INTERVALS: ", .{});
-    for (cf.intervals) |interval| {
-        std.debug.print("{d} ", .{interval});
-    }
-    std.debug.print("\n", .{});
-}
-
 fn debugColors(cm: *const cfg.ConfigMem) void {
     std.debug.print("NCOLORS: {d}\n", .{cm.ncolors});
     std.debug.print("COLORS:\n", .{});
