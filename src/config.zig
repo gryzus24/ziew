@@ -52,7 +52,7 @@ pub const ConfigMem = struct {
     formats_mem_buf: [typ.WIDGETS_MAX]ConfigFormatMem = undefined,
     colors_buf: [COLORS_MAX]color.Color = undefined,
 
-    ncolors: u32 = 0,
+    ncolors: usize = 0,
 
     pub fn newColor(self: *@This(), _color: color.Color) void {
         if (self.ncolors == COLORS_MAX)
@@ -62,7 +62,7 @@ pub const ConfigMem = struct {
         self.ncolors += 1;
     }
 
-    pub fn nLatestColorsSlice(self: *const @This(), n: u32) []const color.Color {
+    pub fn nLatestColorsSlice(self: *const @This(), n: usize) []const color.Color {
         @setRuntimeSafety(true);
         return self.colors_buf[self.ncolors - n .. self.ncolors];
     }
@@ -130,7 +130,7 @@ pub fn readFile(
 }
 
 pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
-    var nwidgets: u32 = 0;
+    var nwidgets: usize = 0;
     var lines = mem.tokenizeScalar(u8, buf, '\n');
     var seen: [typ.WIDGETS_MAX]bool = .{false} ** typ.WIDGETS_MAX;
     var errpos: usize = 0;
@@ -415,7 +415,7 @@ fn acceptConfigFormat(
 fn parseWidgetLine(
     line: []const u8,
     wid: typ.WidgetId,
-    windx: u32,
+    windx: usize,
     config_mem: *ConfigMem,
     errpos: *usize,
 ) !void {
