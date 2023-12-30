@@ -6,7 +6,7 @@ const c = utl.c;
 
 pub fn widget(
     stream: anytype,
-    strftime_fmt: [:0]const u8,
+    strftime_fmt: [*:0]const u8,
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
@@ -16,8 +16,7 @@ pub fn widget(
     utl.writeBlockStart(stream, fg.getDefault(), bg.getDefault());
     const nwritten = c.strftime(&timebuf, timebuf.len, strftime_fmt, tm);
     if (nwritten == 0) {
-        const surrogate = "<empty>";
-        utl.writeStr(stream, surrogate);
+        utl.writeStr(stream, "<empty>");
     } else {
         utl.writeStr(stream, timebuf[0..nwritten]);
     }

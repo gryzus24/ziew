@@ -32,8 +32,8 @@ fn debugCF(cf: *const cfg.ConfigFormat) void {
         std.debug.print("======\n", .{});
     }
     std.debug.print("INTERVALS: ", .{});
-    for (cf.intervals) |intrvl| {
-        std.debug.print("{d} ", .{intrvl});
+    for (cf.intervals) |interval| {
+        std.debug.print("{d} ", .{interval});
     }
     std.debug.print("\n", .{});
 }
@@ -65,20 +65,21 @@ fn openProcFiles(dest: *[typ.WIDGETS_MAX]fs.File, widgets: []const cfg.Widget) v
     }
 }
 
-fn showHelp() void {
+fn showHelpAndExit() noreturn {
     utl.writeStr(io.getStdOut(), "usage: ziew [c <config file>] [h] [v]\n");
+    std.os.exit(0);
 }
 
-fn showVersion() void {
+fn showVersionAndExit() noreturn {
     utl.writeStr(io.getStdOut(), "ziew 0.0.1\n");
+    std.os.exit(0);
 }
 
-pub fn main() void {
+fn readArgs() ?[*:0]const u8 {
     const argv = std.os.argv;
 
     var config_path: ?[*:0]const u8 = null;
     var get_config_path = false;
-
     var argi: usize = 1;
     while (argi < argv.len) : (argi += 1) {
         const arg = argv[argi];
@@ -89,11 +90,11 @@ pub fn main() void {
                     get_config_path = true;
                     argi += 1;
                 },
-                'h' => return showHelp(),
-                'v' => return showVersion(),
+                'h' => showHelpAndExit(),
+                'v' => showVersionAndExit(),
                 else => {
                     utl.writeStr(io.getStdOut(), "unknown option\n");
-                    return showHelp();
+                    showHelpAndExit();
                 },
             }
         }
@@ -107,17 +108,22 @@ pub fn main() void {
             utl.writeStr(stdout, "required argument: ");
             utl.writeStr(stdout, arg[0..len]);
             utl.writeStr(stdout, " <arg>\n");
-            return showHelp();
+            showHelpAndExit();
         }
     }
+    return config_path;
+}
 
-    var _config_buf: [cfg.CONFIG_FILE_BYTES_MAX]u8 = undefined;
-    var _config_mem: cfg.ConfigMem = .{};
+fn readConfig(
+    buf: *[cfg.CONFIG_FILE_BYTES_MAX]u8,
+    cm: *cfg.ConfigMem,
+    path: ?[*:0]const u8,
+) cfg.Config {
     var config: cfg.Config = undefined;
 
     const err = blk: {
-        if (cfg.readFile(&_config_buf, config_path)) |config_file_view| {
-            config = cfg.parse(config_file_view, &_config_mem);
+        if (cfg.readFile(buf, path)) |config_file_view| {
+            config = cfg.parse(config_file_view, cm);
             if (config.widgets.len == 0) {
                 utl.warn("no widgets loaded: using defaults...", .{});
                 break :blk true;
@@ -132,41 +138,53 @@ pub fn main() void {
         }
     };
     if (err)
-        config = cfg.defaultConfig(&_config_mem);
+        config = cfg.defaultConfig(cm);
 
-    const sleep_intrvl = blk: {
-        // NOTE: gcd is the obvious choice here, but it might prove
-        //       disastrous if the interval is misconfigured...
-        var min = config.widgets[0].interval;
-        for (config.widgets[1..]) |*widget| if (widget.interval < min) {
-            min = widget.interval;
-        };
-        break :blk min;
+    return config;
+}
+
+fn minSleepInterval(widgets: []const cfg.Widget) typ.DeciSec {
+    // NOTE: gcd is the obvious choice here, but it might prove
+    //       disastrous if the interval is misconfigured...
+    var min = widgets[0].interval;
+    for (widgets[1..]) |*widget| if (widget.interval < min) {
+        min = widget.interval;
     };
-    const sleep_s = sleep_intrvl / 10;
-    const sleep_ns = (sleep_intrvl % 10) * time.ns_per_s / 10;
+    return min;
+}
 
-    const wid_to_procfile = blk: {
-        var buf: [typ.WIDGETS_MAX]fs.File = undefined;
-        openProcFiles(&buf, config.widgets);
-        break :blk buf;
-    };
-
-    const strftime_fmt: ?[:0]const u8 = blk: {
-        var buf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
-        for (config.widgets, config.formats) |*widget, f| {
-            if (widget.wid == typ.WidgetId.TIME) {
-                const plen = f.parts[0].len;
-                if (plen >= buf.len)
-                    utl.fatal("strftime format too long", .{});
-
-                @memcpy(buf[0..plen], f.parts[0]);
-                buf[plen] = '\x00';
-                break :blk buf[0..plen :0];
-            }
+fn zeroStrftimeFormat(
+    buf: *[typ.WIDGET_BUF_BYTES_MAX]u8,
+    config: *const cfg.Config,
+) ?[*:0]const u8 {
+    for (config.widgets, config.formats) |*widget, *format| {
+        if (widget.wid == typ.WidgetId.TIME) {
+            const part = format.parts[0];
+            if (part.len >= buf.len) utl.fatal("time format too long", .{});
+            @memcpy(buf[0..part.len], format.parts[0]);
+            buf[part.len] = '\x00';
+            return buf[0.. :0];
         }
-        break :blk null;
-    };
+    }
+    return null;
+}
+
+pub fn main() void {
+    var _config_buf: [cfg.CONFIG_FILE_BYTES_MAX]u8 = undefined;
+    var _config_mem: cfg.ConfigMem = .{};
+
+    const config_path = readArgs();
+    const config = readConfig(&_config_buf, &_config_mem, config_path);
+
+    const sleep_interval = minSleepInterval(config.widgets);
+    const sleep_s = sleep_interval / 10;
+    const sleep_ns = (sleep_interval % 10) * time.ns_per_s / 10;
+
+    var strftime_fmt_buf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
+    const strftime_fmt = zeroStrftimeFormat(&strftime_fmt_buf, &config);
+
+    var wid_to_procfile: [typ.WIDGETS_MAX]fs.File = undefined;
+    openProcFiles(&wid_to_procfile, config.widgets);
 
     var _timebuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
     var _membuf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
@@ -200,7 +218,7 @@ pub fn main() void {
     _ = linux.write(1, header, header.len);
     while (true) {
         for (config.widgets, config.formats, 0..) |*widget, *format, i| {
-            refresh_lags[i] -|= sleep_intrvl;
+            refresh_lags[i] -|= sleep_interval;
             if (refresh_lags[i] == 0) {
                 refresh_lags[i] = widget.interval;
 
