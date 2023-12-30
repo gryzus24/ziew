@@ -210,14 +210,31 @@ test "config parse" {
         \\FG CPU %all 0:fff 10:#999
         \\BG CPU 282828
     ;
-    var cm: ConfigMem = undefined;
+    var cm: ConfigMem = .{};
 
     var conf = parse(buf, &cm);
-    try t.expect(conf.widget_ids.len == 1);
-    try t.expect(conf.widget_ids[0] == .CPU);
-
-    try t.expect(conf.intervals.len == 1);
-    try t.expect(conf.intervals[0] == INTERVAL_MAX);
+    try t.expect(conf.widgets.len == 1);
+    try t.expect(conf.widgets[0].wid == .CPU);
+    try t.expect(conf.widgets[0].interval == INTERVAL_MAX);
+    switch (conf.widgets[0].fgcu) {
+        .nocolor, .default => return error.TestUnexpectedResult,
+        .color => |*w| {
+            try t.expect(w.opt == @intFromEnum(typ.CpuOpt.@"%all"));
+            try t.expect(w.colors.len == 2);
+            try t.expect(w.colors[0].thresh == 0);
+            // TODO: change to t.expectEqual when it's usable
+            try t.expect(mem.eql(u8, &w.colors[0]._hex, "#ffffff"));
+            try t.expect(w.colors[1].thresh == 10);
+            try t.expect(mem.eql(u8, &w.colors[1]._hex, "#999999"));
+        },
+    }
+    switch (conf.widgets[0].bgcu) {
+        .nocolor, .color => return error.TestUnexpectedResult,
+        .default => |*w| {
+            try t.expect(w.thresh == 0);
+            try t.expect(mem.eql(u8, &w._hex, "#282828"));
+        },
+    }
 
     try t.expect(conf.formats.len == 1);
     try t.expect(conf.formats[0].nparts == 3);
@@ -225,33 +242,14 @@ test "config parse" {
     try t.expect(mem.eql(u8, conf.formats[0].parts[1], ""));
     try t.expect(mem.eql(u8, conf.formats[0].parts[2], ""));
 
-    try t.expect(conf.formats[0].opts[0] == @intFromEnum(typ.CpuOpt.@"%user"));
-    try t.expect(conf.formats[0].opts[1] == @intFromEnum(typ.CpuOpt.@"%sys"));
+    try t.expect(conf.formats[0].opts[0].opt == @intFromEnum(typ.CpuOpt.@"%user"));
+    try t.expect(conf.formats[0].opts[1].opt == @intFromEnum(typ.CpuOpt.@"%sys"));
 
-    try t.expect(conf.formats[0].opts_precision[0] == OPT_PRECISION_DEFAULT);
-    try t.expect(conf.formats[0].opts_precision[1] == OPT_PRECISION_DEFAULT);
+    try t.expect(conf.formats[0].opts[0].precision == OPT_PRECISION_DEFAULT);
+    try t.expect(conf.formats[0].opts[1].precision == OPT_PRECISION_DEFAULT);
 
-    try t.expect(conf.formats[0].opts_alignment[0] == OPT_ALIGNMENT_DEFAULT);
-    try t.expect(conf.formats[0].opts_alignment[1] == OPT_ALIGNMENT_DEFAULT);
-
-    switch (conf.wid_fgs[@intFromEnum(typ.WidgetId.CPU)]) {
-        .nocolor, .default => return error.TestUnexpectedResult,
-        .color => |*w| {
-            try t.expect(w.opt == @intFromEnum(typ.CpuOpt.@"%all"));
-            try t.expect(w.colors.len == 2);
-            try t.expect(w.colors[0].thresh == 0);
-            try t.expect(mem.eql(u8, w.colors[0].getHex().?, "#ffffff"));
-            try t.expect(w.colors[1].thresh == 10);
-            try t.expect(mem.eql(u8, w.colors[1].getHex().?, "#999999"));
-        },
-    }
-    switch (conf.wid_bgs[@intFromEnum(typ.WidgetId.CPU)]) {
-        .nocolor, .color => return error.TestUnexpectedResult,
-        .default => |*w| {
-            try t.expect(w.thresh == 0);
-            try t.expect(mem.eql(u8, w.getHex().?, "#282828"));
-        },
-    }
+    try t.expect(conf.formats[0].opts[0].alignment == OPT_ALIGNMENT_DEFAULT);
+    try t.expect(conf.formats[0].opts[1].alignment == OPT_ALIGNMENT_DEFAULT);
 }
 
 pub fn defaultConfig(config_mem: *ConfigMem) Config {
