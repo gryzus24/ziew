@@ -3,7 +3,15 @@ const mem = std.mem;
 
 pub const Color = struct {
     thresh: u8,
-    _hex: [7]u8, // format: [@|#]aabbcc, @ at hex[0] returns null (no color, use default)
+
+    // format: [@|#]aabbcc, @ at _hex[0] returns null (no color, use default)
+    _hex: [7]u8,
+
+    pub fn init(thresh: u8, hex: []const u8) !@This() {
+        var inst: Color = .{ .thresh = thresh, ._hex = undefined };
+        if (!inst.checkSetHex(hex)) return error.BadHex;
+        return inst;
+    }
 
     pub fn checkSetHex(self: *@This(), str: []const u8) bool {
         if (str.len == 0 or mem.eql(u8, str, "default")) {
@@ -15,8 +23,7 @@ pub const Color = struct {
         const ismini = (str.len - hashash) == 3;
         const isnormal = (str.len - hashash) == 6;
 
-        if (!isnormal and !ismini)
-            return false;
+        if (!isnormal and !ismini) return false;
 
         for (str[hashash..]) |ch| {
             switch (ch) {

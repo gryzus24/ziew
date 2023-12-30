@@ -47,11 +47,25 @@ pub const ConfigFormatMem = struct {
 };
 
 pub const ConfigMem = struct {
-    widgets_buf: [typ.WIDGETS_MAX]Widget,
-    formats_buf: [typ.WIDGETS_MAX]ConfigFormat,
-    formats_mem_buf: [typ.WIDGETS_MAX]ConfigFormatMem,
-    fg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]color.Color,
-    bg_colors_buf: [typ.WIDGETS_MAX][COLORS_MAX]color.Color,
+    widgets_buf: [typ.WIDGETS_MAX]Widget = undefined,
+    formats_buf: [typ.WIDGETS_MAX]ConfigFormat = undefined,
+    formats_mem_buf: [typ.WIDGETS_MAX]ConfigFormatMem = undefined,
+    colors_buf: [COLORS_MAX]color.Color = undefined,
+
+    ncolors: u32 = 0,
+
+    pub fn newColor(self: *@This(), _color: color.Color) void {
+        if (self.ncolors == COLORS_MAX)
+            utl.fatal("config: color limit ({d}) reached", .{COLORS_MAX});
+
+        self.colors_buf[self.ncolors] = _color;
+        self.ncolors += 1;
+    }
+
+    pub fn nLatestColorsSlice(self: *const @This(), n: u32) []const color.Color {
+        @setRuntimeSafety(true);
+        return self.colors_buf[self.ncolors - n .. self.ncolors];
+    }
 };
 
 pub const Config = struct {
@@ -134,15 +148,11 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
             and line[1] == 'G'
         ) {
             // zig fmt: on
-            const isfg = line[0] == 'F';
-            const fg_colors = &config_mem.fg_colors_buf;
-            const bg_colors = &config_mem.bg_colors_buf;
-
             var wid_int: u8 = undefined;
             const config_color = parseColorLine(
                 line,
                 &wid_int,
-                if (isfg) fg_colors else bg_colors,
+                config_mem,
                 &errpos,
             ) catch |err| {
                 utl.fatalPos(
@@ -153,7 +163,7 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
             };
             for (config_mem.widgets_buf[0..nwidgets]) |*widget| {
                 if (@intFromEnum(widget.wid) == wid_int) {
-                    if (isfg) {
+                    if (line[0] == 'F') {
                         widget.fgcu = config_color;
                     } else {
                         widget.bgcu = config_color;
@@ -269,7 +279,7 @@ const INTERVAL_MAX = 1 << (@sizeOf(typ.DeciSec) * 8 - 1);
 const OPT_PRECISION_DEFAULT = 1;
 const OPT_ALIGNMENT_DEFAULT = .none;
 
-const COLORS_MAX = 10;
+const COLORS_MAX = 100;
 
 fn skipWhitespace(str: []const u8) usize {
     var i: usize = 0;
@@ -424,22 +434,21 @@ fn parseWidgetLine(
 fn parseColorLine(
     line: []const u8,
     wid_int_out: *u8,
-    colors: *[typ.WIDGETS_MAX][COLORS_MAX]color.Color,
+    config_mem: *ConfigMem,
     errpos: *usize,
 ) !color.ColorUnion {
     // 'tis either FG or BG
-    const start = "FG".len;
-    if (line.len < start)
-        unreachable;
+    const pos = "FG".len;
+    if (line.len < pos) unreachable;
 
-    var fields = mem.tokenizeAny(u8, line[start..], " \t");
+    var fields = mem.tokenizeAny(u8, line[pos..], " \t");
 
     // 0: widget, 1: hex OR opt, 2...: thresh:hex
     var nfields: u8 = 0;
-    var ncolors: u8 = 0;
+    var nnew_colors: u8 = 0;
     var opt: ?u8 = null;
 
-    errdefer errpos.* = start + fields.index - 1;
+    errdefer errpos.* = pos + fields.index - 1;
     while (fields.next()) |field| : (nfields += 1) {
         switch (nfields) {
             0 => {
@@ -465,28 +474,22 @@ fn parseColorLine(
                     }
                     // fallthrough
                 }
-                var default: color.Color = .{ .thresh = 0, ._hex = undefined };
-                if (!default.checkSetHex(field))
-                    return error.BadColor;
+                const default = try color.Color.init(0, field);
+                config_mem.newColor(default);
 
                 return .{ .default = default };
             },
             2...2 + COLORS_MAX - 1 => {
-                var thresh: u8 = 0;
                 if (mem.indexOfScalar(u8, field, ':')) |sep_i| {
-                    thresh = fmt.parseUnsigned(u8, field[0..sep_i], 10) catch {
+                    var thresh: u8 = fmt.parseUnsigned(u8, field[0..sep_i], 10) catch {
                         return error.BadThreshold;
                     };
-                    if (thresh > 100)
-                        return error.BadThreshold;
+                    if (thresh > 100) return error.BadThreshold;
 
-                    colors[wid_int_out.*][ncolors].thresh = thresh;
-
-                    const colorstr = field[sep_i + 1 ..];
-                    if (!colors[wid_int_out.*][ncolors].checkSetHex(colorstr))
-                        return error.BadColor;
-
-                    ncolors += 1;
+                    config_mem.newColor(
+                        try color.Color.init(thresh, field[sep_i + 1 ..]),
+                    );
+                    nnew_colors += 1;
                 } else {
                     return error.NoDelimiter;
                 }
@@ -494,14 +497,12 @@ fn parseColorLine(
             else => return error.TooManyColors,
         }
     }
-
-    if (nfields < 3)
-        return error.IncompleteLine;
+    if (nfields < 3) return error.IncompleteLine;
 
     return .{
         .color = .{
             .opt = opt.?,
-            .colors = colors[wid_int_out.*][0..ncolors],
+            .colors = config_mem.nLatestColorsSlice(nnew_colors),
         },
     };
 }

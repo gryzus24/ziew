@@ -38,25 +38,12 @@ fn debugCF(cf: *const cfg.ConfigFormat) void {
     std.debug.print("\n", .{});
 }
 
-fn debugCC(config: *const cfg.Config) void {
-    std.debug.print("FG COLORS:\n", .{});
-    for (config.wid_fgs) |elem| {
-        std.debug.print(" OPT:   {any}\n", .{elem.opt});
-        std.debug.print(" NCOLS: {}\n", .{elem.colors.len});
-        for (elem.colors) |color| {
-            std.debug.print("  {any}\n", .{color});
-        }
+fn debugColors(cm: *const cfg.ConfigMem) void {
+    std.debug.print("NCOLORS: {d}\n", .{cm.ncolors});
+    std.debug.print("COLORS:\n", .{});
+    for (cm.colors_buf) |color| {
+        std.debug.print(" {any}\n", .{color});
     }
-    std.debug.print("\n", .{});
-    std.debug.print("BG COLORS:\n", .{});
-    for (config.wid_bgs) |elem| {
-        std.debug.print(" OPT:   {any}\n", .{elem.opt});
-        std.debug.print(" NCOLS: {}\n", .{elem.colors.len});
-        for (elem.colors) |color| {
-            std.debug.print("  {any}\n", .{color});
-        }
-    }
-    std.debug.print("\n", .{});
 }
 
 fn openProcFiles(dest: *[typ.WIDGETS_MAX]fs.File, widgets: []const cfg.Widget) void {
@@ -125,7 +112,7 @@ pub fn main() void {
     }
 
     var _config_buf: [cfg.CONFIG_FILE_BYTES_MAX]u8 = undefined;
-    var _config_mem: cfg.ConfigMem = undefined;
+    var _config_mem: cfg.ConfigMem = .{};
     var config: cfg.Config = undefined;
 
     const err = blk: {
