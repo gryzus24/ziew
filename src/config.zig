@@ -260,13 +260,13 @@ pub fn defaultConfig(config_mem: *ConfigMem) Config {
         \\DISK 200 "/{-}/ {available}"
         \\CPU  20  "CPU{%all.1>}"
         \\MEM  20  "MEM {used} : {free} +{cached.0}"
-        \\BAT  300 "BAT {%charge.2} {state}"
+        \\BAT  300 "BAT0{-}BAT {%fulldesign.2} {state}"
         \\TIME 20  "%A %d.%m ~ %H:%M:%S "
-        \\FG ETH state   0:a44 1:4a4
-        \\FG CPU %all    60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-        \\FG MEM %used   60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-        \\FG BAT state   1:4a4 2:4a4
-        \\BG BAT %charge 0:a00 15:220 25:
+        \\FG ETH state 0:a44 1:4a4
+        \\FG CPU %all  60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+        \\FG MEM %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+        \\FG BAT state 1:4a4 2:4a4
+        \\BG BAT %fulldesign 0:a00 15:220 25:
     ;
     return parse(default_config, config_mem);
 }
