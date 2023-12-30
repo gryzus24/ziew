@@ -213,7 +213,7 @@ All widget format options, specifiers and color options are documented below.
         * %fullnow    - charge relative to the current battery capacity,
         * %fulldesign - charge relative to the designed battery capacity,
         * state       - battery state, either "Discharging", "Charging",
-                        "Full" or "Not-charging".
+                        "Full" or "Not charging".
 
       Optional specifiers
         * precision - number from 0 to 9 inclusive,
@@ -229,7 +229,7 @@ All widget format options, specifiers and color options are documented below.
       state: 0 - battery is discharging,
              1 - battery is charging,
              2 - battery is full,
-             3 - battery is not-charging,
+             3 - battery is not charging,
              4 - unknown state.
 
       Example color lines
