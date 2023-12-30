@@ -45,7 +45,7 @@ pub fn widget(
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
-    var statbuf: [128]u8 = undefined;
+    var statbuf: [256]u8 = undefined;
 
     const nread = proc_stat.pread(&statbuf, 0) catch |err| {
         utl.fatal("CPU: pread: {}", .{err});
