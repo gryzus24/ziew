@@ -61,6 +61,22 @@ pub const ColorUnion = union(enum) {
     nocolor,
     default: Color,
     color: ManyColors,
+
+    pub fn getColor(self: *const @This(), with_checkManyColors: anytype) ?*const [7]u8 {
+        return switch (self.*) {
+            .nocolor => null,
+            .default => |*t| t.getHex(),
+            .color => |t| with_checkManyColors.checkManyColors(t),
+        };
+    }
+
+    pub fn getDefault(self: *const @This()) ?*const [7]u8 {
+        return switch (self.*) {
+            .nocolor => null,
+            .default => |*t| t.getHex(),
+            .color => null,
+        };
+    }
 };
 
 pub fn firstColorAboveThreshold(value: f64, colors: []const Color) ?*const [7]u8 {
@@ -81,20 +97,4 @@ pub fn firstColorEqualThreshold(value: u8, colors: []const Color) ?*const [7]u8 
             return color.getHex();
     }
     return null;
-}
-
-pub fn colorFromColorUnion(cu: *const ColorUnion, with_checkManyColors: anytype) ?*const [7]u8 {
-    return switch (cu.*) {
-        .nocolor => null,
-        .default => |*t| t.getHex(),
-        .color => |t| with_checkManyColors.checkManyColors(t),
-    };
-}
-
-pub fn defaultColorFromColorUnion(cu: *const ColorUnion) ?*const [7]u8 {
-    return switch (cu.*) {
-        .nocolor => null,
-        .default => |*t| t.getHex(),
-        .color => null,
-    };
 }

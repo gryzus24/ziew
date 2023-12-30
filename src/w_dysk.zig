@@ -75,18 +75,14 @@ pub fn widget(
     const used_kb = res.f_blocks - res.f_bavail;
 
     const writer = stream.writer();
-    const color_handler = ColorHandler{
+    const ch = ColorHandler{
         .used_kb = used_kb,
         .free_kb = free_kb,
         .avail_kb = avail_kb,
         .total_kb = total_kb,
     };
 
-    utl.writeBlockStart(
-        writer,
-        color.colorFromColorUnion(fg, color_handler),
-        color.colorFromColorUnion(bg, color_handler),
-    );
+    utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
     utl.writeStr(writer, cf.parts[1]);
     for (cf.iterOpts()[1..], cf.iterParts()[2..]) |*opt, *part| {
         const nu = switch (@as(typ.DiskOpt, @enumFromInt(opt.opt))) {

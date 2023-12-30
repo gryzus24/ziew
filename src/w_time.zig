@@ -13,11 +13,7 @@ pub fn widget(
     const tm = c.localtime(&c.time(null));
     var timebuf: [32]u8 = undefined;
 
-    utl.writeBlockStart(
-        stream,
-        color.defaultColorFromColorUnion(fg),
-        color.defaultColorFromColorUnion(bg),
-    );
+    utl.writeBlockStart(stream, fg.getDefault(), bg.getDefault());
     const nwritten = c.strftime(&timebuf, timebuf.len, strftime_fmt, tm);
     if (nwritten == 0) {
         const surrogate = "<empty>";

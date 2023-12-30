@@ -82,13 +82,9 @@ pub fn widget(
     };
 
     const writer = stream.writer();
-    const color_handler = ColorHandler{ .slots = &slots };
+    const ch = ColorHandler{ .slots = &slots };
 
-    utl.writeBlockStart(
-        writer,
-        color.colorFromColorUnion(fg, color_handler),
-        color.colorFromColorUnion(bg, color_handler),
-    );
+    utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
     utl.writeStr(writer, cf.parts[0]);
     for (cf.iterOpts(), cf.iterParts()[1..]) |*opt, *part| {
         const value = slots[opt.opt];

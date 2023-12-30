@@ -89,7 +89,7 @@ pub fn widget(
     const used_kb = total_kb - avail_kb;
 
     const writer = stream.writer();
-    const color_handler = ColorHandler{
+    const ch = ColorHandler{
         .used_kb = used_kb,
         .free_kb = free_kb,
         .avail_kb = avail_kb,
@@ -97,11 +97,7 @@ pub fn widget(
         .total_kb = total_kb,
     };
 
-    utl.writeBlockStart(
-        writer,
-        color.colorFromColorUnion(fg, color_handler),
-        color.colorFromColorUnion(bg, color_handler),
-    );
+    utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
     utl.writeStr(writer, cf.parts[0]);
     for (cf.iterOpts(), cf.iterParts()[1..]) |*opt, *part| {
         const nu = switch (@as(typ.MemOpt, @enumFromInt(opt.opt))) {

@@ -106,17 +106,13 @@ pub fn widget(
     }
 
     const writer = stream.writer();
-    const color_handler = ColorHandler{
+    const ch = ColorHandler{
         .pcapacity = pcapacity,
         .pcharge = pcharge,
         .status = status,
     };
 
-    utl.writeBlockStart(
-        writer,
-        color.colorFromColorUnion(fg, color_handler),
-        color.colorFromColorUnion(bg, color_handler),
-    );
+    utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
     utl.writeStr(writer, cf.parts[0]);
     for (cf.iterOpts(), cf.iterParts()[1..]) |*opt, *part| {
         switch (@as(typ.BatOpt, @enumFromInt(opt.opt))) {

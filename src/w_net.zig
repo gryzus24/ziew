@@ -153,13 +153,9 @@ pub fn widget(
         _ = getInet(sock, &ifr, &_inetbuf, &isup);
 
     const writer = stream.writer();
-    const color_handler = ColorHandler{ .isup = isup };
+    const ch = ColorHandler{ .isup = isup };
 
-    utl.writeBlockStart(
-        writer,
-        color.colorFromColorUnion(fg, color_handler),
-        color.colorFromColorUnion(bg, color_handler),
-    );
+    utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
     utl.writeStr(writer, cf.parts[1]);
     for (cf.iterOpts()[1..], cf.iterParts()[2..]) |*opt, *part| {
         switch (@as(typ.EthOpt, @enumFromInt(opt.opt))) {
