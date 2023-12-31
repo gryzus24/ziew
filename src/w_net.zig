@@ -116,9 +116,8 @@ pub fn widget(
     const Static = struct {
         var sock: linux.fd_t = 0;
     };
-    if (Static.sock == 0) {
+    if (Static.sock == 0)
         Static.sock = openIoctlSocket();
-    }
 
     var ifr: linux.ifreq = undefined;
     const ifname = cf.parts[0];
@@ -155,7 +154,7 @@ pub fn widget(
     utl.writeStr(writer, cf.parts[1]);
     for (cf.iterOpts()[1..], cf.iterParts()[2..]) |*opt, *part| {
         switch (@as(typ.EthOpt, @enumFromInt(opt.opt))) {
-            .ifname => utl.writeStr(writer, &ifr.ifrn.name),
+            .ifname => utl.writeStr(writer, ifname),
             .inet => utl.writeStr(writer, inet),
             .flags => utl.writeStr(writer, flags),
             .state => utl.writeStr(writer, if (isup) "up" else "down"),
