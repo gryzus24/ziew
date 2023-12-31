@@ -189,7 +189,7 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
                 };
                 seen[wid_int] = true;
                 config_mem.widgets_buf[nwidgets].wid = wid;
-                typ.knobVerifyArgs(wid, &config_mem.formats_buf[nwidgets]);
+                wid.panicOnInvalidArgs(&config_mem.formats_buf[nwidgets]);
                 nwidgets += 1;
             }
         } else {
@@ -458,8 +458,8 @@ fn parseColorLine(
             },
             1 => {
                 const _wid = @as(typ.WidgetId, @enumFromInt(wid_int_out.*));
-                if (typ.knobSupportsManyColors(_wid)) {
-                    if (typ.knobValidManyColorsOptname(_wid, field)) {
+                if (_wid.supportsManyColors()) {
+                    if (_wid.isManyColorsOptnameSupported(field)) {
                         for (typ.WID_TO_OPT_NAMES[wid_int_out.*], 0..) |name, j| {
                             if (mem.eql(u8, field, name)) {
                                 opt = @intCast(j);

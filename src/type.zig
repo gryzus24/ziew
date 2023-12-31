@@ -3,7 +3,67 @@ const std = @import("std");
 const utl = @import("util.zig");
 const mem = std.mem;
 
-pub const WidgetId = enum { TIME, MEM, CPU, DISK, ETH, WLAN, BAT };
+pub const WidgetId = enum {
+    TIME,
+    MEM,
+    CPU,
+    DISK,
+    ETH,
+    WLAN,
+    BAT,
+
+    fn argsepOptValue(self: @This()) ?u8 {
+        return switch (self) {
+            .DISK => @intFromEnum(DiskOpt.@"-"),
+            .ETH => @intFromEnum(EthOpt.@"-"),
+            .WLAN => @intFromEnum(WlanOpt.@"-"),
+            .BAT => @intFromEnum(BatOpt.@"-"),
+            else => return null,
+        };
+    }
+
+    pub fn panicOnInvalidArgs(self: @This(), cf: *const cfg.ConfigFormat) void {
+        const argsep = self.argsepOptValue() orelse return;
+        const nargs = blk: {
+            var n: usize = 0;
+            for (cf.iterOpts()) |*opt| if (opt.opt == argsep) {
+                n += 1;
+            };
+            break :blk n;
+        };
+        if (nargs == 0 or cf.opts[0].opt != argsep) {
+            const placeholder = switch (self) {
+                .DISK => "<mountpoint>",
+                .ETH, .WLAN => "<interface>",
+                .BAT => "<battery name>",
+                else => unreachable,
+            };
+            utl.fatal(
+                "config: {s}: requires argument {s}",
+                .{ @tagName(self), placeholder },
+            );
+        }
+        if (nargs > 1)
+            utl.fatal("config: {s}: too many arguments", .{@tagName(self)});
+    }
+
+    pub fn supportsManyColors(self: @This()) bool {
+        return switch (self) {
+            .MEM, .CPU, .DISK, .ETH, .WLAN, .BAT => true,
+            .TIME => false,
+        };
+    }
+
+    pub fn isManyColorsOptnameSupported(self: @This(), optname: []const u8) bool {
+        return switch (self) {
+            .TIME => false,
+            .MEM, .CPU, .DISK => optname[0] == '%',
+            .ETH, .WLAN => mem.eql(u8, optname, "state"),
+            .BAT => optname[0] == '%' or mem.eql(u8, optname, "state"),
+        };
+    }
+};
+
 pub const WIDGETS_MAX = @typeInfo(WidgetId).Enum.fields.len;
 pub const WIDGET_BUF_BYTES_MAX = 128;
 
@@ -93,55 +153,6 @@ pub fn strStartToWidEnum(str: []const u8) ?WidgetId {
             return @enumFromInt(field.value);
     }
     return null;
-}
-
-pub fn knobSupportsManyColors(wid: WidgetId) bool {
-    return switch (wid) {
-        .MEM, .CPU, .DISK, .ETH, .WLAN, .BAT => true,
-        .TIME => false,
-    };
-}
-
-pub fn knobValidManyColorsOptname(wid: WidgetId, optname: []const u8) bool {
-    return switch (wid) {
-        .TIME => false,
-        .MEM, .CPU, .DISK => optname[0] == '%',
-        .ETH, .WLAN => mem.eql(u8, optname, "state"),
-        .BAT => optname[0] == '%' or mem.eql(u8, optname, "state"),
-    };
-}
-
-pub fn knobVerifyArgs(wid: WidgetId, cf: *const cfg.ConfigFormat) void {
-    switch (wid) {
-        .DISK, .ETH, .WLAN, .BAT => {
-            const sep_enum_value = switch (wid) {
-                .DISK => @intFromEnum(DiskOpt.@"-"),
-                .ETH => @intFromEnum(EthOpt.@"-"),
-                .WLAN => @intFromEnum(WlanOpt.@"-"),
-                .BAT => @intFromEnum(BatOpt.@"-"),
-                else => unreachable,
-            };
-            const nargs = blk: {
-                var n: u8 = 0;
-                for (cf.iterOpts()) |*opt| if (opt.opt == sep_enum_value) {
-                    n += 1;
-                };
-                break :blk n;
-            };
-            if (nargs == 0 or cf.opts[0].opt != sep_enum_value) {
-                const argname = switch (wid) {
-                    .DISK => "<mountpoint>",
-                    .ETH, .WLAN => "<interface>",
-                    .BAT => "<battery name>",
-                    else => unreachable,
-                };
-                utl.fatal("config: {s}: requires argument {s}", .{ @tagName(wid), argname });
-            }
-            if (nargs > 1)
-                utl.fatal("config: {s}: too many arguments", .{@tagName(wid)});
-        },
-        .TIME, .MEM, .CPU => {},
-    }
 }
 
 // 1/10th of a second
