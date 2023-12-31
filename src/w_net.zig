@@ -16,15 +16,10 @@ inline fn errnoInt(r: usize) isize {
     return @as(isize, @bitCast(r));
 }
 
-var _ioctl_sock: linux.fd_t = 0;
-fn getIoctlSocket() linux.fd_t {
-    if (_ioctl_sock == 0) {
-        const ret = errnoInt(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
-        if (ret <= 0)
-            utl.fatal("NET: socket errno: {}", .{ret});
-        _ioctl_sock = @as(linux.fd_t, @intCast(ret));
-    }
-    return _ioctl_sock;
+fn openIoctlSocket() linux.fd_t {
+    const ret = errnoInt(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
+    if (ret <= 0) utl.fatal("NET: socket errno: {}", .{ret});
+    return @as(linux.fd_t, @intCast(ret));
 }
 
 fn getInet(
@@ -112,24 +107,25 @@ const ColorHandler = struct {
     }
 };
 
-// takes in one required argument in cf.parts[0]: <interface>
 pub fn widget(
     stream: anytype,
     cf: *const cfg.ConfigFormat,
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
-    const sock = getIoctlSocket();
+    const Static = struct {
+        var sock: linux.fd_t = 0;
+    };
+    if (Static.sock == 0) {
+        Static.sock = openIoctlSocket();
+    }
 
     var ifr: linux.ifreq = undefined;
-    const ifname: [:0]u8 = blk: {
-        const arg = cf.parts[0];
-        if (arg.len >= ifr.ifrn.name.len)
-            utl.fatal("NET: interface name too long: '{s}'", .{arg});
-        @memcpy(ifr.ifrn.name[0..arg.len], arg);
-        ifr.ifrn.name[arg.len] = '\x00';
-        break :blk ifr.ifrn.name[0..arg.len :0];
-    };
+    const ifname = cf.parts[0];
+    _ = utl.zeroTerminate(&ifr.ifrn.name, ifname) orelse utl.fatal(
+        "NET: interface name too long '{s}'",
+        .{ifname},
+    );
 
     var _inetbuf: [INET_BUF_SIZE]u8 = .{0} ** INET_BUF_SIZE;
     var _flagsbuf: [6]u8 = .{0} ** 6;
@@ -142,15 +138,15 @@ pub fn widget(
     for (cf.iterOpts()[1..]) |*opt| {
         switch (@as(typ.EthOpt, @enumFromInt(opt.opt))) {
             .ifname => {},
-            .inet => inet = getInet(sock, &ifr, &_inetbuf, &isup),
-            .flags => flags = getFlags(sock, &ifr, &_flagsbuf, &isup),
+            .inet => inet = getInet(Static.sock, &ifr, &_inetbuf, &isup),
+            .flags => flags = getFlags(Static.sock, &ifr, &_flagsbuf, &isup),
             .state => wants_state = true,
             .@"-" => unreachable,
         }
     }
     // neither inet nor flags got polled - poll for isup only
     if (wants_state and _inetbuf[0] == 0 and _flagsbuf[0] == 0)
-        _ = getInet(sock, &ifr, &_inetbuf, &isup);
+        _ = getInet(Static.sock, &ifr, &_inetbuf, &isup);
 
     const writer = stream.writer();
     const ch = ColorHandler{ .isup = isup };
@@ -159,7 +155,7 @@ pub fn widget(
     utl.writeStr(writer, cf.parts[1]);
     for (cf.iterOpts()[1..], cf.iterParts()[2..]) |*opt, *part| {
         switch (@as(typ.EthOpt, @enumFromInt(opt.opt))) {
-            .ifname => utl.writeStr(writer, ifname),
+            .ifname => utl.writeStr(writer, &ifr.ifrn.name),
             .inet => utl.writeStr(writer, inet),
             .flags => utl.writeStr(writer, flags),
             .state => utl.writeStr(writer, if (isup) "up" else "down"),

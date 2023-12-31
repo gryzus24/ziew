@@ -131,16 +131,15 @@ fn minSleepInterval(widgets: []const cfg.Widget) typ.DeciSec {
 }
 
 fn zeroStrftimeFormat(
-    buf: *[typ.WIDGET_BUF_BYTES_MAX]u8,
+    buf: *[typ.WIDGET_BUF_BYTES_MAX / 2]u8,
     config: *const cfg.Config,
 ) ?[*:0]const u8 {
     for (config.widgets, config.formats) |*widget, *format| {
         if (widget.wid == typ.WidgetId.TIME) {
-            const part = format.parts[0];
-            if (part.len >= buf.len) utl.fatal("time format too long", .{});
-            @memcpy(buf[0..part.len], format.parts[0]);
-            buf[part.len] = '\x00';
-            return buf[0.. :0];
+            return utl.zeroTerminate(buf, format.parts[0]) orelse utl.fatal(
+                "time format too long",
+                .{},
+            );
         }
     }
     return null;
@@ -157,7 +156,7 @@ pub fn main() void {
     const sleep_s = sleep_interval / 10;
     const sleep_ns = (sleep_interval % 10) * time.ns_per_s / 10;
 
-    var strftime_fmt_buf: [typ.WIDGET_BUF_BYTES_MAX]u8 = undefined;
+    var strftime_fmt_buf: [typ.WIDGET_BUF_BYTES_MAX / 2]u8 = undefined;
     const strftime_fmt = zeroStrftimeFormat(&strftime_fmt_buf, &config);
 
     var wid_to_procfile: [typ.WIDGETS_MAX]fs.File = undefined;

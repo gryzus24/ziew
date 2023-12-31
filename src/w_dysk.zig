@@ -24,7 +24,6 @@ const ColorHandler = struct {
     }
 };
 
-// takes in one required argument in cf.parts[0]: <mountpoint>
 pub fn widget(
     stream: anytype,
     cf: *const cfg.ConfigFormat,
@@ -33,19 +32,14 @@ pub fn widget(
 ) []const u8 {
     var buf: [typ.WIDGET_BUF_BYTES_MAX / 2]u8 = undefined;
 
-    const mountpoint: [:0]u8 = blk: {
-        const arg = cf.parts[0];
-        if (arg.len >= buf.len)
-            utl.fatal("DISK: mountpoint too scary", .{});
-        @memcpy(buf[0..arg.len], arg);
-        buf[arg.len] = '\x00';
-        break :blk buf[0..arg.len :0];
-    };
+    const mountpoint = utl.zeroTerminate(&buf, cf.parts[0]) orelse utl.fatal(
+        "DISK: mountpoint path too long",
+        .{},
+    );
 
     // TODO: use statvfs instead of this
     var res: c.struct_statfs = undefined;
-    const ret = c.statfs(mountpoint, &res);
-    if (ret != 0)
+    if (c.statfs(mountpoint, &res) != 0)
         utl.fatal("DISK: bad mountpoint '{s}'", .{mountpoint});
 
     // convert block size to 1K for calculations

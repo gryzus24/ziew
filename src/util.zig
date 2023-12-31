@@ -50,6 +50,13 @@ pub fn percentOf(value: u64, total: u64) NumUnit {
     return .{ .val = fvalue / ftotal * 100, .unit = '%' };
 }
 
+pub fn zeroTerminate(dest: []u8, src: []const u8) ?[:0]const u8 {
+    if (src.len >= dest.len) return null;
+    @memcpy(dest[0..src.len], src);
+    dest[src.len] = 0;
+    return dest[0..src.len :0];
+}
+
 pub inline fn writeStr(with_write: anytype, str: []const u8) void {
     _ = with_write.write(str) catch {};
 }

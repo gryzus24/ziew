@@ -40,15 +40,15 @@ pub fn widget(
     bg: *const color.ColorUnion,
 ) []const u8 {
     var buf: [1024]u8 = undefined;
-    const arg = cf.parts[0];
 
-    const uevent_path: [:0]u8 = blk: {
+    const battery = cf.parts[0];
+    const uevent_path = blk: {
         const ret = fmt.bufPrint(
             &buf,
             "/sys/class/power_supply/{s}/uevent\x00",
-            .{arg},
+            .{battery},
         ) catch {
-            utl.fatal("BAT: uevent path too long", .{});
+            utl.fatal("BAT: battery name too long", .{});
         };
         break :blk ret[0 .. ret.len - 1 :0];
     };
@@ -56,7 +56,11 @@ pub fn widget(
     const file = fs.cwd().openFileZ(uevent_path, .{}) catch |err| switch (err) {
         error.FileNotFound => {
             utl.writeBlockStart(stream, fg.getDefault(), bg.getDefault());
-            const s = fmt.bufPrint(&buf, "{s}: <not found>", .{arg}) catch unreachable;
+            const s = fmt.bufPrint(
+                &buf,
+                "{s}: <not found>",
+                .{battery},
+            ) catch unreachable;
             utl.writeStr(stream, s);
             return utl.writeBlockEnd_GetWritten(stream);
         },
