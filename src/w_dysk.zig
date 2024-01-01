@@ -33,14 +33,13 @@ pub fn widget(
     var buf: [typ.WIDGET_BUF_BYTES_MAX / 2]u8 = undefined;
 
     const mountpoint = utl.zeroTerminate(&buf, cf.parts[0]) orelse utl.fatal(
-        "DISK: mountpoint path too long",
-        .{},
+        &.{"DISK: mountpoint path too long"},
     );
 
     // TODO: use statvfs instead of this
     var res: c.struct_statfs = undefined;
     if (c.statfs(mountpoint, &res) != 0)
-        utl.fatal("DISK: bad mountpoint '{s}'", .{mountpoint});
+        utl.fatal(&.{ "DISK: bad mountpoint '", mountpoint, "'" });
 
     // convert block size to 1K for calculations
     if (res.f_bsize == 4096) {

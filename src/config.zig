@@ -56,7 +56,7 @@ pub const ConfigMem = struct {
 
     pub fn newColor(self: *@This(), _color: color.Color) void {
         if (self.ncolors == COLORS_MAX)
-            utl.fatal("config: color limit ({d}) reached", .{COLORS_MAX});
+            utl.fatalFmt("config: color limit ({d}) reached", .{COLORS_MAX});
 
         self.colors_buf[self.ncolors] = _color;
         self.ncolors += 1;
@@ -86,7 +86,7 @@ fn defaultConfigPath(
         _ = fbs.write(home) catch return error.PathTooLong;
         _ = fbs.write("/.config/ziew/config") catch return error.PathTooLong;
     } else {
-        utl.warn("config: $HOME and $XDG_CONFIG_HOME not set", .{});
+        utl.warn(&.{"config: $HOME and $XDG_CONFIG_HOME not set"});
         return error.FileNotFound;
     }
     _ = fbs.write("\x00") catch return error.PathTooLong;
@@ -101,18 +101,18 @@ pub fn readFile(
 ) error{FileNotFound}![]const u8 {
     const config_path = path orelse (defaultConfigPath(buf) catch |err| switch (err) {
         error.FileNotFound => return error.FileNotFound,
-        error.PathTooLong => utl.fatal("config: {}", .{err}),
+        error.PathTooLong => utl.fatal(&.{ "config: ", @errorName(err) }),
     });
 
     const file = fs.cwd().openFileZ(config_path, .{}) catch |err| switch (err) {
         error.FileNotFound => return error.FileNotFound,
-        else => utl.fatal("config: open: {}", .{err}),
+        else => utl.fatal(&.{ "config: open: ", @errorName(err) }),
     };
     defer file.close();
 
     const nread = nread_blk: {
         var nread = file.read(buf) catch |err|
-            utl.fatal("config: read: {}", .{err});
+            utl.fatal(&.{ "config: read: ", @errorName(err) });
         if (nread < buf.len) {
             // handle missing $'\n' edge case
             buf[nread] = '\n';
@@ -120,10 +120,10 @@ pub fn readFile(
         } else {
             const sz = sz_blk: {
                 const meta = file.metadata() catch |err|
-                    utl.fatal("config: file too big: {}", .{err});
+                    utl.fatal(&.{ "config: file too big: ", @errorName(err) });
                 break :sz_blk meta.size();
             };
-            utl.fatal("config: file too big by {} bytes", .{sz - nread});
+            utl.fatalFmt("config: file too big by {} bytes", .{sz - nread});
         }
     };
     return buf[0..nread];
@@ -156,9 +156,8 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
                 &errpos,
             ) catch |err| {
                 utl.fatalPos(
-                    "config: {}: {s}",
-                    .{ err, line },
-                    fmt.count("config: {}: ", .{err}) + errpos,
+                    &.{ "config: ", @errorName(err), ": ", line },
+                    fmt.count("config: {s}: ", .{@errorName(err)}) + errpos,
                 );
             };
             for (config_mem.widgets_buf[0..nwidgets]) |*widget| {
@@ -182,9 +181,8 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
                     &errpos,
                 ) catch |err| {
                     utl.fatalPos(
-                        "config: {}: {s}",
-                        .{ err, line },
-                        fmt.count("config: {}: ", .{err}) + errpos,
+                        &.{ "config: ", @errorName(err), ": ", line },
+                        fmt.count("config: {s}: ", .{@errorName(err)}) + errpos,
                     );
                 };
                 seen[wid_int] = true;
@@ -193,7 +191,7 @@ pub fn parse(buf: []const u8, config_mem: *ConfigMem) Config {
                 nwidgets += 1;
             }
         } else {
-            utl.warn("config: unknown widget: '{s}'", .{line});
+            utl.warn(&.{ "config: unknown widget: '", line, "'" });
         }
     }
     return .{

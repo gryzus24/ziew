@@ -48,7 +48,7 @@ pub fn widget(
     var statbuf: [256]u8 = undefined;
 
     const nread = proc_stat.pread(&statbuf, 0) catch |err| {
-        utl.fatal("CPU: pread: {}", .{err});
+        utl.fatal(&.{ "CPU: pread: ", @errorName(err) });
     };
 
     var cur: ProcStat = .{ .fields = undefined };
@@ -64,7 +64,7 @@ pub fn widget(
                         10,
                     ) catch unreachable;
                     if (statbuf[i] == '\n') {
-                        if (nfields != 10) utl.fatal("CPU: buf too small", .{});
+                        if (nfields != 10) utl.fatal(&.{"CPU: buf too small"});
                         break :out;
                     }
                 }

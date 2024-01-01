@@ -36,7 +36,7 @@ fn openProcFiles(dest: *[typ.WIDGETS_MAX]fs.File, widgets: []const cfg.Widget) v
         const path = wid_to_path[wid];
         if (path.len > 0) {
             dest[wid] = fs.cwd().openFileZ(path, .{}) catch |err| {
-                utl.fatal("{s} open: {}", .{ path, err });
+                utl.fatal(&.{ "open: ", path, ": ", @errorName(err) });
             };
         }
     }
@@ -102,14 +102,14 @@ fn readConfig(
         if (cfg.readFile(buf, path)) |config_file_view| {
             config = cfg.parse(config_file_view, cm);
             if (config.widgets.len == 0) {
-                utl.warn("no widgets loaded: using defaults...", .{});
+                utl.warn(&.{"no widgets loaded: using defaults..."});
                 break :blk true;
             } else {
                 break :blk false;
             }
         } else |err| switch (err) {
             error.FileNotFound => {
-                utl.warn("no config file: using defaults...", .{});
+                utl.warn(&.{"no config file: using defaults..."});
                 break :blk true;
             },
         }
@@ -137,8 +137,7 @@ fn zeroStrftimeFormat(
     for (config.widgets, config.formats) |*widget, *format| {
         if (widget.wid == typ.WidgetId.TIME) {
             return utl.zeroTerminate(buf, format.parts[0]) orelse utl.fatal(
-                "time format too long",
-                .{},
+                &.{"time format too long"},
             );
         }
     }

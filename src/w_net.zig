@@ -18,7 +18,7 @@ inline fn errnoInt(r: usize) isize {
 
 fn openIoctlSocket() linux.fd_t {
     const ret = errnoInt(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
-    if (ret <= 0) utl.fatal("NET: socket errno: {}", .{ret});
+    if (ret <= 0) utl.fatalFmt("NET: socket errno: {}", .{ret});
     return @as(linux.fd_t, @intCast(ret));
 }
 
@@ -47,7 +47,7 @@ fn getInet(
         },
         -c.EADDRNOTAVAIL => "<unavailable>",
         -c.ENODEV => "<no device>",
-        else => utl.fatal("NET: inet errno: {}", .{e}),
+        else => utl.fatalFmt("NET: inet errno: {}", .{e}),
     };
 }
 
@@ -95,7 +95,7 @@ fn getFlags(
             flagsbuf[0] = '-';
             break :blk flagsbuf[0..1];
         },
-        else => utl.fatal("NET: flags errno: {}", .{e}),
+        else => utl.fatalFmt("NET: flags errno: {}", .{e}),
     };
 }
 
@@ -122,8 +122,7 @@ pub fn widget(
     var ifr: linux.ifreq = undefined;
     const ifname = cf.parts[0];
     _ = utl.zeroTerminate(&ifr.ifrn.name, ifname) orelse utl.fatal(
-        "NET: interface name too long '{s}'",
-        .{ifname},
+        &.{ "NET: interface name too long '", ifname, "'" },
     );
 
     var _inetbuf: [INET_BUF_SIZE]u8 = .{0} ** INET_BUF_SIZE;

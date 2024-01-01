@@ -183,63 +183,75 @@ pub fn writeBlockEnd_GetWritten(fbs: anytype) []const u8 {
     return ret;
 }
 
-inline fn makeMsg(buf: *[512]u8, comptime full_format: []const u8, args: anytype) []const u8 {
-    return fmt.bufPrint(buf, full_format, args) catch |err| {
-        std.debug.panic("bufprint: {}", .{err});
-    };
+// == LOGGING =================================================================
+
+var bss_mem: [512]u8 = undefined;
+
+fn makeMsg(comptime format: []const u8, args: anytype) []const u8 {
+    return fmt.bufPrint(&bss_mem, format, args) catch return &bss_mem;
 }
 
-fn writeLog(msg: []const u8) void {
-    const file = fs.cwd().createFileZ(
-        "/tmp/ziew.log",
-        .{ .truncate = false },
-    ) catch |err| switch (err) {
-        error.AccessDenied => {
-            writeStr(io.getStdErr(), "open: /tmp/ziew.log: probably sticky, only author can modify\n");
-            return;
-        },
-        else => return,
-    };
-    file.seekFromEnd(0) catch return;
-    writeStr(file, msg);
-}
+const Log = struct {
+    file: ?fs.File,
 
-pub fn fatal(comptime format: []const u8, args: anytype) noreturn {
-    @setCold(true);
-    var buf: [512]u8 = undefined;
-
-    const msg = makeMsg(&buf, "fatal: " ++ format ++ "\n", args);
-    writeStr(io.getStdErr(), msg);
-    writeLog(msg);
-
-    os.exit(1);
-}
-
-pub fn fatalPos(comptime format: []const u8, args: anytype, errpos: usize) noreturn {
-    @setCold(true);
-    var buf: [512]u8 = undefined;
-    const stderr = io.getStdErr();
-
-    const msg = makeMsg(&buf, "fatal: " ++ format ++ "\n", args);
-    writeStr(stderr, msg);
-    writeLog(msg);
-
-    writeStr(stderr, " " ** "fatal: ".len);
-    for (0..errpos) |_| {
-        writeStr(stderr, " ");
+    pub fn log(self: @This(), msg: []const u8) void {
+        writeStr(io.getStdErr(), msg);
+        if (self.file) |f| writeStr(f, msg);
     }
-    writeStr(stderr, "^\n");
 
+    pub fn close(self: @This()) void {
+        if (self.file) |f| f.close();
+    }
+};
+
+fn openLog() Log {
+    const file = fs.cwd().createFileZ("/tmp/ziew.log", .{ .truncate = false });
+    if (file) |f| {
+        f.seekFromEnd(0) catch {};
+    } else |err| switch (err) {
+        error.AccessDenied => writeStr(
+            io.getStdErr(),
+            "open: /tmp/ziew.log: probably sticky, only author can modify\n",
+        ),
+        else => @panic(makeMsg("openLog: {s}", .{@errorName(err)})),
+    }
+    return .{ .file = file catch null };
+}
+
+pub fn fatal(strings: []const []const u8) noreturn {
+    const log = openLog();
+    defer log.close();
+    log.log("fatal: ");
+    for (strings) |s| log.log(s);
+    log.log("\n");
     os.exit(1);
 }
 
-pub fn warn(comptime format: []const u8, args: anytype) void {
-    @setCold(true);
-    var buf: [512]u8 = undefined;
+pub fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
+    const log = openLog();
+    defer log.close();
+    log.log(makeMsg("fatal: " ++ format ++ "\n", args));
+    os.exit(1);
+}
 
-    const msg = makeMsg(&buf, "warning: " ++ format ++ "\n", args);
-    writeStr(io.getStdErr(), msg);
-    writeLog(msg);
+pub fn fatalPos(strings: []const []const u8, errpos: usize) noreturn {
+    const log = openLog();
+    defer log.close();
+    log.log("fatal: ");
+    for (strings) |s| log.log(s);
+    log.log("\n");
+    @memset(bss_mem[0 .. "fatal: ".len + errpos], ' ');
+    log.log(bss_mem[0 .. "fatal: ".len + errpos]);
+    log.log("^\n");
+    os.exit(1);
+}
+
+pub fn warn(strings: []const []const u8) void {
+    const log = openLog();
+    defer log.close();
+    log.log("warning: ");
+    for (strings) |s| log.log(s);
+    log.log("\n");
 }
 
 pub fn repr(str: ?[]const u8) void {

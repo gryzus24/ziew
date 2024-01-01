@@ -61,7 +61,7 @@ pub fn widget(
     var meminfo_buf: [MEMINFO_BUF_SIZE]u8 = undefined;
 
     _ = proc_meminfo.pread(&meminfo_buf, 0) catch |err| {
-        utl.fatal("MEM: pread: {}", .{err});
+        utl.fatal(&.{ "MEM: pread: ", @errorName(err) });
     };
 
     var pos: usize = 0;

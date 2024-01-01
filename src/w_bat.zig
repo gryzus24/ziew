@@ -48,7 +48,7 @@ pub fn widget(
             "/sys/class/power_supply/{s}/uevent\x00",
             .{battery},
         ) catch {
-            utl.fatal("BAT: battery name too long", .{});
+            utl.fatal(&.{"BAT: battery name too long"});
         };
         break :blk ret[0 .. ret.len - 1 :0];
     };
@@ -64,12 +64,12 @@ pub fn widget(
             utl.writeStr(stream, s);
             return utl.writeBlockEnd_GetWritten(stream);
         },
-        else => utl.fatal("BAT: check: {}", .{err}),
+        else => utl.fatal(&.{ "BAT: check: ", @errorName(err) }),
     };
     defer file.close();
 
-    const nread = file.read(&buf) catch |err| utl.fatal("BAT: read: {}", .{err});
-    if (nread == 0) utl.fatal("BAT: empty uevent", .{});
+    const nread = file.read(&buf) catch |err| utl.fatal(&.{ "BAT: read: ", @errorName(err) });
+    if (nread == 0) utl.fatal(&.{"BAT: empty uevent"});
 
     var status: []const u8 = "Unknown";
     var full_design: u64 = 0;

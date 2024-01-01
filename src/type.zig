@@ -38,13 +38,10 @@ pub const WidgetId = enum {
                 .BAT => "<battery name>",
                 else => unreachable,
             };
-            utl.fatal(
-                "config: {s}: requires argument {s}",
-                .{ @tagName(self), placeholder },
-            );
+            utl.fatal(&.{ "config: ", @tagName(self), ": requires argument ", placeholder });
         }
         if (nargs > 1)
-            utl.fatal("config: {s}: too many arguments", .{@tagName(self)});
+            utl.fatal(&.{ "config: ", @tagName(self), ": too many arguments" });
     }
 
     pub fn supportsManyColors(self: @This()) bool {
