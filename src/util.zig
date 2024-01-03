@@ -263,3 +263,12 @@ pub fn repr(str: ?[]const u8) void {
         writeStr(stderr, "<null>\n");
     }
 }
+
+pub fn unsafeAtou64(buf: []const u8) u64 {
+    var r: u64 = buf[0] - '0';
+    for (buf[1..]) |ch| {
+        r *= 10;
+        r += ch - '0';
+    }
+    return r;
+}

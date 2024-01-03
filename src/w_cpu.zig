@@ -57,15 +57,9 @@ pub fn widget(
     out: for ("cpu".len..nread) |i| switch (statbuf[i]) {
         ' ', '\n' => {
             if (ndigits > 0) {
-                cur.fields[nvals] = fmt.parseUnsigned(
-                    u64,
-                    statbuf[i - ndigits .. i],
-                    10,
-                ) catch unreachable;
-
+                cur.fields[nvals] = utl.unsafeAtou64(statbuf[i - ndigits .. i]);
                 nvals += 1;
                 if (nvals == cur.fields.len) break :out;
-
                 ndigits = 0;
             }
         },

@@ -63,15 +63,9 @@ pub fn widget(
     out: while (i < nread) : (i += 1) switch (meminfo_buf[i]) {
         ' ' => {
             if (ndigits > 0) {
-                slots[nvals] = fmt.parseUnsigned(
-                    u64,
-                    meminfo_buf[i - ndigits .. i],
-                    10,
-                ) catch unreachable;
-
+                slots[nvals] = utl.unsafeAtou64(meminfo_buf[i - ndigits .. i]);
                 nvals += 1;
                 if (nvals == slots.len) break :out;
-
                 ndigits = 0;
                 // jump to the next key
                 i += "kB\n".len + MEMINFO_KEY_LEN;
