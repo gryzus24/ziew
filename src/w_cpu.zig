@@ -52,30 +52,26 @@ pub fn widget(
     };
 
     var cur: ProcStat = .{ .fields = undefined };
-    var nfields: usize = 0;
-    var field_start: usize = 0;
-    out: for (3..nread) |i| {
-        switch (statbuf[i]) {
-            ' ', '\n' => {
-                if (nfields > 0) {
-                    cur.fields[nfields - 1] = fmt.parseUnsigned(
-                        u64,
-                        statbuf[field_start..i],
-                        10,
-                    ) catch unreachable;
-                    if (statbuf[i] == '\n') {
-                        if (nfields != 10) utl.fatal(&.{"CPU: buf too small"});
-                        break :out;
-                    }
-                }
-                field_start = i + 1;
-            },
-            '0'...'9' => {
-                if (i == field_start) nfields += 1;
-            },
-            else => {},
-        }
-    }
+    var nvals: usize = 0;
+    var ndigits: usize = 0;
+    out: for ("cpu".len..nread) |i| switch (statbuf[i]) {
+        ' ', '\n' => {
+            if (ndigits > 0) {
+                cur.fields[nvals] = fmt.parseUnsigned(
+                    u64,
+                    statbuf[i - ndigits .. i],
+                    10,
+                ) catch unreachable;
+
+                nvals += 1;
+                if (nvals == cur.fields.len) break :out;
+
+                ndigits = 0;
+            }
+        },
+        '0'...'9' => ndigits += 1,
+        else => {},
+    };
 
     const user_delta: f64 = @floatFromInt(cur.user() - prev.user());
     const sys_delta: f64 = @floatFromInt(cur.sys() - prev.sys());
