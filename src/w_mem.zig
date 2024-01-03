@@ -20,16 +20,6 @@ const MEMINFO_BUF_SIZE = blk: {
     break :blk w.len;
 };
 
-fn parseMemInfoLine(line: []const u8) u64 {
-    const value_str = blk: {
-        // NOTE: kB is hardcoded in the kernel
-        const end = if (line[line.len - 1] == 'B') line.len - 3 else line.len;
-        const start = mem.lastIndexOfScalar(u8, line[0..end], ' ').? + 1;
-        break :blk line[start..end];
-    };
-    return fmt.parseUnsigned(u64, value_str, 10) catch unreachable;
-}
-
 const ColorHandler = struct {
     used_kb: u64,
     free_kb: u64,
@@ -60,31 +50,42 @@ pub fn widget(
 ) []const u8 {
     var meminfo_buf: [MEMINFO_BUF_SIZE]u8 = undefined;
 
-    _ = proc_meminfo.pread(&meminfo_buf, 0) catch |err| {
+    const nread = proc_meminfo.pread(&meminfo_buf, 0) catch |err| {
         utl.fatal(&.{ "MEM: pread: ", @errorName(err) });
     };
 
-    var pos: usize = 0;
-    var end: usize = 0;
+    const MEMINFO_KEY_LEN = "xxxxxxxx:       ".len;
+    var slots: [5]u64 = undefined;
 
-    end = mem.indexOfScalar(u8, meminfo_buf[pos..], '\n').?;
-    const total_kb = parseMemInfoLine(meminfo_buf[pos..end]);
-    pos = end + 1;
+    var i: usize = MEMINFO_KEY_LEN;
+    var nvals: usize = 0;
+    var ndigits: usize = 0;
+    out: while (i < nread) : (i += 1) switch (meminfo_buf[i]) {
+        ' ' => {
+            if (ndigits > 0) {
+                slots[nvals] = fmt.parseUnsigned(
+                    u64,
+                    meminfo_buf[i - ndigits .. i],
+                    10,
+                ) catch unreachable;
 
-    end = pos + mem.indexOfScalar(u8, meminfo_buf[pos..], '\n').?;
-    const free_kb = parseMemInfoLine(meminfo_buf[pos..end]);
-    pos = end + 1;
+                nvals += 1;
+                if (nvals == slots.len) break :out;
 
-    end = pos + mem.indexOfScalar(u8, meminfo_buf[pos..], '\n').?;
-    const avail_kb = parseMemInfoLine(meminfo_buf[pos..end]);
-    pos = end + 1;
+                ndigits = 0;
+                // jump to the next key
+                i += "kB\n".len + MEMINFO_KEY_LEN;
+            }
+        },
+        '0'...'9' => ndigits += 1,
+        else => {},
+    };
 
-    end = pos + mem.indexOfScalar(u8, meminfo_buf[pos..], '\n').?;
-    const buffers_kb = parseMemInfoLine(meminfo_buf[pos..end]);
-    pos = end + 1;
-
-    end = pos + mem.indexOfScalar(u8, meminfo_buf[pos..], '\n').?;
-    const cached_kb = parseMemInfoLine(meminfo_buf[pos..end]);
+    const total_kb = slots[0];
+    const free_kb = slots[1];
+    const avail_kb = slots[2];
+    const buffers_kb = slots[3];
+    const cached_kb = slots[4];
 
     const used_kb = total_kb - avail_kb;
 
