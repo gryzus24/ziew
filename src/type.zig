@@ -78,6 +78,8 @@ pub const MemOpt = enum {
     available,
     buffers,
     cached,
+    dirty,
+    writeback,
 };
 pub const CpuOpt = enum { @"%all", @"%user", @"%sys" };
 pub const DiskOpt = enum {

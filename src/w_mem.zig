@@ -7,37 +7,57 @@ const fmt = std.fmt;
 const fs = std.fs;
 const mem = std.mem;
 
-const MEMINFO_BUF_SIZE = blk: {
-    const w =
-        \\MemTotal:       18446744073709551616 kB
-        \\MemFree:        18446744073709551616 kB
-        \\MemAvailable:   18446744073709551616 kB
-        \\Buffers:        18446744073709551616 kB
-        \\Cached:         18446744073709551616 kB
-        \\
-    ;
-    if (w.len != 200) unreachable;
-    break :blk w.len;
-};
-
 const ColorHandler = struct {
-    used_kb: u64,
-    free_kb: u64,
-    avail_kb: u64,
-    cached_kb: u64,
-    total_kb: u64,
+    meminfo: *const MemInfo,
 
     pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
+        const mi = self.meminfo;
         return color.firstColorAboveThreshold(
             switch (@as(typ.MemOpt, @enumFromInt(mc.opt))) {
-                .@"%used" => utl.percentOf(self.used_kb, self.total_kb),
-                .@"%free" => utl.percentOf(self.free_kb, self.total_kb),
-                .@"%available" => utl.percentOf(self.avail_kb, self.total_kb),
-                .@"%cached" => utl.percentOf(self.cached_kb, self.total_kb),
-                .used, .total, .free, .available, .buffers, .cached => unreachable,
+                .@"%used" => utl.percentOf(mi.used(), mi.total()),
+                .@"%free" => utl.percentOf(mi.free(), mi.total()),
+                .@"%available" => utl.percentOf(mi.avail(), mi.total()),
+                .@"%cached" => utl.percentOf(mi.cached(), mi.total()),
+                .used => unreachable,
+                .total => unreachable,
+                .free => unreachable,
+                .available => unreachable,
+                .buffers => unreachable,
+                .cached => unreachable,
+                .dirty => unreachable,
+                .writeback => unreachable,
             }.val,
             mc.colors,
         );
+    }
+};
+
+const MemInfo = struct {
+    fields: [7]u64,
+
+    pub fn total(self: @This()) u64 {
+        return self.fields[0];
+    }
+    pub fn free(self: @This()) u64 {
+        return self.fields[1];
+    }
+    pub fn avail(self: @This()) u64 {
+        return self.fields[2];
+    }
+    pub fn buffers(self: @This()) u64 {
+        return self.fields[3];
+    }
+    pub fn cached(self: @This()) u64 {
+        return self.fields[4];
+    }
+    pub fn dirty(self: @This()) u64 {
+        return self.fields[5];
+    }
+    pub fn writeback(self: @This()) u64 {
+        return self.fields[6];
+    }
+    pub fn used(self: @This()) u64 {
+        return self.total() - self.avail();
     }
 };
 
@@ -48,66 +68,60 @@ pub fn widget(
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
-    var meminfo_buf: [MEMINFO_BUF_SIZE]u8 = undefined;
+    const MEMINFO_BUF_SIZE = 2048;
+    const MEMINFO_KEY_LEN = "xxxxxxxx:       ".len;
 
+    var meminfo_buf: [MEMINFO_BUF_SIZE]u8 = undefined;
     const nread = proc_meminfo.pread(&meminfo_buf, 0) catch |err| {
         utl.fatal(&.{ "MEM: pread: ", @errorName(err) });
     };
 
-    const MEMINFO_KEY_LEN = "xxxxxxxx:       ".len;
-    var slots: [5]u64 = undefined;
+    var meminfo: MemInfo = .{ .fields = undefined };
 
     var i: usize = MEMINFO_KEY_LEN;
     var nvals: usize = 0;
     var ndigits: usize = 0;
+    var skip: bool = false;
     out: while (i < nread) : (i += 1) switch (meminfo_buf[i]) {
         ' ' => {
-            if (ndigits > 0) {
-                slots[nvals] = utl.unsafeAtou64(meminfo_buf[i - ndigits .. i]);
+            if (ndigits == 0) continue;
+            if (!skip) {
+                meminfo.fields[nvals] = utl.unsafeAtou64(
+                    meminfo_buf[i - ndigits .. i],
+                );
                 nvals += 1;
-                if (nvals == slots.len) break :out;
-                ndigits = 0;
-                // jump to the next key
-                i += "kB\n".len + MEMINFO_KEY_LEN;
+                if (nvals == meminfo.fields.len) break :out;
+                if (nvals == 5) skip = true; // skip lines after 'Cached'
             }
+            ndigits = 0;
+            i += "kB\n".len;
+            if (meminfo_buf[i + 1] == 'D') skip = false; // Dirty
+            i += MEMINFO_KEY_LEN;
         },
         '0'...'9' => ndigits += 1,
         else => {},
     };
 
-    const total_kb = slots[0];
-    const free_kb = slots[1];
-    const avail_kb = slots[2];
-    const buffers_kb = slots[3];
-    const cached_kb = slots[4];
-
-    const used_kb = total_kb - avail_kb;
-
     const writer = stream.writer();
-    const ch = ColorHandler{
-        .used_kb = used_kb,
-        .free_kb = free_kb,
-        .avail_kb = avail_kb,
-        .cached_kb = cached_kb,
-        .total_kb = total_kb,
-    };
+    const ch: ColorHandler = .{ .meminfo = &meminfo };
 
     utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
     utl.writeStr(writer, cf.parts[0]);
     for (cf.iterOpts(), cf.iterParts()[1..]) |*opt, *part| {
         const nu = switch (@as(typ.MemOpt, @enumFromInt(opt.opt))) {
-            .@"%used" => utl.percentOf(used_kb, total_kb),
-            .@"%free" => utl.percentOf(free_kb, total_kb),
-            .@"%available" => utl.percentOf(avail_kb, total_kb),
-            .@"%cached" => utl.percentOf(cached_kb, total_kb),
-            .used => utl.kbToHuman(used_kb),
-            .total => utl.kbToHuman(total_kb),
-            .free => utl.kbToHuman(free_kb),
-            .available => utl.kbToHuman(avail_kb),
-            .buffers => utl.kbToHuman(buffers_kb),
-            .cached => utl.kbToHuman(cached_kb),
+            .@"%used" => utl.percentOf(meminfo.used(), meminfo.total()),
+            .@"%free" => utl.percentOf(meminfo.free(), meminfo.total()),
+            .@"%available" => utl.percentOf(meminfo.avail(), meminfo.total()),
+            .@"%cached" => utl.percentOf(meminfo.cached(), meminfo.total()),
+            .used => utl.kbToHuman(meminfo.used()),
+            .total => utl.kbToHuman(meminfo.total()),
+            .free => utl.kbToHuman(meminfo.free()),
+            .available => utl.kbToHuman(meminfo.avail()),
+            .buffers => utl.kbToHuman(meminfo.buffers()),
+            .cached => utl.kbToHuman(meminfo.cached()),
+            .dirty => utl.kbToHuman(meminfo.dirty()),
+            .writeback => utl.kbToHuman(meminfo.writeback()),
         };
-
         utl.writeNumUnit(writer, nu, opt.alignment, opt.precision);
         utl.writeStr(writer, part.*);
     }
