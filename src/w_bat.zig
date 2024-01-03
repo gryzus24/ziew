@@ -85,11 +85,20 @@ pub fn widget(
         if (mem.eql(u8, key, "STATUS")) {
             status = value;
         } else if (mem.eql(u8, key, "CHARGE_FULL_DESIGN") or mem.eql(u8, key, "ENERGY_FULL_DESIGN")) {
-            full_design = fmt.parseUnsigned(u64, value, 10) catch unreachable;
+            full_design = fmt.parseUnsigned(u64, value, 10) catch blk: {
+                utl.warn(&.{"BAT: bad 'full_design' value"});
+                break :blk 0;
+            };
         } else if (mem.eql(u8, key, "CHARGE_FULL") or mem.eql(u8, key, "ENERGY_FULL")) {
-            full = fmt.parseUnsigned(u64, value, 10) catch unreachable;
+            full = fmt.parseUnsigned(u64, value, 10) catch blk: {
+                utl.warn(&.{"BAT: bad 'full' value"});
+                break :blk 0;
+            };
         } else if (mem.eql(u8, key, "CHARGE_NOW") or mem.eql(u8, key, "ENERGY_NOW")) {
-            now = fmt.parseUnsigned(u64, value, 10) catch unreachable;
+            now = fmt.parseUnsigned(u64, value, 10) catch blk: {
+                utl.warn(&.{"BAT: bad 'now' value"});
+                break :blk 0;
+            };
         }
     }
 
