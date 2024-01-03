@@ -153,4 +153,4 @@ pub fn strStartToWidEnum(str: []const u8) ?WidgetId {
 }
 
 // 1/10th of a second
-pub const DeciSec = u32;
+pub const DeciSec = u64;

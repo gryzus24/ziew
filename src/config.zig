@@ -270,7 +270,7 @@ pub fn defaultConfig(config_mem: *ConfigMem) Config {
 // == private ==
 
 const INTERVAL_DEFAULT: typ.DeciSec = 50;
-const INTERVAL_MAX = 1 << (@sizeOf(typ.DeciSec) * 8 - 1);
+const INTERVAL_MAX = 1 << 31;
 
 const OPT_PRECISION_DEFAULT = 1;
 const OPT_ALIGNMENT_DEFAULT = .none;
@@ -297,8 +297,15 @@ fn acceptInterval(str: []const u8, pos: *usize) !typ.DeciSec {
             else => return error.BadInterval,
         }
     }
-    const ret = fmt.parseUnsigned(typ.DeciSec, str[start..i], 10) catch unreachable;
-    if (ret <= 0 or ret > INTERVAL_MAX) return INTERVAL_MAX;
+    const ret = fmt.parseUnsigned(
+        typ.DeciSec,
+        str[start..i],
+        10,
+    ) catch |err| switch (err) {
+        error.Overflow => return INTERVAL_MAX,
+        error.InvalidCharacter => unreachable,
+    };
+    if (ret == 0 or ret > INTERVAL_MAX) return INTERVAL_MAX;
     return ret;
 }
 
