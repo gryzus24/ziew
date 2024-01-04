@@ -26,11 +26,11 @@ const ColorHandler = struct {
 
 pub fn widget(
     stream: anytype,
-    cf: *const cfg.ConfigFormat,
+    cf: *const cfg.WidgetFormat,
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
-    var buf: [typ.WIDGET_BUF_BYTES_MAX / 2]u8 = undefined;
+    var buf: [typ.WIDGET_BUF_MAX / 2]u8 = undefined;
 
     const mountpoint = utl.zeroTerminate(&buf, cf.parts[0]) orelse utl.fatal(
         &.{"DISK: mountpoint path too long"},
@@ -39,7 +39,7 @@ pub fn widget(
     // TODO: use statvfs instead of this
     var res: c.struct_statfs = undefined;
     if (c.statfs(mountpoint, &res) != 0)
-        utl.fatal(&.{ "DISK: bad mountpoint '", mountpoint, "'" });
+        utl.fatal(&.{ "DISK: bad mountpoint: ", mountpoint });
 
     // convert block size to 1K for calculations
     if (res.f_bsize == 4096) {

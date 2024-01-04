@@ -25,16 +25,14 @@ pub const Color = struct {
 
         if (!isnormal and !ismini) return false;
 
-        for (str[hashash..]) |ch| {
-            switch (ch) {
-                '0'...'9', 'a'...'f', 'A'...'F' => {},
-                else => return false,
-            }
-        }
+        for (str[hashash..]) |ch| switch (ch) {
+            '0'...'9', 'a'...'f', 'A'...'F' => {},
+            else => return false,
+        };
 
         self._hex[0] = '#';
         if (ismini) {
-            var i: u8 = 1;
+            var i: usize = 1;
             for (str[hashash..]) |ch| {
                 self._hex[i] = ch;
                 i += 1;

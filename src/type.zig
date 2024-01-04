@@ -8,21 +8,19 @@ pub const WidgetId = enum {
     MEM,
     CPU,
     DISK,
-    ETH,
-    WLAN,
+    NET,
     BAT,
 
     fn argsepOptValue(self: @This()) ?u8 {
         return switch (self) {
             .DISK => @intFromEnum(DiskOpt.@"-"),
-            .ETH => @intFromEnum(EthOpt.@"-"),
-            .WLAN => @intFromEnum(WlanOpt.@"-"),
+            .NET => @intFromEnum(NetOpt.@"-"),
             .BAT => @intFromEnum(BatOpt.@"-"),
             else => return null,
         };
     }
 
-    pub fn panicOnInvalidArgs(self: @This(), cf: *const cfg.ConfigFormat) void {
+    pub fn panicOnInvalidArgs(self: @This(), cf: *const cfg.WidgetFormat) void {
         const argsep = self.argsepOptValue() orelse return;
         const nargs = blk: {
             var n: usize = 0;
@@ -34,7 +32,7 @@ pub const WidgetId = enum {
         if (nargs == 0 or cf.opts[0].opt != argsep) {
             const placeholder = switch (self) {
                 .DISK => "<mountpoint>",
-                .ETH, .WLAN => "<interface>",
+                .NET => "<interface>",
                 .BAT => "<battery name>",
                 else => unreachable,
             };
@@ -46,7 +44,7 @@ pub const WidgetId = enum {
 
     pub fn supportsManyColors(self: @This()) bool {
         return switch (self) {
-            .MEM, .CPU, .DISK, .ETH, .WLAN, .BAT => true,
+            .MEM, .CPU, .DISK, .NET, .BAT => true,
             .TIME => false,
         };
     }
@@ -55,14 +53,11 @@ pub const WidgetId = enum {
         return switch (self) {
             .TIME => false,
             .MEM, .CPU, .DISK => optname[0] == '%',
-            .ETH, .WLAN => mem.eql(u8, optname, "state"),
+            .NET => mem.eql(u8, optname, "state"),
             .BAT => optname[0] == '%' or mem.eql(u8, optname, "state"),
         };
     }
 };
-
-pub const WIDGETS_MAX = @typeInfo(WidgetId).Enum.fields.len;
-pub const WIDGET_BUF_BYTES_MAX = 128;
 
 pub const TimeOpt = enum { @"-" };
 pub const MemOpt = enum {
@@ -93,29 +88,47 @@ pub const DiskOpt = enum {
     available,
     @"-",
 };
-pub const EthOpt = enum { ifname, inet, flags, state, @"-" };
-pub const WlanOpt = enum { ifname, inet, flags, state, @"-" };
+pub const NetOpt = enum { ifname, inet, flags, state, @"-" };
 pub const BatOpt = enum { @"%fullnow", @"%fulldesign", state, @"-" };
 
-pub const OPT_TYPES = blk: {
-    const w = .{ TimeOpt, MemOpt, CpuOpt, DiskOpt, EthOpt, WlanOpt, BatOpt };
-    if (w.len != WIDGETS_MAX)
-        @compileError("adjust OPT_TYPES");
+// 1/10th of a second
+pub const DeciSec = u64;
+
+// == CONSTANTS ===============================================================
+
+const _WIDGET_IDS_NUM = @typeInfo(WidgetId).Enum.fields.len;
+
+const _OPT_TYPES = blk: {
+    const w = .{ TimeOpt, MemOpt, CpuOpt, DiskOpt, NetOpt, BatOpt };
+    if (w.len != _WIDGET_IDS_NUM)
+        @compileError("adjust _OPT_TYPES");
     break :blk w;
 };
+
+// maximum number of widgets that can be configured
+pub const WIDGETS_MAX = 10;
+
+// individual widget maximum buffer size
+pub const WIDGET_BUF_MAX = 128;
+
+// maximum number of options that can be used in a widget format
 pub const OPTS_MAX = blk: {
     var max: usize = 0;
-    for (OPT_TYPES) |t| {
+    for (_OPT_TYPES) |t| {
         const n = @typeInfo(t).Enum.fields.len;
         if (n > max)
             max = n;
     }
     break :blk max;
 };
+
+// maximum number of parts that can be present in a widget format
 pub const PARTS_MAX = OPTS_MAX + 1;
+
+// size of a buffer that can hold the longest option name
 pub const OPT_NAME_BUF_MAX = blk: {
     var max: usize = 0;
-    for (OPT_TYPES) |t| {
+    for (_OPT_TYPES) |t| {
         const enum_t = @typeInfo(t).Enum;
         for (enum_t.fields) |field| if (field.name.len > max) {
             max = field.name.len;
@@ -125,9 +138,10 @@ pub const OPT_NAME_BUF_MAX = blk: {
     break :blk max + 3;
 };
 
-pub const WID_TO_OPT_NAMES: [WIDGETS_MAX][]const []const u8 = blk: {
-    var w: [WIDGETS_MAX][]const []const u8 = undefined;
-    for (OPT_TYPES, 0..) |t, i| {
+// option names of a widget @intFromEnum(WidgetId)
+pub const WID_TO_OPT_NAMES: [_WIDGET_IDS_NUM][]const []const u8 = blk: {
+    var w: [_WIDGET_IDS_NUM][]const []const u8 = undefined;
+    for (_OPT_TYPES, 0..) |t, i| {
         const enum_t = @typeInfo(t).Enum;
         var q: [enum_t.fields.len][]const u8 = undefined;
         for (enum_t.fields, 0..) |field, j| {
@@ -137,6 +151,9 @@ pub const WID_TO_OPT_NAMES: [WIDGETS_MAX][]const []const u8 = blk: {
     }
     break :blk w;
 };
+
+// maximum config file size
+pub const CONFIG_FILE_BUF_MAX = 2048 + 1024;
 
 pub fn strToWidEnum(str: []const u8) ?WidgetId {
     inline for (@typeInfo(WidgetId).Enum.fields) |field| {
@@ -153,6 +170,3 @@ pub fn strStartToWidEnum(str: []const u8) ?WidgetId {
     }
     return null;
 }
-
-// 1/10th of a second
-pub const DeciSec = u64;

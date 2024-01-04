@@ -18,11 +18,11 @@ pub const NumUnit = struct {
     unit: u8,
 };
 
-pub const BYTES_IN_4K = 4096;
-pub const BYTES_IN_4M = 4096 * 1024;
-pub const BYTES_IN_4G = 4096 * 1024 * 1024;
-
 pub fn kbToHuman(value: u64) NumUnit {
+    const BYTES_IN_4K = 4096;
+    const BYTES_IN_4M = 4096 * 1024;
+    const BYTES_IN_4G = 4096 * 1024 * 1024;
+
     const fvalue: f64 = @floatFromInt(value);
     return switch (value) {
         0...BYTES_IN_4K - 1 => .{
@@ -73,20 +73,7 @@ pub inline fn writeFloat(writer: anytype, value: f64, precision: u8) void {
     }
 }
 
-pub const PRECISION_ROUND_EPS: [10]f64 = .{
-    0.5 / 1.0,
-    0.5 / 10.0,
-    0.5 / 100.0,
-    0.5 / 1000.0,
-    0.5 / 10000.0,
-    0.5 / 100000.0,
-    0.5 / 1000000.0,
-    0.5 / 10000000.0,
-    0.5 / 100000000.0,
-    0.5 / 1000000000.0,
-};
-
-pub const AlignmentValueType = enum { percent, size };
+const AlignmentValueType = enum { percent, size };
 
 pub fn writeAlignment(
     with_write: anytype,
@@ -94,8 +81,20 @@ pub fn writeAlignment(
     value: f64,
     precision: u8,
 ) void {
-    const spaces: [3]u8 = .{ ' ', ' ', ' ' };
+    const PRECISION_ROUND_EPS: [10]f64 = .{
+        0.5 / 1.0,
+        0.5 / 10.0,
+        0.5 / 100.0,
+        0.5 / 1000.0,
+        0.5 / 10000.0,
+        0.5 / 100000.0,
+        0.5 / 1000000.0,
+        0.5 / 10000000.0,
+        0.5 / 100000000.0,
+        0.5 / 1000000000.0,
+    };
     const eps = PRECISION_ROUND_EPS[precision];
+    const spaces: [3]u8 = .{ ' ', ' ', ' ' };
 
     const len: u2 = switch (value_type) {
         .percent => blk: {

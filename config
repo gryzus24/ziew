@@ -1,56 +1,60 @@
+##
 # Example ziew configuration. After editing, run ziew from the terminal
 # to see if there are any errors. Upon ignoring the advice above
 # you might want to consult the /tmp/ziew.log file.
-##
+#
 
 ##
 # Widget line format
 # WIDGET  REFRESH-INTERVAL (in 1/10ths of a second)  FORMAT-STRING
 
-# You might want to adjust the interface name before the {-} symbol.
-WLAN  20    "wlp1s0{-}{ifname}: {inet} {flags}"
-ETH   20    "enp5s0{-}{ifname}: {inet} {flags}"
+##
+# Color line format
+#   Change color conditionally on the OPTION value
+#     FG or BG  OPTION  [THRESHOLD:RGB ...]
+#   Set default color to RGB
+#     FG or BG  RGB
 
-# Get space available on / every 20 seconds.
-DISK  200   "/{-}/ {available}"
+##
+# Color lines must come after the Widget lines they apply to.
 
-# .1: precision after a decimal point, >: aligned to the right.
-CPU   20    "CPU{%all.1>}"
-MEM   20    "MEM {used} : {free} +{cached.0}"
-
-# Get battery info from /sys/class/power_supply/BAT<n>.
-# Retrieving battery info might be expensive - do it every 30 seconds.
-BAT   300   "BAT0{-}BAT {%fulldesign.2} {state}"
-
-# See strftime(3) for details about the format.
-TIME  20    "%A %d.%m ~ %H:%M:%S "
-
+## NOTE
 # To make widget timings accurate, make sure all intervals
 # are nicely divisible by the shortest interval.
 # In this case 200 and 300 are all multiples of 20 so it's fine.
-##
 
-##
-# Color line format
-# FG or BG  WIDGET  OPTION  [THRESHOLD:RGB ...]
-
+# You might want to adjust the interface name before the {-} symbol.
+NET 20 "wlp1s0{-}{ifname}: {inet} {flags}"
 # 0 - interface down, 1 - interface up.
 # Valid RGB value formats: a44, #a44, aa4444, #aa4444.
-FG WLAN state 0:a44 1:4a4
-FG ETH  state 0:a44 1:4a4
+FG     state 0:a44 1:4a4
 
+NET 20 "enp5s0{-}{ifname}: {inet} {flags}"
+FG     state 0:a44 1:4a4
+
+# Get space available on / every 20 seconds.
+DISK 200 "/{-}/ {available}"
+
+# .1: precision after a decimal point, >: aligned to the right.
+CPU 20 "CPU{%all.1>}"
 # Gradient of yellow (at 60% cpu usage) to red (at 90% and above).
-# Values must be in ascending order. 10 colors max.
-FG CPU %all  60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-FG MEM %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+# Values must be in ascending order.
+FG     %all 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 
+MEM 20 "MEM {used} : {free} +{cached.0}"
+FG     %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+
+# Get battery info from /sys/class/power_supply/BAT<n>.
+# Retrieving battery info is quite expensive - do it every 30 seconds.
+BAT 300 "BAT0{-}BAT {%fulldesign.2} {state}"
 # 0 - Discharging, 1 - Charging, 2 - Full, 3 - Not-charging, 4 - Unknown
-FG BAT state   1:4a4 2:4a4
-
+FG      state       1:4a4 2:4a4
 # 0 to 15%: red, 15% to 25%: faint yellow, 25% and up: default color.
-BG BAT %fulldesign 0:a00 15:220 25:
+BG      %fulldesign 0:a00 15:220 25:
 
+# See strftime(3) for details about the format.
+TIME 20 "%A %d.%m ~ %H:%M:%S "
 # Set the default foreground color.
-FG TIME 9f9
+FG      9f9
 
 # vim: ft=config

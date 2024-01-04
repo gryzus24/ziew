@@ -64,7 +64,7 @@ const MemInfo = struct {
 pub fn widget(
     stream: anytype,
     proc_meminfo: *const fs.File,
-    cf: *const cfg.ConfigFormat,
+    cf: *const cfg.WidgetFormat,
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
@@ -82,7 +82,7 @@ pub fn widget(
     var nvals: usize = 0;
     var ndigits: usize = 0;
     var skip: bool = false;
-    out: while (i < nread) : (i += 1) switch (meminfo_buf[i]) {
+    while (i < nread) : (i += 1) switch (meminfo_buf[i]) {
         ' ' => {
             if (ndigits == 0) continue;
             if (!skip) {
@@ -90,7 +90,7 @@ pub fn widget(
                     meminfo_buf[i - ndigits .. i],
                 );
                 nvals += 1;
-                if (nvals == meminfo.fields.len) break :out;
+                if (nvals == meminfo.fields.len) break;
                 if (nvals == 5) skip = true; // skip lines after 'Cached'
             }
             ndigits = 0;

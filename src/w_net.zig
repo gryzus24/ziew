@@ -62,7 +62,7 @@ fn getFlags(
     const e = errnoInt(linux.ioctl(sock, c.SIOCGIFFLAGS, @intFromPtr(ifr)));
     return switch (e) {
         0 => blk: {
-            var n: u8 = 0;
+            var n: usize = 0;
 
             if (ifr.ifru.flags & c.IFF_ALLMULTI == c.IFF_ALLMULTI) {
                 flagsbuf[n] = 'A';
@@ -109,7 +109,7 @@ const ColorHandler = struct {
 
 pub fn widget(
     stream: anytype,
-    cf: *const cfg.ConfigFormat,
+    cf: *const cfg.WidgetFormat,
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
@@ -122,7 +122,7 @@ pub fn widget(
     var ifr: linux.ifreq = undefined;
     const ifname = cf.parts[0];
     _ = utl.zeroTerminate(&ifr.ifrn.name, ifname) orelse utl.fatal(
-        &.{ "NET: interface name too long '", ifname, "'" },
+        &.{ "NET: interface name too long: ", ifname },
     );
 
     var _inetbuf: [INET_BUF_SIZE]u8 = .{0} ** INET_BUF_SIZE;
@@ -134,7 +134,7 @@ pub fn widget(
     var wants_state: bool = false;
 
     for (cf.iterOpts()[1..]) |*opt| {
-        switch (@as(typ.EthOpt, @enumFromInt(opt.opt))) {
+        switch (@as(typ.NetOpt, @enumFromInt(opt.opt))) {
             .ifname => {},
             .inet => inet = getInet(Static.sock, &ifr, &_inetbuf, &isup),
             .flags => flags = getFlags(Static.sock, &ifr, &_flagsbuf, &isup),
@@ -147,12 +147,12 @@ pub fn widget(
         _ = getInet(Static.sock, &ifr, &_inetbuf, &isup);
 
     const writer = stream.writer();
-    const ch = ColorHandler{ .isup = isup };
+    const ch: ColorHandler = .{ .isup = isup };
 
     utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
     utl.writeStr(writer, cf.parts[1]);
     for (cf.iterOpts()[1..], cf.iterParts()[2..]) |*opt, *part| {
-        switch (@as(typ.EthOpt, @enumFromInt(opt.opt))) {
+        switch (@as(typ.NetOpt, @enumFromInt(opt.opt))) {
             .ifname => utl.writeStr(writer, ifname),
             .inet => utl.writeStr(writer, inet),
             .flags => utl.writeStr(writer, flags),

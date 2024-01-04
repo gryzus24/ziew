@@ -41,7 +41,7 @@ pub fn widget(
     stream: anytype,
     proc_stat: *const fs.File,
     prev: *ProcStat,
-    cf: *const cfg.ConfigFormat,
+    cf: *const cfg.WidgetFormat,
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
@@ -54,12 +54,12 @@ pub fn widget(
     var cur: ProcStat = .{ .fields = undefined };
     var nvals: usize = 0;
     var ndigits: usize = 0;
-    out: for ("cpu".len..nread) |i| switch (statbuf[i]) {
+    for ("cpu".len..nread) |i| switch (statbuf[i]) {
         ' ', '\n' => {
             if (ndigits > 0) {
                 cur.fields[nvals] = utl.unsafeAtou64(statbuf[i - ndigits .. i]);
                 nvals += 1;
-                if (nvals == cur.fields.len) break :out;
+                if (nvals == cur.fields.len) break;
                 ndigits = 0;
             }
         },
@@ -84,7 +84,7 @@ pub fn widget(
     };
 
     const writer = stream.writer();
-    const ch = ColorHandler{ .slots = &slots };
+    const ch: ColorHandler = .{ .slots = &slots };
 
     utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
     utl.writeStr(writer, cf.parts[0]);
