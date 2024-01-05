@@ -239,8 +239,10 @@ pub fn fatalPos(strings: []const []const u8, errpos: usize) noreturn {
     log.log("fatal: ");
     for (strings) |s| log.log(s);
     log.log("\n");
-    @memset(bss_mem[0 .. "fatal: ".len + errpos], ' ');
-    log.log(bss_mem[0 .. "fatal: ".len + errpos]);
+    var errend = "fatal: ".len + errpos;
+    if (errend > bss_mem.len) errend = bss_mem.len;
+    @memset(bss_mem[0..errend], ' ');
+    log.log(bss_mem[0..errend]);
     log.log("^\n");
     os.exit(1);
 }
