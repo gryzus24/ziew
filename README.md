@@ -4,10 +4,10 @@
 *ziew* is a more minimal alternative to *i3status*.
 
 ## Aspirations
-  *ziew* wants:
-  * to implement useful widgets using the least amount of syscalls and instructions,
-  * to have a small and predictable configuration file,
-  * to be compatible with any x86_64 Linux platform.
+*ziew* wants:
+* to implement useful widgets using the least amount of syscalls and instructions,
+* to have a small and predictable configuration file,
+* to be compatible with any x86_64 Linux platform.
 
 ## Widgets
 Widget | Data source
@@ -42,8 +42,8 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
 
     FG|BG COLOR
 
-    FG|BG  - either FG for foreground color or BG for background color,
-    COLOR  - hexadecimal RGB color value (e.g. #99aabb or #9ab, # is optional).
+    FG|BG - either FG for foreground color or BG for background color,
+    COLOR - hexadecimal RGB color value (e.g. #99aabb or #9ab, # is optional).
 
     Example
       FG TIME #8a8
@@ -63,7 +63,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
       BG CPU %all 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
       FG CPU %user 0:22a 10:default 60:aa2
 
-Color lines must come after the Widget lines they apply to. You can define multiple widgets and place them in any order you want, but with the following limitations:
+*Color* lines must come after the *Widget* lines they apply to. You can define multiple widgets and place them in any order you want, but with the following limitations:
 * maximum number of widgets is 10,
 * maximum number of colors is 100,
 * you cannot define more than one CPU widget (who needs that anyway?).
@@ -92,12 +92,14 @@ All widget format options, specifiers and color options are documented below.
 
     Format
       Options
-        * [%]used      - used memory as reported by free(1),
+        * [%]used      - used memory (total - available),
         * total        - total system memory,
-        * [%]free      - memory that is not utilized at all,
+        * [%]free      - memory which is not utilized at all,
         * [%]available - memory available for starting new programs,
-        * buffers      - buffers (whatever that means),
-        * [%]cached    - memory used for the page cache.
+        * buffers      - memory used for filesystem metadata cache,
+        * [%]cached    - memory used for the page cache (excludes buffers),
+        * dirty        - memory waiting to get written back to the disk,
+        * writeback    - memory actively being written back to the disk.
 
       Optional specifiers
         * precision - number from 0 to 9 inclusive,
