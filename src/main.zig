@@ -62,7 +62,7 @@ fn showHelpAndExit() noreturn {
 }
 
 fn showVersionAndExit() noreturn {
-    utl.writeStr(io.getStdOut(), "ziew 0.0.1\n");
+    utl.writeStr(io.getStdOut(), "ziew 0.0.2\n");
     std.os.exit(0);
 }
 
