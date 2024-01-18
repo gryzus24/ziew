@@ -41,7 +41,7 @@ CPU 20 "CPU{%all.1>}"
 # Values must be in ascending order.
 FG     %all 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 
-MEM 20 "MEM {used} : {free} +{cached.0}"
+MEM 20 "MEM {used.1} : {free.1} +{cached}"
 FG     %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 
 # Get battery info from /sys/class/power_supply/BAT<n>.

@@ -266,7 +266,7 @@ pub fn defaultConfig(config_mem: *ConfigMem) []const Widget {
 const INTERVAL_DEFAULT: typ.DeciSec = 50;
 const INTERVAL_MAX = 1 << 31;
 
-const OPT_PRECISION_DEFAULT = 1;
+const OPT_PRECISION_DEFAULT = 0;
 const OPT_ALIGNMENT_DEFAULT = .none;
 
 const COLORS_MAX = 100;

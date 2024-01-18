@@ -32,8 +32,19 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
     WIDGET   - uppercase name of the widget,
     INTERVAL - refresh interval in deciseconds (1/10 of a second),
     FORMAT   - widget specific format enclosed in double quotes. Format,
-               apart from plain text may contain optional options enclosed in
-               squirrelly brackets and optional specifiers after a period.
+               apart from plain text may contain options which tell the widget
+               what information to display. Options are enclosed in squirrelly
+               brackets and may contain specifiers after a period:
+
+                 {OPTION.[PRECISION][ALIGNMENT]}
+
+               * OPTION    - widget specific option name,
+               * PRECISION - number from 0 to 9 inclusive - specifies digits
+                             of precision (0 if left unspecified),
+               * ALIGNMENT - either < for left alignment or > for right
+                             alignment - reserves space for the longest
+                             representation of a number (no alignment if left
+                             unspecified).
 
     Example
       CPU 25 "CPU {%all.1>}"
@@ -68,13 +79,16 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
 * maximum number of colors is 100,
 * you cannot define more than one CPU widget (who needs that anyway?).
 
-All widget format options, specifiers and color options are documented below.
+Every option and supported color configuration for each *Widget* is documented below.
 
 **TIME**
 
     Format
       This widget is special in that its entire format is documented in
       strftime(3) and not here.
+
+      Specifiers
+        unsupported
 
     Colors
       [x] default
@@ -101,9 +115,9 @@ All widget format options, specifiers and color options are documented below.
         * dirty        - memory waiting to get written back to the disk,
         * writeback    - memory actively being written back to the disk.
 
-      Optional specifiers
-        * precision - number from 0 to 9 inclusive,
-        * alignment - either < for left alignment or > for right alignment.
+      Specifiers
+        [x] precision
+        [x] alignment
 
     Colors
       [x] default
@@ -123,9 +137,9 @@ All widget format options, specifiers and color options are documented below.
         * %sys  - time spent executing kernel code,
         * %all  - time spent executing both user and kernel code.
 
-      Optional specifiers
-        * precision - number from 0 to 9 inclusive,
-        * alignment - either < for left alignment or > for right alignment.
+      Specifiers
+        [x] precision
+        [x] alignment
 
     Colors
       [x] default
@@ -152,9 +166,9 @@ All widget format options, specifiers and color options are documented below.
                          ext4 reserves 5% of total disk space for the super-user),
         * [%]available - available disk space for the normal user.
 
-      Optional specifiers
-        * precision - number from 0 to 9 inclusive,
-        * alignment - either < for left alignment or > for right alignment.
+      Specifiers
+        [x] precision
+        [x] alignment
 
     Colors
       [x] default
@@ -172,7 +186,7 @@ All widget format options, specifiers and color options are documented below.
     Format
       Options
         * ifname - <interface> name as specified in the argument,
-        * inet   - local ipv4 address,
+        * inet   - local IPv4 address,
         * flags  - a choice of device flags:
                      * receive (A)ll multicast packets,
                      * valid (B)roadcast address set,
@@ -182,8 +196,8 @@ All widget format options, specifiers and color options are documented below.
                      * interface is (U)p/running.
         * state  - interface state, either "up" or "down".
 
-      Optional specifiers
-        none
+      Specifiers
+        unsupported
 
     Colors
       [x] default
@@ -208,9 +222,9 @@ All widget format options, specifiers and color options are documented below.
         * state       - battery state, either "Discharging", "Charging",
                         "Full" or "Not charging".
 
-      Optional specifiers
-        * precision - number from 0 to 9 inclusive,
-        * alignment - either < for left alignment or > for right alignment.
+      Specifiers
+        [-] precision (partial - state option unsupported)
+        [-] alignment (partial - state option unsupported)
 
     Colors
       [x] default
