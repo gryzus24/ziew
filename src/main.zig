@@ -12,6 +12,7 @@ const fmt = std.fmt;
 const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
+const math = std.math;
 const mem = std.mem;
 const time = std.time;
 
@@ -135,12 +136,17 @@ fn readConfig(
 }
 
 fn minSleepInterval(widgets: []const cfg.Widget) typ.DeciSec {
+    var min = widgets[0].interval;
+    var gcd = min;
+    for (widgets[1..]) |*w| {
+        if (w.interval < min) min = w.interval;
+        gcd = math.gcd(gcd, w.interval);
+    }
+    if (gcd < min) utl.warn(
+        &.{"gcd of intervals < minimum interval, widget refreshes will be inexact"},
+    );
     // NOTE: gcd is the obvious choice here, but it might prove
     //       disastrous if the interval is misconfigured...
-    var min = widgets[0].interval;
-    for (widgets[1..]) |*w| if (w.interval < min) {
-        min = w.interval;
-    };
     return min;
 }
 
