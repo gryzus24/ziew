@@ -50,13 +50,6 @@ pub fn percentOf(value: u64, total: u64) NumUnit {
     return .{ .val = fvalue / ftotal * 100, .unit = '%' };
 }
 
-pub fn zeroTerminate(dest: []u8, src: []const u8) ?[:0]const u8 {
-    if (src.len >= dest.len) return null;
-    @memcpy(dest[0..src.len], src);
-    dest[src.len] = 0;
-    return dest[0..src.len :0];
-}
-
 pub inline fn writeStr(with_write: anytype, str: []const u8) void {
     _ = with_write.write(str) catch {};
 }
@@ -218,6 +211,7 @@ fn openLog() Log {
 }
 
 pub fn fatal(strings: []const []const u8) noreturn {
+    @setCold(true);
     const log = openLog();
     defer log.close();
     log.log("fatal: ");
@@ -226,7 +220,9 @@ pub fn fatal(strings: []const []const u8) noreturn {
     os.exit(1);
 }
 
-pub fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
+// inline to avoid comptime duplication
+pub inline fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
+    @setCold(true);
     const log = openLog();
     defer log.close();
     log.log(makeMsg("fatal: " ++ format ++ "\n", args));
@@ -234,6 +230,7 @@ pub fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
 }
 
 pub fn fatalPos(strings: []const []const u8, errpos: usize) noreturn {
+    @setCold(true);
     const log = openLog();
     defer log.close();
     log.log("fatal: ");
@@ -248,12 +245,15 @@ pub fn fatalPos(strings: []const []const u8, errpos: usize) noreturn {
 }
 
 pub fn warn(strings: []const []const u8) void {
+    @setCold(true);
     const log = openLog();
     defer log.close();
     log.log("warning: ");
     for (strings) |s| log.log(s);
     log.log("\n");
 }
+
+// == MISC ====================================================================
 
 pub fn repr(str: ?[]const u8) void {
     const stderr = io.getStdErr().writer();
@@ -272,4 +272,11 @@ pub fn unsafeAtou64(buf: []const u8) u64 {
         r += ch - '0';
     }
     return r;
+}
+
+pub fn zeroTerminate(dest: []u8, src: []const u8) ?[:0]const u8 {
+    if (src.len >= dest.len) return null;
+    @memcpy(dest[0..src.len], src);
+    dest[src.len] = 0;
+    return dest[0..src.len :0];
 }
