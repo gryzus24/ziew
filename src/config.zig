@@ -87,19 +87,19 @@ pub const ConfigMem = struct {
 
 fn defaultConfigPath(
     buf: *[typ.CONFIG_FILE_BUF_MAX]u8,
-) error{ FileNotFound, PathTooLong }![*:0]const u8 {
+) error{ FileNotFound, NoSpaceLeft }![*:0]const u8 {
     var fbs = io.fixedBufferStream(buf);
-    if (os.getenvZ("XDG_CONFIG_HOME")) |xdg| {
-        _ = fbs.write(xdg) catch return error.PathTooLong;
-        _ = fbs.write("/ziew/config") catch return error.PathTooLong;
+    if (os.getenvZ("XDG_CONFIG_HOME")) |xdg_config_home| {
+        _ = try fbs.write(xdg_config_home);
+        _ = try fbs.write("/ziew/config");
     } else if (os.getenvZ("HOME")) |home| {
-        _ = fbs.write(home) catch return error.PathTooLong;
-        _ = fbs.write("/.config/ziew/config") catch return error.PathTooLong;
+        _ = try fbs.write(home);
+        _ = try fbs.write("/.config/ziew/config");
     } else {
         utl.warn(&.{"config: $HOME and $XDG_CONFIG_HOME not set"});
         return error.FileNotFound;
     }
-    _ = fbs.write("\x00") catch return error.PathTooLong;
+    _ = try fbs.write(&[1]u8{'\x00'});
 
     const ret = fbs.getWritten();
     return ret[0 .. ret.len - 1 :0];
@@ -111,7 +111,7 @@ pub fn readFile(
 ) error{FileNotFound}![]const u8 {
     const config_path = path orelse (defaultConfigPath(buf) catch |err| switch (err) {
         error.FileNotFound => return error.FileNotFound,
-        error.PathTooLong => utl.fatal(&.{ "config: ", @errorName(err) }),
+        error.NoSpaceLeft => utl.fatal(&.{ "config: path: ", @errorName(err) }),
     });
 
     const file = fs.cwd().openFileZ(config_path, .{}) catch |err| switch (err) {
@@ -127,7 +127,7 @@ pub fn readFile(
         const t = file.metadata() catch |err| utl.fatal(
             &.{ "config: file too big: ", @errorName(err) },
         );
-        utl.fatalFmt("config: file too big by {} bytes", .{t.size() - nread});
+        utl.fatalFmt("config: file too big by {} bytes", .{1 + t.size() - nread});
     }
     // handle missing $'\n' edge case
     buf[nread] = '\n';

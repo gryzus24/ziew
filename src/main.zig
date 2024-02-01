@@ -114,8 +114,8 @@ fn readConfig(
     var widgets: []const cfg.Widget = undefined;
 
     const err = blk: {
-        if (cfg.readFile(buf, path)) |config_file_view| {
-            widgets = cfg.parse(cm, config_file_view);
+        if (cfg.readFile(buf, path)) |config_view| {
+            widgets = cfg.parse(cm, config_view);
             if (widgets.len == 0) {
                 utl.warn(&.{"no widgets loaded: using defaults..."});
                 break :blk true;
