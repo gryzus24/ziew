@@ -146,11 +146,10 @@ pub fn widget(
     if (wants_state and _inetbuf[0] == 0 and _flagsbuf[0] == 0)
         _ = getInet(Static.sock, &ifr, &_inetbuf, &isup);
 
-    const writer = stream.writer();
     const ch: ColorHandler = .{ .isup = isup };
 
-    utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
-    utl.writeStr(writer, wf.parts[1]);
+    utl.writeBlockStart(stream, fg.getColor(ch), bg.getColor(ch));
+    utl.writeStr(stream, wf.parts[1]);
     for (wf.iterOpts()[1..], wf.iterParts()[2..]) |*opt, *part| {
         const str = switch (@as(typ.NetOpt, @enumFromInt(opt.opt))) {
             .ifname => ifname,
@@ -159,8 +158,8 @@ pub fn widget(
             .state => if (isup) "up" else "down",
             .@"-" => unreachable,
         };
-        utl.writeStr(writer, str);
-        utl.writeStr(writer, part.*);
+        utl.writeStr(stream, str);
+        utl.writeStr(stream, part.*);
     }
     return utl.writeBlockEnd_GetWritten(stream);
 }
