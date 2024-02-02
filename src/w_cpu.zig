@@ -5,11 +5,12 @@ const typ = @import("type.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
 const fs = std.fs;
-const mem = std.mem;
 const math = std.math;
+const mem = std.mem;
 
-pub const ProcStat = struct {
-    fields: [10]u64,
+pub const CpuState = struct {
+    fields: [10]u64 = .{0} ** 10,
+    slots: [3]f64 = .{0} ** 3,
 
     pub fn user(self: @This()) u64 {
         // user time includes guest time,
@@ -27,39 +28,28 @@ pub const ProcStat = struct {
         //          idle             iowait
         return self.fields[3] + self.fields[4];
     }
-};
-
-const ColorHandler = struct {
-    slots: *const [3]f64,
 
     pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
         return color.firstColorAboveThreshold(self.slots[mc.opt], mc.colors);
     }
 };
 
-pub fn widget(
-    stream: anytype,
-    proc_stat: *const fs.File,
-    prev: *ProcStat,
-    cf: *const cfg.WidgetFormat,
-    fg: *const color.ColorUnion,
-    bg: *const color.ColorUnion,
-) []const u8 {
+pub fn update(stat: *const fs.File, old: *const CpuState) CpuState {
     var statbuf: [256]u8 = undefined;
 
-    const nread = proc_stat.pread(&statbuf, 0) catch |err| {
+    const nread = stat.pread(&statbuf, 0) catch |err| {
         utl.fatal(&.{ "CPU: pread: ", @errorName(err) });
     };
 
-    var cur: ProcStat = .{ .fields = undefined };
+    var new: CpuState = .{};
     var nvals: usize = 0;
     var ndigits: usize = 0;
     for ("cpu".len..nread) |i| switch (statbuf[i]) {
         ' ', '\n' => {
             if (ndigits > 0) {
-                cur.fields[nvals] = utl.unsafeAtou64(statbuf[i - ndigits .. i]);
+                new.fields[nvals] = utl.unsafeAtou64(statbuf[i - ndigits .. i]);
                 nvals += 1;
-                if (nvals == cur.fields.len) break;
+                if (nvals == new.fields.len) break;
                 ndigits = 0;
             }
         },
@@ -67,43 +57,46 @@ pub fn widget(
         else => {},
     };
 
-    const user_delta: f64 = @floatFromInt(cur.user() - prev.user());
-    const sys_delta: f64 = @floatFromInt(cur.sys() - prev.sys());
-    const idle_delta: f64 = @floatFromInt(cur.idle() - prev.idle());
-    const total_delta = user_delta + sys_delta + idle_delta;
+    const user_delta = new.user() - old.user();
+    const sys_delta = new.sys() - old.sys();
+    const idle_delta = new.idle() - old.idle();
 
-    const user = user_delta / total_delta * 100;
-    const sys = sys_delta / total_delta * 100;
+    const us_delta: f64 = @floatFromInt(user_delta + sys_delta);
+    const u_delta: f64 = @floatFromInt(user_delta);
+    const s_delta: f64 = @floatFromInt(sys_delta);
+    const total_delta: f64 = @floatFromInt(user_delta + sys_delta + idle_delta);
 
-    const slots = blk: {
-        var w: [3]f64 = undefined;
-        w[@intFromEnum(typ.CpuOpt.@"%all")] = user + sys;
-        w[@intFromEnum(typ.CpuOpt.@"%user")] = user;
-        w[@intFromEnum(typ.CpuOpt.@"%sys")] = sys;
-        break :blk w;
-    };
+    new.slots[@intFromEnum(typ.CpuOpt.@"%all")] = us_delta / total_delta * 100;
+    new.slots[@intFromEnum(typ.CpuOpt.@"%user")] = u_delta / total_delta * 100;
+    new.slots[@intFromEnum(typ.CpuOpt.@"%sys")] = s_delta / total_delta * 100;
 
+    return new;
+}
+
+pub fn widget(
+    stream: anytype,
+    state: *const CpuState,
+    wf: *const cfg.WidgetFormat,
+    fg: *const color.ColorUnion,
+    bg: *const color.ColorUnion,
+) []const u8 {
     const writer = stream.writer();
-    const ch: ColorHandler = .{ .slots = &slots };
 
-    utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
-    utl.writeStr(writer, cf.parts[0]);
-    for (cf.iterOpts(), cf.iterParts()[1..]) |*opt, *part| {
-        const value = slots[opt.opt];
+    utl.writeBlockStart(writer, fg.getColor(state), bg.getColor(state));
+    utl.writeStr(writer, wf.parts[0]);
+    for (wf.iterOpts(), wf.iterParts()[1..]) |*opt, *part| {
+        const value = state.slots[opt.opt];
 
         if (opt.alignment == .right)
             utl.writeAlignment(writer, .percent, value, opt.precision);
 
         utl.writeFloat(writer, value, opt.precision);
-        utl.writeStr(writer, "%");
+        utl.writeStr(writer, &[1]u8{'%'});
 
         if (opt.alignment == .left)
             utl.writeAlignment(writer, .percent, value, opt.precision);
 
         utl.writeStr(writer, part.*);
     }
-
-    @memcpy(&prev.fields, &cur.fields);
-
     return utl.writeBlockEnd_GetWritten(stream);
 }

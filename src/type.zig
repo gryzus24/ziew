@@ -20,16 +20,16 @@ pub const WidgetId = enum {
         };
     }
 
-    pub fn panicOnInvalidArgs(self: @This(), cf: *const cfg.WidgetFormat) void {
+    pub fn panicOnInvalidArgs(self: @This(), wf: *const cfg.WidgetFormat) void {
         const argsep = self.argsepOptValue() orelse return;
         const nargs = blk: {
             var n: usize = 0;
-            for (cf.iterOpts()) |*opt| if (opt.opt == argsep) {
+            for (wf.iterOpts()) |*opt| if (opt.opt == argsep) {
                 n += 1;
             };
             break :blk n;
         };
-        if (nargs == 0 or cf.opts[0].opt != argsep) {
+        if (nargs == 0 or wf.opts[0].opt != argsep) {
             const placeholder = switch (self) {
                 .DISK => "<mountpoint>",
                 .NET => "<interface>",

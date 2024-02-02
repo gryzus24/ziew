@@ -184,16 +184,7 @@ pub fn parse(config_mem: *ConfigMem, buf: []const u8) []const Widget {
             utl.warn(&.{ "config: unknown widget: ", line });
         }
     }
-
-    const widgets = config_mem.widgetsSlice();
-    var ncpu_widgets: usize = 0;
-    for (widgets) |*w| if (w.wid == typ.WidgetId.CPU) {
-        ncpu_widgets += 1;
-    };
-    if (ncpu_widgets > 1)
-        utl.fatal(&.{"config: multiple CPU widgets not supported"});
-
-    return widgets;
+    return config_mem.widgetsSlice();
 }
 
 test "config parse" {

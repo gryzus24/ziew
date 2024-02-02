@@ -35,13 +35,13 @@ const ColorHandler = struct {
 
 pub fn widget(
     stream: anytype,
-    cf: *const cfg.WidgetFormat,
+    wf: *const cfg.WidgetFormat,
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
     var buf: [1024]u8 = undefined;
 
-    const battery = cf.parts[0];
+    const battery = wf.parts[0];
     const uevent_path = blk: {
         const ret = fmt.bufPrint(
             &buf,
@@ -113,8 +113,8 @@ pub fn widget(
     };
 
     utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
-    utl.writeStr(writer, cf.parts[1]);
-    for (cf.iterOpts()[1..], cf.iterParts()[2..]) |*opt, *part| {
+    utl.writeStr(writer, wf.parts[1]);
+    for (wf.iterOpts()[1..], wf.iterParts()[2..]) |*opt, *part| {
         switch (@as(typ.BatOpt, @enumFromInt(opt.opt))) {
             .@"%fullnow" => utl.writeNumUnit(
                 writer,

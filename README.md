@@ -77,7 +77,6 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
 *Color* lines must come after the *Widget* lines they apply to. You can define multiple widgets and place them in any order you want, but with the following limitations:
 * maximum number of widgets is 10,
 * maximum number of colors is 100,
-* you cannot define more than one CPU widget (who needs that anyway?).
 
 Every option and supported color configuration for each *Widget* is documented below.
 

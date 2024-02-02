@@ -187,8 +187,10 @@ pub fn main() void {
     writebuf[0] = ',';
     writebuf[1] = '[';
 
-    var cpu_state: w_cpu.ProcStat = .{ .fields = .{0} ** 10 };
-    var refresh_lags: [typ.WIDGETS_MAX]typ.DeciSec = .{0} ** typ.WIDGETS_MAX;
+    var time_to_refresh: [typ.WIDGETS_MAX]typ.DeciSec = .{0} ** typ.WIDGETS_MAX;
+
+    var cpu_state: w_cpu.CpuState = .{};
+    var mem_state: w_mem.MemState = .{};
 
     const header =
         \\{"version":1}
@@ -196,10 +198,22 @@ pub fn main() void {
     ;
     _ = linux.write(1, header, header.len);
     while (true) {
+        var cpu_updated = false;
+        var mem_updated = false;
+
         for (widgets, 0..) |*w, i| {
-            refresh_lags[i] -|= sleep_interval;
-            if (refresh_lags[i] == 0) {
-                refresh_lags[i] = w.interval;
+            time_to_refresh[i] -|= sleep_interval;
+            if (time_to_refresh[i] == 0) {
+                time_to_refresh[i] = w.interval;
+
+                if (w.wid == .CPU and !cpu_updated) {
+                    cpu_state = w_cpu.update(&procfiles.stat.?, &cpu_state);
+                    cpu_updated = true;
+                }
+                if (w.wid == .MEM and !mem_updated) {
+                    w_mem.update(&procfiles.meminfo.?, &mem_state);
+                    mem_updated = true;
+                }
 
                 const start = 2 + i * typ.WIDGET_BUF_MAX;
                 var fbs = io.fixedBufferStream(
@@ -208,21 +222,8 @@ pub fn main() void {
 
                 widgetbuf_views[i] = switch (w.wid) {
                     .TIME => w_time.widget(&fbs, strftime_fmt.?, &w.fg, &w.bg),
-                    .MEM => w_mem.widget(
-                        &fbs,
-                        &procfiles.meminfo.?,
-                        w.format,
-                        &w.fg,
-                        &w.bg,
-                    ),
-                    .CPU => w_cpu.widget(
-                        &fbs,
-                        &procfiles.stat.?,
-                        &cpu_state,
-                        w.format,
-                        &w.fg,
-                        &w.bg,
-                    ),
+                    .MEM => w_mem.widget(&fbs, &mem_state, w.format, &w.fg, &w.bg),
+                    .CPU => w_cpu.widget(&fbs, &cpu_state, w.format, &w.fg, &w.bg),
                     .DISK => w_dysk.widget(&fbs, w.format, &w.fg, &w.bg),
                     .NET => w_net.widget(&fbs, w.format, &w.fg, &w.bg),
                     .BAT => w_bat.widget(&fbs, w.format, &w.fg, &w.bg),

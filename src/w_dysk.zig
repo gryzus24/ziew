@@ -26,13 +26,13 @@ const ColorHandler = struct {
 
 pub fn widget(
     stream: anytype,
-    cf: *const cfg.WidgetFormat,
+    wf: *const cfg.WidgetFormat,
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
     var buf: [typ.WIDGET_BUF_MAX / 2]u8 = undefined;
 
-    const mountpoint = utl.zeroTerminate(&buf, cf.parts[0]) orelse utl.fatal(
+    const mountpoint = utl.zeroTerminate(&buf, wf.parts[0]) orelse utl.fatal(
         &.{"DISK: mountpoint path too long"},
     );
 
@@ -76,8 +76,8 @@ pub fn widget(
     };
 
     utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
-    utl.writeStr(writer, cf.parts[1]);
-    for (cf.iterOpts()[1..], cf.iterParts()[2..]) |*opt, *part| {
+    utl.writeStr(writer, wf.parts[1]);
+    for (wf.iterOpts()[1..], wf.iterParts()[2..]) |*opt, *part| {
         const nu = switch (@as(typ.DiskOpt, @enumFromInt(opt.opt))) {
             .@"%used" => utl.percentOf(used_kb, total_kb),
             .@"%free" => utl.percentOf(free_kb, total_kb),

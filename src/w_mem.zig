@@ -7,33 +7,8 @@ const fmt = std.fmt;
 const fs = std.fs;
 const mem = std.mem;
 
-const ColorHandler = struct {
-    meminfo: *const MemInfo,
-
-    pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
-        const mi = self.meminfo;
-        return color.firstColorAboveThreshold(
-            switch (@as(typ.MemOpt, @enumFromInt(mc.opt))) {
-                .@"%used" => utl.percentOf(mi.used(), mi.total()),
-                .@"%free" => utl.percentOf(mi.free(), mi.total()),
-                .@"%available" => utl.percentOf(mi.avail(), mi.total()),
-                .@"%cached" => utl.percentOf(mi.cached(), mi.total()),
-                .used => unreachable,
-                .total => unreachable,
-                .free => unreachable,
-                .available => unreachable,
-                .buffers => unreachable,
-                .cached => unreachable,
-                .dirty => unreachable,
-                .writeback => unreachable,
-            }.val,
-            mc.colors,
-        );
-    }
-};
-
-const MemInfo = struct {
-    fields: [7]u64,
+pub const MemState = struct {
+    fields: [7]u64 = .{0} ** 7,
 
     pub fn total(self: @This()) u64 {
         return self.fields[0];
@@ -59,24 +34,36 @@ const MemInfo = struct {
     pub fn used(self: @This()) u64 {
         return self.total() - self.avail();
     }
+
+    pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
+        return color.firstColorAboveThreshold(
+            switch (@as(typ.MemOpt, @enumFromInt(mc.opt))) {
+                .@"%used" => utl.percentOf(self.used(), self.total()),
+                .@"%free" => utl.percentOf(self.free(), self.total()),
+                .@"%available" => utl.percentOf(self.avail(), self.total()),
+                .@"%cached" => utl.percentOf(self.cached(), self.total()),
+                .used => unreachable,
+                .total => unreachable,
+                .free => unreachable,
+                .available => unreachable,
+                .buffers => unreachable,
+                .cached => unreachable,
+                .dirty => unreachable,
+                .writeback => unreachable,
+            }.val,
+            mc.colors,
+        );
+    }
 };
 
-pub fn widget(
-    stream: anytype,
-    proc_meminfo: *const fs.File,
-    cf: *const cfg.WidgetFormat,
-    fg: *const color.ColorUnion,
-    bg: *const color.ColorUnion,
-) []const u8 {
+pub fn update(meminfo: *const fs.File, old: *MemState) void {
     const MEMINFO_BUF_SIZE = 2048;
     const MEMINFO_KEY_LEN = "xxxxxxxx:       ".len;
 
     var meminfo_buf: [MEMINFO_BUF_SIZE]u8 = undefined;
-    const nread = proc_meminfo.pread(&meminfo_buf, 0) catch |err| {
+    const nread = meminfo.pread(&meminfo_buf, 0) catch |err| {
         utl.fatal(&.{ "MEM: pread: ", @errorName(err) });
     };
-
-    var meminfo: MemInfo = .{ .fields = undefined };
 
     var i: usize = MEMINFO_KEY_LEN;
     var nvals: usize = 0;
@@ -86,11 +73,11 @@ pub fn widget(
         ' ' => {
             if (ndigits == 0) continue;
             if (!skip) {
-                meminfo.fields[nvals] = utl.unsafeAtou64(
+                old.fields[nvals] = utl.unsafeAtou64(
                     meminfo_buf[i - ndigits .. i],
                 );
                 nvals += 1;
-                if (nvals == meminfo.fields.len) break;
+                if (nvals == old.fields.len) break;
                 if (nvals == 5) skip = true; // skip lines after 'Cached'
             }
             ndigits = 0;
@@ -101,26 +88,33 @@ pub fn widget(
         '0'...'9' => ndigits += 1,
         else => {},
     };
+}
 
+pub fn widget(
+    stream: anytype,
+    state: *const MemState,
+    wf: *const cfg.WidgetFormat,
+    fg: *const color.ColorUnion,
+    bg: *const color.ColorUnion,
+) []const u8 {
     const writer = stream.writer();
-    const ch: ColorHandler = .{ .meminfo = &meminfo };
 
-    utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
-    utl.writeStr(writer, cf.parts[0]);
-    for (cf.iterOpts(), cf.iterParts()[1..]) |*opt, *part| {
+    utl.writeBlockStart(writer, fg.getColor(state), bg.getColor(state));
+    utl.writeStr(writer, wf.parts[0]);
+    for (wf.iterOpts(), wf.iterParts()[1..]) |*opt, *part| {
         const nu = switch (@as(typ.MemOpt, @enumFromInt(opt.opt))) {
-            .@"%used" => utl.percentOf(meminfo.used(), meminfo.total()),
-            .@"%free" => utl.percentOf(meminfo.free(), meminfo.total()),
-            .@"%available" => utl.percentOf(meminfo.avail(), meminfo.total()),
-            .@"%cached" => utl.percentOf(meminfo.cached(), meminfo.total()),
-            .used => utl.kbToHuman(meminfo.used()),
-            .total => utl.kbToHuman(meminfo.total()),
-            .free => utl.kbToHuman(meminfo.free()),
-            .available => utl.kbToHuman(meminfo.avail()),
-            .buffers => utl.kbToHuman(meminfo.buffers()),
-            .cached => utl.kbToHuman(meminfo.cached()),
-            .dirty => utl.kbToHuman(meminfo.dirty()),
-            .writeback => utl.kbToHuman(meminfo.writeback()),
+            .@"%used" => utl.percentOf(state.used(), state.total()),
+            .@"%free" => utl.percentOf(state.free(), state.total()),
+            .@"%available" => utl.percentOf(state.avail(), state.total()),
+            .@"%cached" => utl.percentOf(state.cached(), state.total()),
+            .used => utl.kbToHuman(state.used()),
+            .total => utl.kbToHuman(state.total()),
+            .free => utl.kbToHuman(state.free()),
+            .available => utl.kbToHuman(state.avail()),
+            .buffers => utl.kbToHuman(state.buffers()),
+            .cached => utl.kbToHuman(state.cached()),
+            .dirty => utl.kbToHuman(state.dirty()),
+            .writeback => utl.kbToHuman(state.writeback()),
         };
         utl.writeNumUnit(writer, nu, opt.alignment, opt.precision);
         utl.writeStr(writer, part.*);

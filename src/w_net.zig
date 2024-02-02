@@ -109,7 +109,7 @@ const ColorHandler = struct {
 
 pub fn widget(
     stream: anytype,
-    cf: *const cfg.WidgetFormat,
+    wf: *const cfg.WidgetFormat,
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
@@ -120,7 +120,7 @@ pub fn widget(
         Static.sock = openIoctlSocket();
 
     var ifr: linux.ifreq = undefined;
-    const ifname = cf.parts[0];
+    const ifname = wf.parts[0];
     _ = utl.zeroTerminate(&ifr.ifrn.name, ifname) orelse utl.fatal(
         &.{ "NET: interface name too long: ", ifname },
     );
@@ -133,7 +133,7 @@ pub fn widget(
     var isup: bool = false;
     var wants_state: bool = false;
 
-    for (cf.iterOpts()[1..]) |*opt| {
+    for (wf.iterOpts()[1..]) |*opt| {
         switch (@as(typ.NetOpt, @enumFromInt(opt.opt))) {
             .ifname => {},
             .inet => inet = getInet(Static.sock, &ifr, &_inetbuf, &isup),
@@ -150,8 +150,8 @@ pub fn widget(
     const ch: ColorHandler = .{ .isup = isup };
 
     utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
-    utl.writeStr(writer, cf.parts[1]);
-    for (cf.iterOpts()[1..], cf.iterParts()[2..]) |*opt, *part| {
+    utl.writeStr(writer, wf.parts[1]);
+    for (wf.iterOpts()[1..], wf.iterParts()[2..]) |*opt, *part| {
         switch (@as(typ.NetOpt, @enumFromInt(opt.opt))) {
             .ifname => utl.writeStr(writer, ifname),
             .inet => utl.writeStr(writer, inet),
