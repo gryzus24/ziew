@@ -277,3 +277,15 @@ pub fn zeroTerminate(dest: []u8, src: []const u8) ?[:0]const u8 {
     dest[src.len] = 0;
     return dest[0..src.len :0];
 }
+
+pub fn skipChars(str: []const u8, chars: []const u8) usize {
+    var i: usize = 0;
+    while (i < str.len) : (i += 1) {
+        for (chars) |ch| {
+            if (str[i] == ch) break;
+        } else {
+            return i;
+        }
+    }
+    return i;
+}

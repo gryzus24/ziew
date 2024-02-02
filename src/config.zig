@@ -262,14 +262,8 @@ const OPT_ALIGNMENT_DEFAULT = .none;
 
 const COLORS_MAX = 100;
 
-fn skipWhitespace(str: []const u8) usize {
-    var i: usize = 0;
-    while (i < str.len and (str[i] == ' ' or str[i] == '\t')) : (i += 1) {}
-    return i;
-}
-
 fn acceptInterval(str: []const u8, pos: *usize) !typ.DeciSec {
-    const start = skipWhitespace(str);
+    const start = utl.skipChars(str, " \t");
     if (start == 0 or start == str.len) return error.NoInterval;
 
     var i: usize = start;
@@ -298,7 +292,7 @@ fn acceptWidgetFormat(
     wid: typ.WidgetId,
     pos: *usize,
 ) !*WidgetFormat {
-    const start = skipWhitespace(str);
+    const start = utl.skipChars(str, " \t");
     pos.* += start;
 
     if (start == str.len) return error.NoFormat;
