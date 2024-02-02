@@ -266,11 +266,8 @@ pub fn repr(str: ?[]const u8) void {
 }
 
 pub fn unsafeAtou64(buf: []const u8) u64 {
-    var r: u64 = buf[0] - '0';
-    for (buf[1..]) |ch| {
-        r *= 10;
-        r += ch - '0';
-    }
+    var r: u64 = buf[0] & 0x0f;
+    for (buf[1..]) |ch| r = r * 10 + (ch & 0x0f);
     return r;
 }
 
