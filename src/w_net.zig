@@ -152,13 +152,14 @@ pub fn widget(
     utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
     utl.writeStr(writer, wf.parts[1]);
     for (wf.iterOpts()[1..], wf.iterParts()[2..]) |*opt, *part| {
-        switch (@as(typ.NetOpt, @enumFromInt(opt.opt))) {
-            .ifname => utl.writeStr(writer, ifname),
-            .inet => utl.writeStr(writer, inet),
-            .flags => utl.writeStr(writer, flags),
-            .state => utl.writeStr(writer, if (isup) "up" else "down"),
+        const str = switch (@as(typ.NetOpt, @enumFromInt(opt.opt))) {
+            .ifname => ifname,
+            .inet => inet,
+            .flags => flags,
+            .state => if (isup) "up" else "down",
             .@"-" => unreachable,
-        }
+        };
+        utl.writeStr(writer, str);
         utl.writeStr(writer, part.*);
     }
     return utl.writeBlockEnd_GetWritten(stream);
