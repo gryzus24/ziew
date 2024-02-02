@@ -34,7 +34,7 @@ pub const CpuState = struct {
     }
 };
 
-pub fn update(stat: *const fs.File, old: *const CpuState) CpuState {
+pub fn update(stat: *const fs.File, old: *CpuState) void {
     var statbuf: [256]u8 = undefined;
 
     const nread = stat.pread(&statbuf, 0) catch |err| {
@@ -66,11 +66,11 @@ pub fn update(stat: *const fs.File, old: *const CpuState) CpuState {
     const s_delta: f64 = @floatFromInt(sys_delta);
     const total_delta: f64 = @floatFromInt(user_delta + sys_delta + idle_delta);
 
-    new.slots[@intFromEnum(typ.CpuOpt.@"%all")] = us_delta / total_delta * 100;
-    new.slots[@intFromEnum(typ.CpuOpt.@"%user")] = u_delta / total_delta * 100;
-    new.slots[@intFromEnum(typ.CpuOpt.@"%sys")] = s_delta / total_delta * 100;
+    old.slots[@intFromEnum(typ.CpuOpt.@"%all")] = us_delta / total_delta * 100;
+    old.slots[@intFromEnum(typ.CpuOpt.@"%user")] = u_delta / total_delta * 100;
+    old.slots[@intFromEnum(typ.CpuOpt.@"%sys")] = s_delta / total_delta * 100;
 
-    return new;
+    @memcpy(&old.fields, &new.fields);
 }
 
 pub fn widget(

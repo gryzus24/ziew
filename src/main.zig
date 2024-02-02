@@ -207,7 +207,7 @@ pub fn main() void {
                 time_to_refresh[i] = w.interval;
 
                 if (w.wid == .CPU and !cpu_updated) {
-                    cpu_state = w_cpu.update(&procfiles.stat.?, &cpu_state);
+                    w_cpu.update(&procfiles.stat.?, &cpu_state);
                     cpu_updated = true;
                 }
                 if (w.wid == .MEM and !mem_updated) {
