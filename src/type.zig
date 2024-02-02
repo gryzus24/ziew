@@ -10,12 +10,14 @@ pub const WidgetId = enum {
     DISK,
     NET,
     BAT,
+    READ,
 
     fn argsepOptValue(self: @This()) ?u8 {
         return switch (self) {
             .DISK => @intFromEnum(DiskOpt.@"-"),
             .NET => @intFromEnum(NetOpt.@"-"),
             .BAT => @intFromEnum(BatOpt.@"-"),
+            .READ => @intFromEnum(ReadOpt.@"-"),
             else => return null,
         };
     }
@@ -34,6 +36,7 @@ pub const WidgetId = enum {
                 .DISK => "<mountpoint>",
                 .NET => "<interface>",
                 .BAT => "<battery name>",
+                .READ => "<filepath>",
                 else => unreachable,
             };
             utl.fatal(&.{ "config: ", @tagName(self), ": requires argument ", placeholder });
@@ -45,13 +48,13 @@ pub const WidgetId = enum {
     pub fn supportsManyColors(self: @This()) bool {
         return switch (self) {
             .MEM, .CPU, .DISK, .NET, .BAT => true,
-            .TIME => false,
+            .TIME, .READ => false,
         };
     }
 
     pub fn isManyColorsOptnameSupported(self: @This(), optname: []const u8) bool {
         return switch (self) {
-            .TIME => false,
+            .TIME, .READ => false,
             .MEM, .CPU, .DISK => optname[0] == '%',
             .NET => mem.eql(u8, optname, "state"),
             .BAT => optname[0] == '%' or mem.eql(u8, optname, "state"),
@@ -90,6 +93,7 @@ pub const DiskOpt = enum {
 };
 pub const NetOpt = enum { ifname, inet, flags, state, @"-" };
 pub const BatOpt = enum { @"%fullnow", @"%fulldesign", state, @"-" };
+pub const ReadOpt = enum { basename, content, raw, @"-" };
 
 // 1/10th of a second
 pub const DeciSec = u64;
@@ -99,7 +103,7 @@ pub const DeciSec = u64;
 const _WIDGET_IDS_NUM = @typeInfo(WidgetId).Enum.fields.len;
 
 const _OPT_TYPES = blk: {
-    const w = .{ TimeOpt, MemOpt, CpuOpt, DiskOpt, NetOpt, BatOpt };
+    const w = .{ TimeOpt, MemOpt, CpuOpt, DiskOpt, NetOpt, BatOpt, ReadOpt };
     if (w.len != _WIDGET_IDS_NUM)
         @compileError("adjust _OPT_TYPES");
     break :blk w;
