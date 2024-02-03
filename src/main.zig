@@ -9,6 +9,7 @@ const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
+const c = utl.c;
 const fmt = std.fmt;
 const fs = std.fs;
 const io = std.io;
@@ -181,8 +182,8 @@ pub fn main() void {
     const widgets = readConfig(&_config_buf, &_config_mem, config_path);
 
     const sleep_interval = minSleepInterval(widgets);
-    const sleep_s = sleep_interval / 10;
-    const sleep_ns = (sleep_interval % 10) * time.ns_per_s / 10;
+    const sleep_s: isize = @intCast(sleep_interval / 10);
+    const sleep_ns: isize = @intCast((sleep_interval % 10) * time.ns_per_s / 10);
 
     var strftime_fmt_buf: [typ.WIDGET_BUF_MAX / 2]u8 = undefined;
     const strftime_fmt = zeroStrftimeFormat(&strftime_fmt_buf, widgets);
@@ -266,7 +267,18 @@ pub fn main() void {
         writebuf[pos - 1] = ']';
 
         _ = linux.write(1, &writebuf, pos);
-        std.os.nanosleep(sleep_s, sleep_ns);
+
+        var req: linux.timespec = .{ .tv_sec = sleep_s, .tv_nsec = sleep_ns };
+        var rem: linux.timespec = undefined;
+        while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &rem)))) {
+            -c.EINTR => {
+                if (g_refresh_all) break;
+                req = rem;
+            },
+            -c.EINVAL => unreachable,
+            -c.EFAULT => unreachable,
+            else => break,
+        };
     }
 
     unreachable;
