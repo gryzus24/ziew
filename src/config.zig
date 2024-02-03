@@ -5,6 +5,7 @@ const utl = @import("util.zig");
 const fmt = std.fmt;
 const fs = std.fs;
 const io = std.io;
+const math = std.math;
 const mem = std.mem;
 const os = std.os;
 
@@ -36,7 +37,7 @@ pub const WidgetFormat = struct {
 
 pub const Widget = struct {
     wid: typ.WidgetId,
-    interval: typ.DeciSec = INTERVAL_DEFAULT,
+    interval: typ.DeciSec = typ.WIDGET_INTERVAL_DEFAULT,
     format: *const WidgetFormat,
     fg: color.ColorUnion = .{ .nocolor = {} },
     bg: color.ColorUnion = .{ .nocolor = {} },
@@ -202,7 +203,7 @@ test "config parse" {
 
     const _cpu = widgets[0];
     try t.expect(_cpu.wid == .CPU);
-    try t.expect(_cpu.interval == INTERVAL_MAX);
+    try t.expect(_cpu.interval == typ.WIDGET_INTERVAL_MAX);
     try t.expect(_cpu.format.nparts == 3);
     try t.expect(mem.eql(u8, _cpu.format.parts[0], ""));
     try t.expect(mem.eql(u8, _cpu.format.parts[1], ""));
@@ -254,9 +255,6 @@ pub fn defaultConfig(config_mem: *ConfigMem) []const Widget {
 
 // == private ==
 
-const INTERVAL_DEFAULT: typ.DeciSec = 50;
-const INTERVAL_MAX = 1 << 31;
-
 const OPT_PRECISION_DEFAULT = 0;
 const OPT_ALIGNMENT_DEFAULT = .none;
 
@@ -279,10 +277,10 @@ fn acceptInterval(str: []const u8, pos: *usize) !typ.DeciSec {
         str[start..i],
         10,
     ) catch |err| switch (err) {
-        error.Overflow => return INTERVAL_MAX,
+        error.Overflow => return typ.WIDGET_INTERVAL_MAX,
         error.InvalidCharacter => unreachable,
     };
-    if (ret == 0 or ret > INTERVAL_MAX) return INTERVAL_MAX;
+    if (ret == 0 or ret > typ.WIDGET_INTERVAL_MAX) return typ.WIDGET_INTERVAL_MAX;
     return ret;
 }
 

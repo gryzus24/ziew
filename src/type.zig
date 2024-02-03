@@ -159,6 +159,9 @@ pub const WID_TO_OPT_NAMES: [_WIDGET_IDS_NUM][]const []const u8 = blk: {
 // maximum config file size
 pub const CONFIG_FILE_BUF_MAX = 2048 + 1024;
 
+pub const WIDGET_INTERVAL_DEFAULT = 50;
+pub const WIDGET_INTERVAL_MAX = 1 << 31;
+
 pub fn strToWidEnum(str: []const u8) ?WidgetId {
     inline for (@typeInfo(WidgetId).Enum.fields) |field| {
         if (mem.eql(u8, str, field.name))

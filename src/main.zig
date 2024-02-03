@@ -137,13 +137,15 @@ fn readConfig(
 }
 
 fn minSleepInterval(widgets: []const cfg.Widget) typ.DeciSec {
-    var min = widgets[0].interval;
-    var gcd = min;
-    for (widgets[1..]) |*w| {
-        if (w.interval < min) min = w.interval;
-        gcd = math.gcd(gcd, w.interval);
+    var min: typ.DeciSec = typ.WIDGET_INTERVAL_MAX;
+    var gcd: ?typ.DeciSec = null;
+    for (widgets) |*w| {
+        if (w.interval != typ.WIDGET_INTERVAL_MAX) {
+            if (w.interval < min) min = w.interval;
+            gcd = math.gcd(gcd orelse w.interval, w.interval);
+        }
     }
-    if (gcd < min) utl.warn(
+    if (gcd orelse min < min) utl.warn(
         &.{"gcd of intervals < minimum interval, widget refreshes will be inexact"},
     );
     // NOTE: gcd is the obvious choice here, but it might prove
