@@ -165,6 +165,12 @@ fn zeroStrftimeFormat(
     return null;
 }
 
+var g_refresh_all = false;
+
+fn sa_handler(signum: c_int) callconv(.C) void {
+    if (signum == linux.SIG.USR1) g_refresh_all = true;
+}
+
 pub fn main() void {
     var _config_buf: [typ.CONFIG_FILE_BUF_MAX]u8 = undefined;
     var _config_mem: cfg.ConfigMem = .{};
@@ -188,7 +194,18 @@ pub fn main() void {
     writebuf[0] = ',';
     writebuf[1] = '[';
 
-    var time_to_refresh: [typ.WIDGETS_MAX]typ.DeciSec = .{0} ** typ.WIDGETS_MAX;
+    const ret = linux.sigaction(
+        linux.SIG.USR1,
+        &.{
+            .handler = .{ .handler = &sa_handler },
+            .mask = linux.empty_sigset,
+            .flags = linux.SA.RESTART,
+        },
+        null,
+    );
+    if (ret != 0) utl.fatal(&.{"sigaction failed"});
+
+    var time_to_refresh = [_]typ.DeciSec{0} ** typ.WIDGETS_MAX;
 
     var cpu_state: w_cpu.CpuState = .{};
     var mem_state: w_mem.MemState = .{};
@@ -201,6 +218,11 @@ pub fn main() void {
     while (true) {
         var cpu_updated = false;
         var mem_updated = false;
+
+        if (g_refresh_all) {
+            @memset(&time_to_refresh, 0);
+            g_refresh_all = false;
+        }
 
         for (widgets, 0..) |*w, i| {
             time_to_refresh[i] -|= sleep_interval;
