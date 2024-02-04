@@ -167,12 +167,17 @@ pub fn writeBlockStart(
 }
 
 pub fn writeBlockEnd_GetWritten(fbs: anytype) []const u8 {
-    writeStr(fbs,
-        \\"},
-    );
-    const ret = fbs.getWritten();
-    fbs.reset();
-    return ret;
+    const endstr = "\"},";
+    const nwritten = fbs.write(endstr) catch |err| switch (err) {
+        error.NoSpaceLeft => @as(usize, 0),
+    };
+    if (nwritten < endstr.len) {
+        const seekamt: comptime_int = "...".len + endstr.len;
+        fbs.seekBy(-seekamt) catch unreachable;
+        _ = fbs.write("...") catch unreachable;
+        _ = fbs.write(endstr) catch unreachable;
+    }
+    return fbs.getWritten();
 }
 
 // == LOGGING =================================================================
