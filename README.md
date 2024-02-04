@@ -18,6 +18,7 @@ Widget | Data source
 | DISK | statfs(2)
 | NET  | netdevice(7), ioctl(2)
 | BAT  | /sys/class/power_supply/*
+| READ | filesystem
 
 ## Files
 The configuration file of *ziew* resides at `$XDG_CONFIG_HOME/ziew/config` (usually `~/.config/ziew/config`). See the example configuration file (config) and copy it to this location.
@@ -78,6 +79,14 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
 * maximum number of widgets is 10,
 * maximum number of colors is 100,
 
+### Signals
+Sending a SIGUSR1 signal to the *ziew* process causes all widgets to be refreshed immediately. You can use the *kill* shell builtin to send the signal:
+
+```console
+$ kill -s USR1 `pidof ziew`
+```
+
+### Full documentation
 Every option and supported color configuration for each *Widget* is documented below.
 
 **TIME**
@@ -240,8 +249,42 @@ Every option and supported color configuration for each *Widget* is documented b
       FG state 1:4a4 2:4a4
       BG %charge 0:a00 15:220 25:
 
+**READ**
+
+    This widget reads one line of text from a file given a <filepath>. The line
+    may start with optional fields specifying the foreground and/or background
+    colors.
+
+    Required argument at the beginning of the format text
+      <filepath>{-}
+
+    Format
+      Options
+        * basename - filename from <filepath>,
+        * content  - line of text from the file with the color fields applied,
+        * raw      - line of text from the file.
+
+      Specifiers
+        unsupported
+
+    Colors
+      [x] default
+      [ ] conditional (unsupported - read directly from the file)
+
+      color format of the "content" option, specified directly in the file:
+        #[FG RGB] #[BG RGB] [TEXT] - apply FG and BG colors
+        #[FG RGB] [TEXT]           - apply FG color
+        # #[BG RGB] [TEXT]         - apply BG color
+        [TEXT]                     - default colors
+
+    Example config entry
+      READ 0 "/home/user/.config/ziew/myfile{-}{basename}: {content}"
+
+    Example "myfile" content
+      #8a8 greenish text
+
 ## Notes and caveats
-This is an opinionated piece of software that doesn't even use heap memory, not all widgets implemented by i3status are available.
+This is an opinionated piece of software that doesn't even use heap memory (explicitly), not all widgets implemented by i3status are available.
 
 If you want:
 - sink volume and control,
