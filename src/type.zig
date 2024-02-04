@@ -110,10 +110,10 @@ const _OPT_TYPES = blk: {
 };
 
 // maximum number of widgets that can be configured
-pub const WIDGETS_MAX = 10;
+pub const WIDGETS_MAX = 16;
 
 // individual widget maximum buffer size
-pub const WIDGET_BUF_MAX = 128;
+pub const WIDGET_BUF_MAX = 256;
 
 // maximum number of options that can be used in a widget format
 pub const OPTS_MAX = blk: {

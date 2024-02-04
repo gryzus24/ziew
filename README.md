@@ -76,7 +76,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
       FG CPU %user 0:22a 10:default 60:aa2
 
 *Color* lines must come after the *Widget* lines they apply to. You can define multiple widgets and place them in any order you want, but with the following limitations:
-* maximum number of widgets is 10,
+* maximum number of widgets is 16,
 * maximum number of colors is 100,
 
 ### Signals
