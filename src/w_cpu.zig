@@ -10,7 +10,7 @@ const mem = std.mem;
 
 pub const CpuState = struct {
     fields: [10]u64 = .{0} ** 10,
-    slots: [3]f64 = .{0} ** 3,
+    slots: [3]utl.F5014 = .{utl.F5014.init(0)} ** 3,
 
     pub fn user(self: @This()) u64 {
         // user time includes guest time,
@@ -30,7 +30,16 @@ pub const CpuState = struct {
     }
 
     pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
-        return color.firstColorAboveThreshold(self.slots[mc.opt], mc.colors);
+        var result: ?*const [7]u8 = null;
+        const value = self.slots[mc.opt].dec();
+        for (mc.colors) |*mcc| {
+            if (value >= mcc.thresh) {
+                result = mcc.getHex();
+            } else {
+                break;
+            }
+        }
+        return result;
     }
 };
 
@@ -61,14 +70,14 @@ pub fn update(stat: *const fs.File, old: *CpuState) void {
     const sys_delta = new.sys() - old.sys();
     const idle_delta = new.idle() - old.idle();
 
-    const us_delta: f64 = @floatFromInt(user_delta + sys_delta);
-    const u_delta: f64 = @floatFromInt(user_delta);
-    const s_delta: f64 = @floatFromInt(sys_delta);
-    const total_delta: f64 = @floatFromInt(user_delta + sys_delta + idle_delta);
+    const us_pdelta = utl.F5014.init((user_delta + sys_delta) * 100);
+    const u_pdelta = utl.F5014.init(user_delta * 100);
+    const s_pdelta = utl.F5014.init(sys_delta * 100);
+    const total_delta = user_delta + sys_delta + idle_delta;
 
-    old.slots[@intFromEnum(typ.CpuOpt.@"%all")] = us_delta / total_delta * 100;
-    old.slots[@intFromEnum(typ.CpuOpt.@"%user")] = u_delta / total_delta * 100;
-    old.slots[@intFromEnum(typ.CpuOpt.@"%sys")] = s_delta / total_delta * 100;
+    old.slots[@intFromEnum(typ.CpuOpt.@"%all")] = us_pdelta.div(total_delta);
+    old.slots[@intFromEnum(typ.CpuOpt.@"%user")] = u_pdelta.div(total_delta);
+    old.slots[@intFromEnum(typ.CpuOpt.@"%sys")] = s_pdelta.div(total_delta);
 
     @memcpy(&old.fields, &new.fields);
 }
@@ -85,16 +94,16 @@ pub fn widget(
     utl.writeBlockStart(writer, fg.getColor(state), bg.getColor(state));
     utl.writeStr(writer, wf.parts[0]);
     for (wf.iterOpts(), wf.iterParts()[1..]) |*opt, *part| {
-        const value = state.slots[opt.opt];
+        const value = state.slots[opt.opt].round(opt.precision);
 
         if (opt.alignment == .right)
-            utl.writeAlignment(writer, .percent, value, opt.precision);
+            utl.writeF5014Alignment(writer, .percent, value);
 
-        utl.writeFloat(writer, value, opt.precision);
+        value.write(writer, opt.precision);
         utl.writeStr(writer, &[1]u8{'%'});
 
         if (opt.alignment == .left)
-            utl.writeAlignment(writer, .percent, value, opt.precision);
+            utl.writeF5014Alignment(writer, .percent, value);
 
         utl.writeStr(writer, part.*);
     }
