@@ -40,7 +40,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                  {OPTION.[PRECISION][ALIGNMENT]}
 
                * OPTION    - widget specific option name,
-               * PRECISION - number from 0 to 9 inclusive - specifies digits
+               * PRECISION - number from 0 to 3 inclusive - specifies digits
                              of precision (0 if left unspecified),
                * ALIGNMENT - either < for left alignment or > for right
                              alignment - reserves space for the longest
