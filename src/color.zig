@@ -77,10 +77,10 @@ pub const ColorUnion = union(enum) {
     }
 };
 
-pub fn firstColorAboveThreshold(value: f64, colors: []const Color) ?*const [7]u8 {
+pub fn firstColorAboveThreshold(value: u64, colors: []const Color) ?*const [7]u8 {
     var result: ?*const [7]u8 = null;
     for (colors) |*color| {
-        if (value >= @as(f64, @floatFromInt(color.thresh))) {
+        if (value >= color.thresh) {
             result = color.getHex();
         } else {
             break;

@@ -18,7 +18,7 @@ const ColorHandler = struct {
                 .@"%free" => utl.percentOf(self.free_kb, self.total_kb),
                 .@"%available" => utl.percentOf(self.avail_kb, self.total_kb),
                 .used, .total, .free, .available, .@"-" => unreachable,
-            }.val,
+            }.val.whole(),
             mc.colors,
         );
     }

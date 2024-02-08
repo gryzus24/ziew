@@ -30,16 +30,8 @@ pub const CpuState = struct {
     }
 
     pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
-        var result: ?*const [7]u8 = null;
-        const value = self.slots[mc.opt].dec();
-        for (mc.colors) |*mcc| {
-            if (value >= mcc.thresh) {
-                result = mcc.getHex();
-            } else {
-                break;
-            }
-        }
-        return result;
+        const value = self.slots[mc.opt].whole();
+        return color.firstColorAboveThreshold(value, mc.colors);
     }
 };
 
@@ -69,11 +61,11 @@ pub fn update(stat: *const fs.File, old: *CpuState) void {
     const user_delta = new.user() - old.user();
     const sys_delta = new.sys() - old.sys();
     const idle_delta = new.idle() - old.idle();
+    const total_delta = user_delta + sys_delta + idle_delta;
 
     const us_pdelta = utl.F5014.init((user_delta + sys_delta) * 100);
     const u_pdelta = utl.F5014.init(user_delta * 100);
     const s_pdelta = utl.F5014.init(sys_delta * 100);
-    const total_delta = user_delta + sys_delta + idle_delta;
 
     old.slots[@intFromEnum(typ.CpuOpt.@"%all")] = us_pdelta.div(total_delta);
     old.slots[@intFromEnum(typ.CpuOpt.@"%user")] = u_pdelta.div(total_delta);
@@ -94,16 +86,16 @@ pub fn widget(
     utl.writeBlockStart(writer, fg.getColor(state), bg.getColor(state));
     utl.writeStr(writer, wf.parts[0]);
     for (wf.iterOpts(), wf.iterParts()[1..]) |*opt, *part| {
-        const value = state.slots[opt.opt].round(opt.precision);
+        const value = state.slots[opt.opt];
 
         if (opt.alignment == .right)
-            utl.writeF5014Alignment(writer, .percent, value);
+            utl.writeAlignment(writer, .percent, value, opt.precision);
 
         value.write(writer, opt.precision);
         utl.writeStr(writer, &[1]u8{'%'});
 
         if (opt.alignment == .left)
-            utl.writeF5014Alignment(writer, .percent, value);
+            utl.writeAlignment(writer, .percent, value, opt.precision);
 
         utl.writeStr(writer, part.*);
     }

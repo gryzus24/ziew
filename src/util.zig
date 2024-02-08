@@ -14,7 +14,7 @@ pub const c = @cImport({
 });
 
 pub const NumUnit = struct {
-    val: f64,
+    val: F5014,
     unit: u8,
 };
 
@@ -23,31 +23,28 @@ pub fn kbToHuman(value: u64) NumUnit {
     const BYTES_IN_4M = 4096 * 1024;
     const BYTES_IN_4G = 4096 * 1024 * 1024;
 
-    const fvalue: f64 = @floatFromInt(value);
     return switch (value) {
         0...BYTES_IN_4K - 1 => .{
-            .val = fvalue,
+            .val = F5014.init(value),
             .unit = 'K',
         },
         BYTES_IN_4K...BYTES_IN_4M - 1 => .{
-            .val = fvalue / 1024,
+            .val = F5014.init(value).div(1024),
             .unit = 'M',
         },
         BYTES_IN_4M...BYTES_IN_4G - 1 => .{
-            .val = fvalue / 1024 / 1024,
+            .val = F5014.init(value).div(1024 * 1024),
             .unit = 'G',
         },
         else => .{
-            .val = fvalue / 1024 / 1024 / 1024,
+            .val = F5014.init(value).div(1024 * 1024 * 1024),
             .unit = 'T',
         },
     };
 }
 
 pub fn percentOf(value: u64, total: u64) NumUnit {
-    const fvalue: f64 = @floatFromInt(value);
-    const ftotal: f64 = @floatFromInt(total);
-    return .{ .val = fvalue / ftotal * 100, .unit = '%' };
+    return .{ .val = F5014.init(value * 100).div(total), .unit = '%' };
 }
 
 pub inline fn writeStr(with_write: anytype, str: []const u8) void {
@@ -62,21 +59,26 @@ pub inline fn writeIntOpts(writer: anytype, value: u64, options: fmt.FormatOptio
     fmt.formatInt(value, 10, .lower, options, writer) catch {};
 }
 
-pub inline fn writeFloat(writer: anytype, value: f64, precision: u8) void {
-    if (precision == 0) {
-        writeInt(writer, @intFromFloat(@round(value)));
-    } else {
-        fmt.formatFloatDecimal(value, .{ .precision = precision }, writer) catch {};
-    }
-}
-
 pub const F5014 = struct {
     u: u64,
 
     pub const FRAC_SHIFT = 14;
     pub const FRAC_MASK: u64 = (1 << FRAC_SHIFT) - 1;
 
-    pub fn dec(self: @This()) u64 {
+    const ROUND_EPS: [4]u64 = .{
+        ((1 << FRAC_SHIFT) + 1) / 2,
+        ((1 << FRAC_SHIFT) + 19) / 20,
+        ((1 << FRAC_SHIFT) + 199) / 200,
+        ((1 << FRAC_SHIFT) + 1999) / 2000,
+    };
+    comptime {
+        for (ROUND_EPS) |e| {
+            if (e <= 1)
+                @compileError("FRAC_SHIFT too low to satisfy the rounding precision");
+        }
+    }
+
+    pub fn whole(self: @This()) u64 {
         return self.u >> FRAC_SHIFT;
     }
 
@@ -100,34 +102,39 @@ pub const F5014 = struct {
         return .{ .u = self.u / n };
     }
 
+    fn _roundup(self: @This(), quants: u64) F5014 {
+        return .{ .u = (self.u + quants - 1) / quants * quants };
+    }
+
     pub fn round(self: @This(), precision: u8) F5014 {
-        const ROUND_EPS: [4]u64 = .{
-            @round(@as(comptime_float, @floatFromInt(1 << FRAC_SHIFT)) / 10.0),
-            @round(@as(comptime_float, @floatFromInt(1 << FRAC_SHIFT)) / 100.0),
-            @round(@as(comptime_float, @floatFromInt(1 << FRAC_SHIFT)) / 1000.0),
-            @round(@as(comptime_float, @floatFromInt(1 << FRAC_SHIFT)) / 10000.0),
-        };
-        comptime {
-            for (ROUND_EPS) |e| if (e == 0) {
-                @compileError("FRAC_SHIFT is too low");
-            };
-        }
-        const eps = ROUND_EPS[precision];
-        return .{ .u = (self.u + eps - 1) / eps * eps };
+        if (precision >= ROUND_EPS.len) return self;
+        return self._roundup(ROUND_EPS[precision]);
     }
 
     pub fn write(self: @This(), with_write: anytype, precision: u8) void {
-        const value = self.round(precision);
+        var int: u64 = undefined;
+        var dec: u64 = undefined;
+        var precindx: u8 = undefined;
+        if (precision >= ROUND_EPS.len) {
+            int = self.whole();
+            dec = self.frac();
+            precindx = ROUND_EPS.len;
+        } else {
+            const rounded = self._roundup(ROUND_EPS[precision]);
+            int = rounded.whole();
+            dec = rounded.frac();
+            precindx = precision;
+        }
 
-        writeInt(with_write, value.dec());
-        if (precision > 0) {
-            const FRAC_PRECISION: [4]u64 = .{ 1, 10, 100, 1000 };
+        writeInt(with_write, int);
+        if (precindx > 0) {
+            const FRAC_PRECISION: [5]u64 = .{ 1, 10, 100, 1000, 10000 };
 
             writeStr(with_write, &[1]u8{'.'});
             writeIntOpts(
                 with_write,
-                (value.frac() * FRAC_PRECISION[precision]) / (1 << FRAC_SHIFT),
-                .{ .width = precision, .fill = '0' },
+                (dec * FRAC_PRECISION[precindx]) / (1 << FRAC_SHIFT),
+                .{ .width = precision, .alignment = .right, .fill = '0' },
             );
         }
     }
@@ -135,76 +142,31 @@ pub const F5014 = struct {
 
 const AlignmentValueType = enum { percent, size };
 
-pub fn writeF5014Alignment(
-    with_write: anytype,
-    value_type: AlignmentValueType,
-    value: F5014,
-) void {
-    const spaces: [3]u8 = .{ ' ', ' ', ' ' };
-
-    const dec = value.dec();
-    const len: u2 = switch (value_type) {
-        .percent => blk: {
-            if (dec < 10) {
-                break :blk 2;
-            } else if (dec < 100) {
-                break :blk 1;
-            } else {
-                break :blk 0;
-            }
-        },
-        .size => blk: {
-            if (dec < 10) {
-                break :blk 3;
-            } else if (dec < 100) {
-                break :blk 2;
-            } else if (dec < 1000) {
-                break :blk 1;
-            } else {
-                break :blk 0;
-            }
-        },
-    };
-    writeStr(with_write, spaces[0..len]);
-}
-
 pub fn writeAlignment(
     with_write: anytype,
     value_type: AlignmentValueType,
-    value: f64,
+    value: F5014,
     precision: u8,
 ) void {
-    const PRECISION_ROUND_EPS: [10]f64 = .{
-        0.5 / 1.0,
-        0.5 / 10.0,
-        0.5 / 100.0,
-        0.5 / 1000.0,
-        0.5 / 10000.0,
-        0.5 / 100000.0,
-        0.5 / 1000000.0,
-        0.5 / 10000000.0,
-        0.5 / 100000000.0,
-        0.5 / 1000000000.0,
-    };
-    const eps = PRECISION_ROUND_EPS[precision];
     const spaces: [3]u8 = .{ ' ', ' ', ' ' };
 
+    const int = value.round(precision).whole();
     const len: u2 = switch (value_type) {
         .percent => blk: {
-            if (value < 10 - eps) {
+            if (int < 10) {
                 break :blk 2;
-            } else if (value < 100 - eps) {
+            } else if (int < 100) {
                 break :blk 1;
             } else {
                 break :blk 0;
             }
         },
         .size => blk: {
-            if (value < 10 - eps) {
+            if (int < 10) {
                 break :blk 3;
-            } else if (value < 100 - eps) {
+            } else if (int < 100) {
                 break :blk 2;
-            } else if (value < 1000 - eps) {
+            } else if (int < 1000) {
                 break :blk 1;
             } else {
                 break :blk 0;
@@ -225,7 +187,7 @@ pub fn writeNumUnit(
     if (alignment == .right)
         writeAlignment(with_write, value_type, nu.val, precision);
 
-    writeFloat(with_write, nu.val, precision);
+    nu.val.write(with_write, precision);
     writeStr(with_write, &[1]u8{nu.unit});
 
     if (alignment == .left)

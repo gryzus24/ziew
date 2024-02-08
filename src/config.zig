@@ -256,6 +256,7 @@ pub fn defaultConfig(config_mem: *ConfigMem) []const Widget {
 // == private ==
 
 const OPT_PRECISION_DEFAULT = 0;
+const OPT_PRECISION_MAX = 4;
 const OPT_ALIGNMENT_DEFAULT = .none;
 
 const COLORS_MAX = 100;
@@ -332,7 +333,9 @@ fn acceptWidgetFormat(
                     if (end + 1 < optbuf_i) {
                         for (optbuf[end + 1 .. optbuf_i]) |spec_ch| switch (spec_ch) {
                             '0'...'9' => {
-                                format.opts[format.nparts - 1].precision = spec_ch - '0';
+                                var prec = spec_ch - '0';
+                                if (prec > OPT_PRECISION_MAX) prec = OPT_PRECISION_MAX;
+                                format.opts[format.nparts - 1].precision = prec;
                             },
                             '<' => {
                                 format.opts[format.nparts - 1].alignment = .left;
