@@ -48,7 +48,11 @@ fn debugFixedPoint() void {
         fp.write(stdout, .size, .none, 3);
         utl.writeStr(stdout, "  ");
 
-        fmt.format(stdout, "{any:.5}", .{@as(f64, @floatFromInt(i)) / (1 << utl.F5608.FRAC_SHIFT)}) catch {};
+        fmt.format(
+            stdout,
+            "{any:.5}",
+            .{@as(f64, @floatFromInt(i)) / (1 << utl.F5608.FRAC_SHIFT)},
+        ) catch {};
         utl.writeStr(stdout, "\n");
     }
 }
@@ -85,7 +89,7 @@ fn showHelpAndExit() noreturn {
 }
 
 fn showVersionAndExit() noreturn {
-    utl.writeStr(io.getStdOut(), "ziew 0.0.2\n");
+    utl.writeStr(io.getStdOut(), "ziew 0.0.3\n");
     std.os.exit(0);
 }
 
