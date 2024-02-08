@@ -50,7 +50,7 @@ pub const MemState = struct {
                 .cached => unreachable,
                 .dirty => unreachable,
                 .writeback => unreachable,
-            }.val.whole(),
+            }.val.roundAndTruncate(),
             mc.colors,
         );
     }

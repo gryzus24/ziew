@@ -15,8 +15,14 @@ const ColorHandler = struct {
 
     pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
         return switch (@as(typ.BatOpt, @enumFromInt(mc.opt))) {
-            .@"%fullnow" => color.firstColorAboveThreshold(self.pfullnow.val.whole(), mc.colors),
-            .@"%fulldesign" => color.firstColorAboveThreshold(self.pfulldesign.val.whole(), mc.colors),
+            .@"%fullnow" => color.firstColorAboveThreshold(
+                self.pfullnow.val.roundAndTruncate(),
+                mc.colors,
+            ),
+            .@"%fulldesign" => color.firstColorAboveThreshold(
+                self.pfulldesign.val.roundAndTruncate(),
+                mc.colors,
+            ),
             .state => blk: {
                 // make sure the first character is uppercase
                 const statusid: u8 = switch (self.status[0] & (0xff - 0x20)) {

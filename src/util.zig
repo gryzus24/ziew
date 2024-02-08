@@ -96,11 +96,15 @@ pub const F5608 = struct {
         return .{ .u = (self.u + quants - 1) / quants * quants };
     }
 
-    pub fn round(self: @This(), precision: u8) F5608 {
+    fn _round(self: @This(), precision: u8) F5608 {
         return if (precision < ROUND_EPS.len)
             self._roundup(ROUND_EPS[precision])
         else
             self;
+    }
+
+    pub fn roundAndTruncate(self: @This()) u64 {
+        return self._round(0).whole();
     }
 
     pub fn write(
@@ -110,7 +114,7 @@ pub const F5608 = struct {
         alignment: cfg.Alignment,
         precision: u8,
     ) void {
-        const rounded = self.round(precision);
+        const rounded = self._round(precision);
         const int = rounded.whole();
 
         if (alignment == .right)

@@ -30,8 +30,10 @@ pub const CpuState = struct {
     }
 
     pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
-        const value = self.slots[mc.opt].whole();
-        return color.firstColorAboveThreshold(value, mc.colors);
+        return color.firstColorAboveThreshold(
+            self.slots[mc.opt].roundAndTruncate(),
+            mc.colors,
+        );
     }
 };
 
