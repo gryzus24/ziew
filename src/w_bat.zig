@@ -116,18 +116,8 @@ pub fn widget(
     utl.writeStr(writer, wf.parts[1]);
     for (wf.iterOpts()[1..], wf.iterParts()[2..]) |*opt, *part| {
         switch (@as(typ.BatOpt, @enumFromInt(opt.opt))) {
-            .@"%fullnow" => utl.writeNumUnit(
-                writer,
-                pfullnow,
-                opt.alignment,
-                opt.precision,
-            ),
-            .@"%fulldesign" => utl.writeNumUnit(
-                writer,
-                pfulldesign,
-                opt.alignment,
-                opt.precision,
-            ),
+            .@"%fullnow" => pfullnow.write(writer, opt.alignment, opt.precision),
+            .@"%fulldesign" => pfulldesign.write(writer, opt.alignment, opt.precision),
             .state => utl.writeStr(writer, status),
             .@"-" => unreachable,
         }

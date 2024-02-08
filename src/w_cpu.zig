@@ -88,15 +88,8 @@ pub fn widget(
     for (wf.iterOpts(), wf.iterParts()[1..]) |*opt, *part| {
         const value = state.slots[opt.opt];
 
-        if (opt.alignment == .right)
-            utl.writeAlignment(writer, .percent, value, opt.precision);
-
-        value.write(writer, opt.precision);
+        value.write(writer, .percent, opt.alignment, opt.precision);
         utl.writeStr(writer, &[1]u8{'%'});
-
-        if (opt.alignment == .left)
-            utl.writeAlignment(writer, .percent, value, opt.precision);
-
         utl.writeStr(writer, part.*);
     }
     return utl.writeBlockEnd_GetWritten(stream);

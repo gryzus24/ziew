@@ -13,50 +13,38 @@ pub const c = @cImport({
     @cInclude("time.h"); // strftime() etc.
 });
 
-pub const NumUnit = struct {
-    val: F5014,
-    unit: u8,
-};
+const AlignmentValueType = enum { percent, size };
 
-pub fn kbToHuman(value: u64) NumUnit {
-    const BYTES_IN_4K = 4096;
-    const BYTES_IN_4M = 4096 * 1024;
-    const BYTES_IN_4G = 4096 * 1024 * 1024;
+fn writeAlignment(
+    with_write: anytype,
+    value_type: AlignmentValueType,
+    value: u64,
+) void {
+    const spaces: [3]u8 = .{ ' ', ' ', ' ' };
 
-    return switch (value) {
-        0...BYTES_IN_4K - 1 => .{
-            .val = F5014.init(value),
-            .unit = 'K',
+    const len: u2 = switch (value_type) {
+        .percent => blk: {
+            if (value < 10) {
+                break :blk 2;
+            } else if (value < 100) {
+                break :blk 1;
+            } else {
+                break :blk 0;
+            }
         },
-        BYTES_IN_4K...BYTES_IN_4M - 1 => .{
-            .val = F5014.init(value).div(1024),
-            .unit = 'M',
-        },
-        BYTES_IN_4M...BYTES_IN_4G - 1 => .{
-            .val = F5014.init(value).div(1024 * 1024),
-            .unit = 'G',
-        },
-        else => .{
-            .val = F5014.init(value).div(1024 * 1024 * 1024),
-            .unit = 'T',
+        .size => blk: {
+            if (value < 10) {
+                break :blk 3;
+            } else if (value < 100) {
+                break :blk 2;
+            } else if (value < 1000) {
+                break :blk 1;
+            } else {
+                break :blk 0;
+            }
         },
     };
-}
-
-pub fn percentOf(value: u64, total: u64) NumUnit {
-    return .{ .val = F5014.init(value * 100).div(total), .unit = '%' };
-}
-
-pub inline fn writeStr(with_write: anytype, str: []const u8) void {
-    _ = with_write.write(str) catch {};
-}
-
-pub inline fn writeInt(writer: anytype, value: u64) void {
-    fmt.formatInt(value, 10, .lower, .{}, writer) catch {};
-}
-
-pub inline fn writeIntOpts(writer: anytype, value: u64, options: fmt.FormatOptions) void {
-    fmt.formatInt(value, 10, .lower, options, writer) catch {};
+    writeStr(with_write, spaces[0..len]);
 }
 
 pub const F5014 = struct {
@@ -111,7 +99,13 @@ pub const F5014 = struct {
         return self._roundup(ROUND_EPS[precision]);
     }
 
-    pub fn write(self: @This(), with_write: anytype, precision: u8) void {
+    pub fn write(
+        self: @This(),
+        with_write: anytype,
+        value_type: AlignmentValueType,
+        alignment: cfg.Alignment,
+        precision: u8,
+    ) void {
         var int: u64 = undefined;
         var dec: u64 = undefined;
         var precindx: u8 = undefined;
@@ -126,6 +120,9 @@ pub const F5014 = struct {
             precindx = precision;
         }
 
+        if (alignment == .right)
+            writeAlignment(with_write, value_type, int);
+
         writeInt(with_write, int);
         if (precindx > 0) {
             const FRAC_PRECISION: [5]u64 = .{ 1, 10, 100, 1000, 10000 };
@@ -137,61 +134,68 @@ pub const F5014 = struct {
                 .{ .width = precision, .alignment = .right, .fill = '0' },
             );
         }
+
+        if (alignment == .left)
+            writeAlignment(with_write, value_type, int);
     }
 };
 
-const AlignmentValueType = enum { percent, size };
+pub const NumUnit = struct {
+    val: F5014,
+    unit: u8,
 
-pub fn writeAlignment(
-    with_write: anytype,
-    value_type: AlignmentValueType,
-    value: F5014,
-    precision: u8,
-) void {
-    const spaces: [3]u8 = .{ ' ', ' ', ' ' };
+    pub fn write(
+        nu: @This(),
+        with_write: anytype,
+        alignment: cfg.Alignment,
+        precision: u8,
+    ) void {
+        const value_type: AlignmentValueType = if (nu.unit == '%') .percent else .size;
 
-    const int = value.round(precision).whole();
-    const len: u2 = switch (value_type) {
-        .percent => blk: {
-            if (int < 10) {
-                break :blk 2;
-            } else if (int < 100) {
-                break :blk 1;
-            } else {
-                break :blk 0;
-            }
+        nu.val.write(with_write, value_type, alignment, precision);
+        writeStr(with_write, &[1]u8{nu.unit});
+    }
+};
+
+pub fn kbToHuman(value: u64) NumUnit {
+    const BYTES_IN_4K = 4096;
+    const BYTES_IN_4M = 4096 * 1024;
+    const BYTES_IN_4G = 4096 * 1024 * 1024;
+
+    return switch (value) {
+        0...BYTES_IN_4K - 1 => .{
+            .val = F5014.init(value),
+            .unit = 'K',
         },
-        .size => blk: {
-            if (int < 10) {
-                break :blk 3;
-            } else if (int < 100) {
-                break :blk 2;
-            } else if (int < 1000) {
-                break :blk 1;
-            } else {
-                break :blk 0;
-            }
+        BYTES_IN_4K...BYTES_IN_4M - 1 => .{
+            .val = F5014.init(value).div(1024),
+            .unit = 'M',
+        },
+        BYTES_IN_4M...BYTES_IN_4G - 1 => .{
+            .val = F5014.init(value).div(1024 * 1024),
+            .unit = 'G',
+        },
+        else => .{
+            .val = F5014.init(value).div(1024 * 1024 * 1024),
+            .unit = 'T',
         },
     };
-    writeStr(with_write, spaces[0..len]);
 }
 
-pub fn writeNumUnit(
-    with_write: anytype,
-    nu: NumUnit,
-    alignment: cfg.Alignment,
-    precision: u8,
-) void {
-    const value_type: AlignmentValueType = if (nu.unit == '%') .percent else .size;
+pub fn percentOf(value: u64, total: u64) NumUnit {
+    return .{ .val = F5014.init(value * 100).div(total), .unit = '%' };
+}
 
-    if (alignment == .right)
-        writeAlignment(with_write, value_type, nu.val, precision);
+pub inline fn writeStr(with_write: anytype, str: []const u8) void {
+    _ = with_write.write(str) catch {};
+}
 
-    nu.val.write(with_write, precision);
-    writeStr(with_write, &[1]u8{nu.unit});
+pub inline fn writeInt(writer: anytype, value: u64) void {
+    fmt.formatInt(value, 10, .lower, .{}, writer) catch {};
+}
 
-    if (alignment == .left)
-        writeAlignment(with_write, value_type, nu.val, precision);
+pub inline fn writeIntOpts(writer: anytype, value: u64, options: fmt.FormatOptions) void {
+    fmt.formatInt(value, 10, .lower, options, writer) catch {};
 }
 
 pub fn writeBlockStart(

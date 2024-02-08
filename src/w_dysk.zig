@@ -88,8 +88,7 @@ pub fn widget(
             .available => utl.kbToHuman(avail_kb),
             .@"-" => unreachable,
         };
-
-        utl.writeNumUnit(writer, nu, opt.alignment, opt.precision);
+        nu.write(writer, opt.alignment, opt.precision);
         utl.writeStr(writer, part.*);
     }
     return utl.writeBlockEnd_GetWritten(stream);
