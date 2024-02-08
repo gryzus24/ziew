@@ -53,7 +53,7 @@ pub const F5014 = struct {
     pub const FRAC_SHIFT = 14;
     pub const FRAC_MASK: u64 = (1 << FRAC_SHIFT) - 1;
 
-    const ROUND_EPS: [4]u64 = .{
+    pub const ROUND_EPS = [_]u64{
         ((1 << FRAC_SHIFT) + 1) / 2,
         ((1 << FRAC_SHIFT) + 19) / 20,
         ((1 << FRAC_SHIFT) + 199) / 200,
@@ -65,6 +65,8 @@ pub const F5014 = struct {
                 @compileError("FRAC_SHIFT too low to satisfy the rounding precision");
         }
     }
+
+    pub const PRECISION_MAX = ROUND_EPS.len - 1;
 
     pub fn whole(self: @This()) u64 {
         return self.u >> FRAC_SHIFT;
