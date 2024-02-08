@@ -65,7 +65,8 @@ pub const F5608 = struct {
         }
     }
 
-    pub const PRECISION_MAX = ROUND_EPS.len - 1;
+    pub const PRECISION_MAX = ROUND_EPS.len;
+    pub const FRAC_PRECISION_MULS: [PRECISION_MAX + 1]u64 = .{ 1, 10, 100, 1000 };
 
     pub fn whole(self: @This()) u64 {
         return self.u >> FRAC_SHIFT;
@@ -96,8 +97,10 @@ pub const F5608 = struct {
     }
 
     pub fn round(self: @This(), precision: u8) F5608 {
-        if (precision >= ROUND_EPS.len) return self;
-        return self._roundup(ROUND_EPS[precision]);
+        return if (precision < ROUND_EPS.len)
+            self._roundup(ROUND_EPS[precision])
+        else
+            self;
     }
 
     pub fn write(
@@ -107,31 +110,20 @@ pub const F5608 = struct {
         alignment: cfg.Alignment,
         precision: u8,
     ) void {
-        var int: u64 = undefined;
-        var dec: u64 = undefined;
-        var precindx: u8 = undefined;
-        if (precision >= ROUND_EPS.len) {
-            int = self.whole();
-            dec = self.frac();
-            precindx = ROUND_EPS.len;
-        } else {
-            const rounded = self._roundup(ROUND_EPS[precision]);
-            int = rounded.whole();
-            dec = rounded.frac();
-            precindx = precision;
-        }
+        const rounded = self.round(precision);
+        const int = rounded.whole();
 
         if (alignment == .right)
             writeAlignment(with_write, value_type, int);
 
         writeInt(with_write, int);
-        if (precindx > 0) {
-            const FRAC_PRECISION: [5]u64 = .{ 1, 10, 100, 1000, 10000 };
+        if (precision > 0) {
+            const fpmul = FRAC_PRECISION_MULS[@min(precision, FRAC_PRECISION_MULS.len - 1)];
 
             writeStr(with_write, &[1]u8{'.'});
             writeIntOpts(
                 with_write,
-                (dec * FRAC_PRECISION[precindx]) / (1 << FRAC_SHIFT),
+                (rounded.frac() * fpmul) / (1 << FRAC_SHIFT),
                 .{ .width = precision, .alignment = .right, .fill = '0' },
             );
         }
@@ -151,9 +143,12 @@ pub const NumUnit = struct {
         alignment: cfg.Alignment,
         precision: u8,
     ) void {
-        const value_type: AlignmentValueType = if (nu.unit == '%') .percent else .size;
-
-        nu.val.write(with_write, value_type, alignment, precision);
+        nu.val.write(
+            with_write,
+            if (nu.unit == '%') .percent else .size,
+            alignment,
+            precision,
+        );
         writeStr(with_write, &[1]u8{nu.unit});
     }
 };
