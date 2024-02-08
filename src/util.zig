@@ -47,17 +47,16 @@ fn writeAlignment(
     writeStr(with_write, spaces[0..len]);
 }
 
-pub const F5014 = struct {
+pub const F5608 = struct {
     u: u64,
 
-    pub const FRAC_SHIFT = 14;
+    pub const FRAC_SHIFT = 8;
     pub const FRAC_MASK: u64 = (1 << FRAC_SHIFT) - 1;
 
     pub const ROUND_EPS = [_]u64{
         ((1 << FRAC_SHIFT) + 1) / 2,
         ((1 << FRAC_SHIFT) + 19) / 20,
         ((1 << FRAC_SHIFT) + 199) / 200,
-        ((1 << FRAC_SHIFT) + 1999) / 2000,
     };
     comptime {
         for (ROUND_EPS) |e| {
@@ -76,27 +75,27 @@ pub const F5014 = struct {
         return self.u & FRAC_MASK;
     }
 
-    pub fn init(n: u64) F5014 {
+    pub fn init(n: u64) F5608 {
         return .{ .u = n << FRAC_SHIFT };
     }
 
-    pub fn add(self: @This(), n: u64) F5014 {
+    pub fn add(self: @This(), n: u64) F5608 {
         return .{ .u = self.u + (n << FRAC_SHIFT) };
     }
 
-    pub fn mul(self: @This(), n: u64) F5014 {
+    pub fn mul(self: @This(), n: u64) F5608 {
         return .{ .u = self.u * n };
     }
 
-    pub fn div(self: @This(), n: u64) F5014 {
+    pub fn div(self: @This(), n: u64) F5608 {
         return .{ .u = self.u / n };
     }
 
-    fn _roundup(self: @This(), quants: u64) F5014 {
+    fn _roundup(self: @This(), quants: u64) F5608 {
         return .{ .u = (self.u + quants - 1) / quants * quants };
     }
 
-    pub fn round(self: @This(), precision: u8) F5014 {
+    pub fn round(self: @This(), precision: u8) F5608 {
         if (precision >= ROUND_EPS.len) return self;
         return self._roundup(ROUND_EPS[precision]);
     }
@@ -143,7 +142,7 @@ pub const F5014 = struct {
 };
 
 pub const NumUnit = struct {
-    val: F5014,
+    val: F5608,
     unit: u8,
 
     pub fn write(
@@ -166,26 +165,26 @@ pub fn kbToHuman(value: u64) NumUnit {
 
     return switch (value) {
         0...BYTES_IN_4K - 1 => .{
-            .val = F5014.init(value),
+            .val = F5608.init(value),
             .unit = 'K',
         },
         BYTES_IN_4K...BYTES_IN_4M - 1 => .{
-            .val = F5014.init(value).div(1024),
+            .val = F5608.init(value).div(1024),
             .unit = 'M',
         },
         BYTES_IN_4M...BYTES_IN_4G - 1 => .{
-            .val = F5014.init(value).div(1024 * 1024),
+            .val = F5608.init(value).div(1024 * 1024),
             .unit = 'G',
         },
         else => .{
-            .val = F5014.init(value).div(1024 * 1024 * 1024),
+            .val = F5608.init(value).div(1024 * 1024 * 1024),
             .unit = 'T',
         },
     };
 }
 
 pub fn percentOf(value: u64, total: u64) NumUnit {
-    return .{ .val = F5014.init(value * 100).div(total), .unit = '%' };
+    return .{ .val = F5608.init(value * 100).div(total), .unit = '%' };
 }
 
 pub inline fn writeStr(with_write: anytype, str: []const u8) void {

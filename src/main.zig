@@ -36,7 +36,7 @@ fn debugColors(cm: *const cfg.ConfigMem) void {
 fn debugFixedPoint() void {
     const stdout = io.getStdOut().writer();
     for (0..(1 << 11) + 2) |i| {
-        const fp = utl.F5014.init(i).div(1 << utl.F5014.FRAC_SHIFT);
+        const fp = utl.F5608.init(i).div(1 << utl.F5608.FRAC_SHIFT);
 
         fmt.format(stdout, "{d:5} ", .{i}) catch {};
         fp.write(stdout, .size, .none, 0);
@@ -48,7 +48,7 @@ fn debugFixedPoint() void {
         fp.write(stdout, .size, .none, 3);
         utl.writeStr(stdout, "  ");
 
-        fmt.format(stdout, "{any:.5}", .{@as(f64, @floatFromInt(i)) / (1 << utl.F5014.FRAC_SHIFT)}) catch {};
+        fmt.format(stdout, "{any:.5}", .{@as(f64, @floatFromInt(i)) / (1 << utl.F5608.FRAC_SHIFT)}) catch {};
         utl.writeStr(stdout, "\n");
     }
 }

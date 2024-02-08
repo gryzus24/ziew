@@ -333,7 +333,7 @@ fn acceptWidgetFormat(
                         for (optbuf[end + 1 .. optbuf_i]) |spec_ch| switch (spec_ch) {
                             '0'...'9' => {
                                 var prec = spec_ch - '0';
-                                if (prec > utl.F5014.PRECISION_MAX) prec = utl.F5014.PRECISION_MAX;
+                                if (prec > utl.F5608.PRECISION_MAX) prec = utl.F5608.PRECISION_MAX;
                                 format.opts[format.nparts - 1].precision = prec;
                             },
                             '<' => {

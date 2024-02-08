@@ -10,7 +10,7 @@ const mem = std.mem;
 
 pub const CpuState = struct {
     fields: [10]u64 = .{0} ** 10,
-    slots: [3]utl.F5014 = .{utl.F5014.init(0)} ** 3,
+    slots: [3]utl.F5608 = .{utl.F5608.init(0)} ** 3,
 
     pub fn user(self: @This()) u64 {
         // user time includes guest time,
@@ -63,9 +63,9 @@ pub fn update(stat: *const fs.File, old: *CpuState) void {
     const idle_delta = new.idle() - old.idle();
     const total_delta = user_delta + sys_delta + idle_delta;
 
-    const us_pdelta = utl.F5014.init((user_delta + sys_delta) * 100);
-    const u_pdelta = utl.F5014.init(user_delta * 100);
-    const s_pdelta = utl.F5014.init(sys_delta * 100);
+    const us_pdelta = utl.F5608.init((user_delta + sys_delta) * 100);
+    const u_pdelta = utl.F5608.init(user_delta * 100);
+    const s_pdelta = utl.F5608.init(sys_delta * 100);
 
     old.slots[@intFromEnum(typ.CpuOpt.@"%all")] = us_pdelta.div(total_delta);
     old.slots[@intFromEnum(typ.CpuOpt.@"%user")] = u_pdelta.div(total_delta);
