@@ -12,11 +12,11 @@ pub fn build(b: *std.Build) !void {
     const build_options = b.addOptions();
     build_options.addOption(
         []const u8,
-        "compile_config_filename",
+        "compile_config_path",
         b.option([]const u8, "compile-config",
             \\Compile the configuration file into the executable,
-            \\                               [string] is the filename of the configuration
-            \\                               file residing in src
+            \\                               [string] is the path of the configuration
+            \\                               file relative to the src directory
         ) orelse "",
     );
 
@@ -28,6 +28,7 @@ pub fn build(b: *std.Build) !void {
         .linkage = .static,
         .link_libc = true,
         .single_threaded = true,
+        .main_pkg_path = .{ .path = "." },
     });
     exe.strip = strip orelse false;
     exe.addOptions("build", build_options);

@@ -1,5 +1,8 @@
 const std = @import("std");
+const build = @import("build");
 const cfg = @import("config.zig");
+const typ = @import("type.zig");
+const utl = @import("util.zig");
 const w_bat = @import("w_bat.zig");
 const w_cpu = @import("w_cpu.zig");
 const w_dysk = @import("w_dysk.zig");
@@ -7,8 +10,6 @@ const w_mem = @import("w_mem.zig");
 const w_net = @import("w_net.zig");
 const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
-const typ = @import("type.zig");
-const utl = @import("util.zig");
 const c = utl.c;
 const fmt = std.fmt;
 const fs = std.fs;
@@ -17,6 +18,9 @@ const linux = std.os.linux;
 const math = std.math;
 const mem = std.mem;
 const time = std.time;
+
+const COMPILE_CONFIG_PATH = build.compile_config_path;
+const COMPILE_CONFIG = COMPILE_CONFIG_PATH.len > 0;
 
 fn debugColors(cm: *const cfg.ConfigMem) void {
     const print = std.debug.print;
@@ -199,9 +203,6 @@ fn sa_handler(signum: c_int) callconv(.C) void {
 }
 
 pub fn main() void {
-    const COMPILE_CONFIG_FILENAME = @import("build").compile_config_filename;
-    const COMPILE_CONFIG = COMPILE_CONFIG_FILENAME.len > 0;
-
     const widgets = blk: {
         if (comptime COMPILE_CONFIG) {
             comptime {
@@ -209,7 +210,7 @@ pub fn main() void {
                 var _config_mem: cfg.ConfigMem = .{};
                 break :blk cfg.parse(
                     &_config_mem,
-                    @embedFile(COMPILE_CONFIG_FILENAME),
+                    @embedFile(COMPILE_CONFIG_PATH),
                 );
             }
         } else {
