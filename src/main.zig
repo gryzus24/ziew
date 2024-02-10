@@ -205,22 +205,6 @@ pub fn main() void {
     const config_path = readArgs();
     const widgets = readConfig(&_config_buf, &_config_mem, config_path);
 
-    const sleep_interval = minSleepInterval(widgets);
-    const sleep_s: isize = @intCast(sleep_interval / 10);
-    const sleep_ns: isize = @intCast((sleep_interval % 10) * time.ns_per_s / 10);
-
-    var strftime_fmt_buf: [typ.WIDGET_BUF_MAX / 2]u8 = undefined;
-    const strftime_fmt = zeroStrftimeFormat(&strftime_fmt_buf, widgets);
-
-    const procfiles = ProcFiles.init(widgets);
-
-    var writebuf: [2 + typ.WIDGETS_MAX * typ.WIDGET_BUF_MAX]u8 = undefined;
-    var widgetbuf: [typ.WIDGETS_MAX * typ.WIDGET_BUF_MAX]u8 = undefined;
-    var widgetbuf_views: [typ.WIDGETS_MAX][]const u8 = undefined;
-
-    writebuf[0] = ',';
-    writebuf[1] = '[';
-
     const ret = linux.sigaction(
         linux.SIG.USR1,
         &.{
@@ -232,10 +216,26 @@ pub fn main() void {
     );
     if (ret != 0) utl.fatal(&.{"sigaction failed"});
 
+    const procfiles = ProcFiles.init(widgets);
+
+    const sleep_interval = minSleepInterval(widgets);
+    const sleep_s: isize = @intCast(sleep_interval / 10);
+    const sleep_ns: isize = @intCast((sleep_interval % 10) * time.ns_per_s / 10);
+
+    var strftime_fmt_buf: [typ.WIDGET_BUF_MAX / 2]u8 = undefined;
+    const strftime_fmt = zeroStrftimeFormat(&strftime_fmt_buf, widgets);
+
     var time_to_refresh = [_]typ.DeciSec{0} ** typ.WIDGETS_MAX;
 
     var cpu_state: w_cpu.CpuState = .{};
     var mem_state: w_mem.MemState = .{};
+
+    var writebuf: [2 + typ.WIDGETS_MAX * typ.WIDGET_BUF_MAX]u8 = undefined;
+    var widgetbuf: [typ.WIDGETS_MAX][typ.WIDGET_BUF_MAX]u8 = undefined;
+    var widgetbuf_views: [typ.WIDGETS_MAX][]const u8 = undefined;
+
+    writebuf[0] = ',';
+    writebuf[1] = '[';
 
     const header =
         \\{"version":1}
@@ -243,18 +243,20 @@ pub fn main() void {
     ;
     _ = linux.write(1, header, header.len);
     while (true) {
-        var cpu_updated = false;
-        var mem_updated = false;
-
         if (g_refresh_all) {
             @memset(&time_to_refresh, 0);
             g_refresh_all = false;
         }
 
+        var cpu_updated = false;
+        var mem_updated = false;
+
         for (widgets, 0..) |*w, i| {
             time_to_refresh[i] -|= sleep_interval;
             if (time_to_refresh[i] == 0) {
                 time_to_refresh[i] = w.interval;
+
+                var fbs = io.fixedBufferStream(&widgetbuf[i]);
 
                 if (w.wid == .CPU and !cpu_updated) {
                     w_cpu.update(&procfiles.stat.?, &cpu_state);
@@ -264,12 +266,6 @@ pub fn main() void {
                     w_mem.update(&procfiles.meminfo.?, &mem_state);
                     mem_updated = true;
                 }
-
-                const start = 2 + i * typ.WIDGET_BUF_MAX;
-                var fbs = io.fixedBufferStream(
-                    widgetbuf[start .. start + typ.WIDGET_BUF_MAX],
-                );
-
                 widgetbuf_views[i] = switch (w.wid) {
                     .TIME => w_time.widget(&fbs, strftime_fmt.?, &w.fg, &w.bg),
                     .MEM => w_mem.widget(&fbs, &mem_state, w.format, &w.fg, &w.bg),
@@ -287,8 +283,7 @@ pub fn main() void {
             @memcpy(writebuf[pos .. pos + view.len], view);
             pos += view.len;
         }
-        // get rid of the trailing comma
-        writebuf[pos - 1] = ']';
+        writebuf[pos - 1] = ']'; // get rid of the trailing comma
 
         _ = linux.write(1, &writebuf, pos);
 
