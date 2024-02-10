@@ -1,9 +1,24 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
+pub fn build(b: *std.Build) !void {
+    const target = b.standardTargetOptions(.{
+        .default_target = try std.zig.CrossTarget.parse(
+            .{ .arch_os_abi = "x86_64-linux-musl" },
+        ),
+    });
     const optimize = b.standardOptimizeOption(.{});
     const strip = b.option(bool, "strip", "Strip debug symbols");
+
+    const build_options = b.addOptions();
+    build_options.addOption(
+        []const u8,
+        "compile_config_filename",
+        b.option([]const u8, "compile-config",
+            \\Compile the configuration file into the executable,
+            \\                               [string] is the filename of the configuration
+            \\                               file residing in src
+        ) orelse "",
+    );
 
     const exe = b.addExecutable(.{
         .name = "ziew",
@@ -15,16 +30,13 @@ pub fn build(b: *std.Build) void {
         .single_threaded = true,
     });
     exe.strip = strip orelse false;
-    if (optimize == .ReleaseFast)
-        exe.omit_frame_pointer = true;
+    exe.addOptions("build", build_options);
 
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-
-    if (b.args) |args|
-        run_cmd.addArgs(args);
+    if (b.args) |args| run_cmd.addArgs(args);
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);

@@ -199,11 +199,26 @@ fn sa_handler(signum: c_int) callconv(.C) void {
 }
 
 pub fn main() void {
-    var _config_buf: [typ.CONFIG_FILE_BUF_MAX]u8 = undefined;
-    var _config_mem: cfg.ConfigMem = .{};
+    const COMPILE_CONFIG_FILENAME = @import("build").compile_config_filename;
+    const COMPILE_CONFIG = COMPILE_CONFIG_FILENAME.len > 0;
 
-    const config_path = readArgs();
-    const widgets = readConfig(&_config_buf, &_config_mem, config_path);
+    const widgets = blk: {
+        if (comptime COMPILE_CONFIG) {
+            comptime {
+                @setEvalBranchQuota(20_000);
+                var _config_mem: cfg.ConfigMem = .{};
+                break :blk cfg.parse(
+                    &_config_mem,
+                    @embedFile(COMPILE_CONFIG_FILENAME),
+                );
+            }
+        } else {
+            var _config_mem: cfg.ConfigMem = .{};
+            var _config_buf: [typ.CONFIG_FILE_BUF_MAX]u8 = undefined;
+            const config_path = readArgs();
+            break :blk readConfig(&_config_buf, &_config_mem, config_path);
+        }
+    };
 
     const ret = linux.sigaction(
         linux.SIG.USR1,
@@ -251,30 +266,64 @@ pub fn main() void {
         var cpu_updated = false;
         var mem_updated = false;
 
-        for (widgets, 0..) |*w, i| {
-            time_to_refresh[i] -|= sleep_interval;
-            if (time_to_refresh[i] == 0) {
-                time_to_refresh[i] = w.interval;
+        // where is the C preprocessor when you need it the most...
+        // notice that we need the "inline" keyword when widgets are
+        // comptime-known, but we cannot specify it conditionally.
+        // even worse, factoring out the code inside the for loop is tricky
+        // and the compiler cannot inline all of this madness properly.
+        if (comptime COMPILE_CONFIG) {
+            inline for (widgets, 0..) |*w, i| {
+                time_to_refresh[i] -|= sleep_interval;
+                if (time_to_refresh[i] == 0) {
+                    time_to_refresh[i] = w.interval;
 
-                var fbs = io.fixedBufferStream(&widgetbuf[i]);
+                    var fbs = io.fixedBufferStream(&widgetbuf[i]);
 
-                if (w.wid == .CPU and !cpu_updated) {
-                    w_cpu.update(&procfiles.stat.?, &cpu_state);
-                    cpu_updated = true;
+                    if (w.wid == .CPU and !cpu_updated) {
+                        w_cpu.update(&procfiles.stat.?, &cpu_state);
+                        cpu_updated = true;
+                    }
+                    if (w.wid == .MEM and !mem_updated) {
+                        w_mem.update(&procfiles.meminfo.?, &mem_state);
+                        mem_updated = true;
+                    }
+                    widgetbuf_views[i] = switch (w.wid) {
+                        .TIME => w_time.widget(&fbs, strftime_fmt.?, &w.fg, &w.bg),
+                        .MEM => w_mem.widget(&fbs, &mem_state, w.format, &w.fg, &w.bg),
+                        .CPU => w_cpu.widget(&fbs, &cpu_state, w.format, &w.fg, &w.bg),
+                        .DISK => w_dysk.widget(&fbs, w.format, &w.fg, &w.bg),
+                        .NET => w_net.widget(&fbs, w.format, &w.fg, &w.bg),
+                        .BAT => w_bat.widget(&fbs, w.format, &w.fg, &w.bg),
+                        .READ => w_read.widget(&fbs, w.format, &w.fg, &w.bg),
+                    };
                 }
-                if (w.wid == .MEM and !mem_updated) {
-                    w_mem.update(&procfiles.meminfo.?, &mem_state);
-                    mem_updated = true;
+            }
+        } else {
+            for (widgets, 0..) |*w, i| {
+                time_to_refresh[i] -|= sleep_interval;
+                if (time_to_refresh[i] == 0) {
+                    time_to_refresh[i] = w.interval;
+
+                    var fbs = io.fixedBufferStream(&widgetbuf[i]);
+
+                    if (w.wid == .CPU and !cpu_updated) {
+                        w_cpu.update(&procfiles.stat.?, &cpu_state);
+                        cpu_updated = true;
+                    }
+                    if (w.wid == .MEM and !mem_updated) {
+                        w_mem.update(&procfiles.meminfo.?, &mem_state);
+                        mem_updated = true;
+                    }
+                    widgetbuf_views[i] = switch (w.wid) {
+                        .TIME => w_time.widget(&fbs, strftime_fmt.?, &w.fg, &w.bg),
+                        .MEM => w_mem.widget(&fbs, &mem_state, w.format, &w.fg, &w.bg),
+                        .CPU => w_cpu.widget(&fbs, &cpu_state, w.format, &w.fg, &w.bg),
+                        .DISK => w_dysk.widget(&fbs, w.format, &w.fg, &w.bg),
+                        .NET => w_net.widget(&fbs, w.format, &w.fg, &w.bg),
+                        .BAT => w_bat.widget(&fbs, w.format, &w.fg, &w.bg),
+                        .READ => w_read.widget(&fbs, w.format, &w.fg, &w.bg),
+                    };
                 }
-                widgetbuf_views[i] = switch (w.wid) {
-                    .TIME => w_time.widget(&fbs, strftime_fmt.?, &w.fg, &w.bg),
-                    .MEM => w_mem.widget(&fbs, &mem_state, w.format, &w.fg, &w.bg),
-                    .CPU => w_cpu.widget(&fbs, &cpu_state, w.format, &w.fg, &w.bg),
-                    .DISK => w_dysk.widget(&fbs, w.format, &w.fg, &w.bg),
-                    .NET => w_net.widget(&fbs, w.format, &w.fg, &w.bg),
-                    .BAT => w_bat.widget(&fbs, w.format, &w.fg, &w.bg),
-                    .READ => w_read.widget(&fbs, w.format, &w.fg, &w.bg),
-                };
             }
         }
 
