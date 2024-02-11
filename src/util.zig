@@ -13,38 +13,14 @@ pub const c = @cImport({
     @cInclude("time.h"); // strftime() etc.
 });
 
-const AlignmentValueType = enum { percent, size };
-
-fn writeAlignment(
-    with_write: anytype,
-    value_type: AlignmentValueType,
-    value: u64,
-) void {
-    const spaces: [3]u8 = .{ ' ', ' ', ' ' };
-
-    const len: u2 = switch (value_type) {
-        .percent => blk: {
-            if (value < 10) {
-                break :blk 2;
-            } else if (value < 100) {
-                break :blk 1;
-            } else {
-                break :blk 0;
-            }
-        },
-        .size => blk: {
-            if (value < 10) {
-                break :blk 3;
-            } else if (value < 100) {
-                break :blk 2;
-            } else if (value < 1000) {
-                break :blk 1;
-            } else {
-                break :blk 0;
-            }
-        },
-    };
-    writeStr(with_write, spaces[0..len]);
+fn writeAlignment(with_write: anytype, value: u64, maxpad: u8) void {
+    const pad = maxpad -| @as(u8, switch (value) {
+        0...9 => 1,
+        10...99 => 2,
+        100...999 => 3,
+        else => 4,
+    });
+    writeStr(with_write, "    "[0..pad]);
 }
 
 pub const F5608 = struct {
@@ -107,6 +83,8 @@ pub const F5608 = struct {
         return self._round(0).whole();
     }
 
+    pub const AlignmentValueType = enum(u8) { percent = 3, size = 4 };
+
     pub fn write(
         self: @This(),
         with_write: anytype,
@@ -118,7 +96,7 @@ pub const F5608 = struct {
         const int = rounded.whole();
 
         if (alignment == .right)
-            writeAlignment(with_write, value_type, int);
+            writeAlignment(with_write, int, @intFromEnum(value_type));
 
         writeInt(with_write, int);
         if (precision > 0) {
@@ -133,7 +111,7 @@ pub const F5608 = struct {
         }
 
         if (alignment == .left)
-            writeAlignment(with_write, value_type, int);
+            writeAlignment(with_write, int, @intFromEnum(value_type));
     }
 };
 
