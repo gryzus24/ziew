@@ -1,29 +1,28 @@
-# ziew -- boring status generator for i3bar
+# ziew - a tiny status generator for i3bar/swaybar
 
 ## Description
 *ziew* is a more minimal alternative to *i3status*.
 
-## Aspirations
-*ziew* wants:
-* to implement useful widgets using the least amount of syscalls and instructions,
-* to have a small and predictable configuration file,
-* to be compatible with any x86_64 Linux platform.
-
-## Widgets
-Widget | Data source
------- | -----------
-| TIME | strftime(3)
-| MEM  | /proc/meminfo
-| CPU  | /proc/stat
-| DISK | statfs(2)
-| NET  | netdevice(7), ioctl(2)
-| BAT  | /sys/class/power_supply/*
-| READ | filesystem
+## Goals
+* implement useful widgets using the least amount of syscalls and instructions,
+* have a small and predictable configuration file,
+* be compatible with any x86_64 Linux platform.
 
 ## Files
 The configuration file of *ziew* resides at `$XDG_CONFIG_HOME/ziew/config` (usually `~/.config/ziew/config`). See the example configuration file (config) and copy it to this location.
 
-## Configuration
+## Building from source
+To build it you will need Zig 0.11. Once inside the cloned repository run:
+
+```
+zig build -p . -Doptimize=ReleaseSmall -Dstrip
+```
+
+The compiled binary will be placed in ./bin, from there you can copy it to somewhere in your $PATH or change `-p` (prefix) e.g. `-p ~/.local` to place the binary in ~/.local/bin. For a debug build, build without the `-Doptimize` and `-Dstrip` options.
+
+## Full documentation
+
+### Configuration
 The configuration file consists of *Widget* lines and *Color* lines. Lines consist of fields separated by tabs or spaces. The order of *Widget* lines in the configuration file is reflected in the final status output.
 
 ### Widget line
@@ -77,16 +76,19 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
 
 *Color* lines must come after the *Widget* lines they apply to. You can define multiple widgets and place them in any order you want, but with the following limitations:
 * maximum number of widgets is 16,
-* maximum number of colors is 100,
+* maximum number of colors is 100.
 
-### Signals
-Sending a SIGUSR1 signal to the *ziew* process causes all widgets to be refreshed immediately. You can use the *kill* shell builtin to send the signal:
+### Widgets
+Widget | Data source
+------ | -----------
+| TIME | strftime(3)
+| MEM  | /proc/meminfo
+| CPU  | /proc/stat
+| DISK | statfs(2)
+| NET  | netdevice(7), ioctl(2)
+| BAT  | /sys/class/power_supply/*
+| READ | filesystem
 
-```console
-$ kill -s USR1 `pidof ziew`
-```
-
-### Full documentation
 Every option and supported color configuration for each *Widget* is documented below.
 
 **TIME**
@@ -282,6 +284,13 @@ Every option and supported color configuration for each *Widget* is documented b
 
     Example "myfile" content
       #8a8 greenish text
+
+### Signals
+Sending a SIGUSR1 signal to the *ziew* process causes all widgets to be refreshed immediately. You can use the *kill* shell builtin to send the signal:
+
+```
+$ kill -s USR1 `pidof ziew`
+```
 
 ## Notes and caveats
 This is an opinionated piece of software that doesn't even use heap memory (explicitly), not all widgets implemented by i3status are available.
