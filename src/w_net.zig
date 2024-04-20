@@ -64,28 +64,28 @@ fn getFlags(
         0 => blk: {
             var n: usize = 0;
 
-            if (ifr.ifru.flags & c.IFF_ALLMULTI == c.IFF_ALLMULTI) {
+            if (ifr.ifru.flags & c.IFF_ALLMULTI > 0) {
                 flagsbuf[n] = 'A';
                 n += 1;
             }
-            if (ifr.ifru.flags & c.IFF_BROADCAST == c.IFF_BROADCAST) {
+            if (ifr.ifru.flags & c.IFF_BROADCAST > 0) {
                 flagsbuf[n] = 'B';
                 n += 1;
             }
-            if (ifr.ifru.flags & c.IFF_MULTICAST == c.IFF_MULTICAST) {
+            if (ifr.ifru.flags & c.IFF_MULTICAST > 0) {
                 flagsbuf[n] = 'M';
                 n += 1;
             }
-            if (ifr.ifru.flags & c.IFF_PROMISC == c.IFF_PROMISC) {
+            if (ifr.ifru.flags & c.IFF_PROMISC > 0) {
                 flagsbuf[n] = 'P';
                 n += 1;
             }
-            if (ifr.ifru.flags & c.IFF_RUNNING == c.IFF_RUNNING) {
+            if (ifr.ifru.flags & c.IFF_RUNNING > 0) {
                 ok.* = true;
                 flagsbuf[n] = 'R';
                 n += 1;
             }
-            if (ifr.ifru.flags & c.IFF_UP == c.IFF_UP) {
+            if (ifr.ifru.flags & c.IFF_UP > 0) {
                 flagsbuf[n] = 'U';
                 n += 1;
             }
