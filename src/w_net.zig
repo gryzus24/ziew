@@ -26,7 +26,6 @@ fn getInet(
     sock: linux.fd_t,
     ifr: *const linux.ifreq,
     inetbuf: *[INET_BUF_SIZE]u8,
-    ok: *bool,
 ) []const u8 {
     const e = errnoInt(linux.ioctl(sock, c.SIOCGIFADDR, @intFromPtr(ifr)));
     return switch (e) {
@@ -35,7 +34,6 @@ fn getInet(
             var inetfbs = io.fixedBufferStream(inetbuf);
             const writer = inetfbs.writer();
 
-            ok.* = true;
             utl.writeInt(writer, @intCast((addr.addr >> 0) & 0xff));
             utl.writeStr(writer, ".");
             utl.writeInt(writer, @intCast((addr.addr >> 8) & 0xff));
@@ -55,7 +53,7 @@ fn getFlags(
     sock: linux.fd_t,
     ifr: *const linux.ifreq,
     flagsbuf: *[6]u8,
-    ok: *bool,
+    up: *bool,
 ) []const u8 {
     // interestingly, the SIOCGIF*P*FLAGS ioctl is not implemented for INET?
     // check switch prong of: v6.6-rc3/source/net/ipv4/af_inet.c#L974
@@ -81,7 +79,7 @@ fn getFlags(
                 n += 1;
             }
             if (ifr.ifru.flags & c.IFF_RUNNING > 0) {
-                ok.* = true;
+                up.* = true;
                 flagsbuf[n] = 'R';
                 n += 1;
             }
@@ -100,10 +98,10 @@ fn getFlags(
 }
 
 const ColorHandler = struct {
-    isup: bool,
+    up: bool,
 
     pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
-        return color.firstColorEqualThreshold(@intFromBool(self.isup), mc.colors);
+        return color.firstColorEqualThreshold(@intFromBool(self.up), mc.colors);
     }
 };
 
@@ -130,23 +128,25 @@ pub fn widget(
 
     var inet: []const u8 = undefined;
     var flags: []const u8 = undefined;
-    var isup: bool = false;
-    var wants_state: bool = false;
+    var up: bool = false;
 
-    for (wf.iterOpts()[1..]) |*opt| {
-        switch (@as(typ.NetOpt, @enumFromInt(opt.opt))) {
-            .ifname => {},
-            .inet => inet = getInet(Static.sock, &ifr, &_inetbuf, &isup),
-            .flags => flags = getFlags(Static.sock, &ifr, &_flagsbuf, &isup),
-            .state => wants_state = true,
-            .@"-" => unreachable,
-        }
-    }
-    // neither inet nor flags got polled - poll for isup only
-    if (wants_state and _inetbuf[0] == 0 and _flagsbuf[0] == 0)
-        _ = getInet(Static.sock, &ifr, &_inetbuf, &isup);
+    const INET = comptime (1 << @intFromEnum(typ.NetOpt.inet));
+    const FLAGS = comptime (1 << @intFromEnum(typ.NetOpt.flags));
+    const STATE = comptime (1 << @intFromEnum(typ.NetOpt.state));
+    var demands: u8 = 0;
 
-    const ch: ColorHandler = .{ .isup = isup };
+    if (@typeInfo(typ.NetOpt).Enum.fields.len >= @bitSizeOf(@TypeOf(demands)))
+        @compileError("bump demands bitfield size");
+
+    for (wf.iterOpts()[1..]) |*opt|
+        demands |= @as(u8, 1) << @intCast(opt.opt);
+
+    if (demands & INET > 0)
+        inet = getInet(Static.sock, &ifr, &_inetbuf);
+    if (demands & (FLAGS | STATE) > 0 or fg.* == .color or bg.* == .color)
+        flags = getFlags(Static.sock, &ifr, &_flagsbuf, &up);
+
+    const ch: ColorHandler = .{ .up = up };
 
     utl.writeBlockStart(stream, fg.getColor(ch), bg.getColor(ch));
     utl.writeStr(stream, wf.parts[1]);
@@ -155,7 +155,7 @@ pub fn widget(
             .ifname => ifname,
             .inet => inet,
             .flags => flags,
-            .state => if (isup) "up" else "down",
+            .state => if (up) "up" else "down",
             .@"-" => unreachable,
         };
         utl.writeStr(stream, str);
