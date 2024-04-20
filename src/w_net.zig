@@ -45,7 +45,7 @@ fn getInet(
             utl.writeInt(writer, @intCast((addr.addr >> 24) & 0xff));
             break :blk inetfbs.getWritten();
         },
-        -c.EADDRNOTAVAIL => "<unavailable>",
+        -c.EADDRNOTAVAIL => "<no address>",
         -c.ENODEV => "<no device>",
         else => utl.fatalFmt("NET: inet errno: {}", .{e}),
     };
