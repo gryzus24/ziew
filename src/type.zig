@@ -79,7 +79,17 @@ pub const MemOpt = enum {
     dirty,
     writeback,
 };
-pub const CpuOpt = enum { @"%all", @"%user", @"%sys" };
+pub const CpuOpt = enum {
+    @"%all",
+    @"%user",
+    @"%sys",
+    all,
+    user,
+    sys,
+    intr,
+    ctxt,
+    visubars,
+};
 pub const DiskOpt = enum {
     @"%used",
     // total
