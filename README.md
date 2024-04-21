@@ -52,7 +52,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                              unspecified).
 
     Example
-      CPU 25 "CPU {%all.1>}"
+      CPU 25 "CPU {%all.1>} {visubars}"
 
 ### Default color line
 
@@ -144,21 +144,27 @@ Every option and supported color configuration for each *Widget* is documented b
 
 **CPU**
 
-    Values are displayed as a percentage of total possible system cpu usage.
+    Values are relative to the last interval refresh.
 
     Format
       Options
-        * %user - time spent executing user code,
-        * %sys  - time spent executing kernel code,
-        * %all  - time spent executing both user and kernel code.
+        * %user    - time spent executing user code,
+        * %sys     - time spent executing kernel code,
+        * %all     - time spent executing both user and kernel code,
+        * user     - %user * number of online CPUs,
+        * sys      - %sys * number of online CPUs,
+        * all      - %all * number of online CPUs,
+        * intr     - number of serviced interrupts,
+        * ctxt     - number of context switches,
+        * visubars - visualization of %all CPU usage as bars, one bar per CPU.
 
       Specifiers
-        [x] precision
-        [x] alignment
+        [-] precision (partial - visubars option unsupported)
+        [-] alignment (partial - only % options fully supported)
 
     Colors
       [x] default
-      [x] conditional
+      [-] conditional (partial - only % options supported)
 
     Example config entry
       CPU 15 "cpu: {%user.<}+{%sys.>} = {%all}"
