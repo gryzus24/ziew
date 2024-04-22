@@ -11,7 +11,9 @@ const mem = std.mem;
 pub const NCPUS_MAX = 64;
 
 pub const Cpu = struct {
-    fields: [8]u64 = .{0} ** 8,
+    pub const NFIELDS = 8;
+
+    fields: [NFIELDS]u64 = .{0} ** NFIELDS,
 
     pub fn user(self: @This()) u64 {
         // user time includes guest time,
@@ -117,66 +119,106 @@ pub const CpuState = struct {
     }
 };
 
-fn unsafeParseCpuLine(line: []const u8, out: *Cpu) void {
+fn parseProcStat(buf: []const u8, new: *Stat) void {
+    var cpui: u32 = 0;
     var i: usize = "cpu".len;
-    while (line[i] != ' ') : (i += 1) {}
+    while (buf[i] == ' ') : (i += 1) {}
+    while (true) {
+        var nfields: u32 = 0;
+        while (nfields < Cpu.NFIELDS) : (nfields += 1) {
+            var j = i;
+            while (buf[j] != ' ') : (j += 1) {}
+            new.cpus[cpui].fields[nfields] = utl.unsafeAtou64(buf[i..j]);
+            i = j + 1;
+        }
+        // cpuXX  41208 ... 1061 0 [0] 0\n
+        i += 4;
+        // cpuXX  41208 ... 1061 0 0 0\n[c]
+        while (buf[i] <= '9') : (i += 1) {}
+        if (buf[i] == 'i') break;
 
-    var nvals: usize = 0;
-    var ndigits: usize = 0;
-    while (true) : (i += 1) switch (line[i]) {
-        ' ' => {
-            if (ndigits > 0) {
-                out.fields[nvals] = utl.unsafeAtou64(line[i - ndigits .. i]);
-                nvals += 1;
-                if (nvals == out.fields.len) break;
-                ndigits = 0;
-            }
-        },
-        '0'...'9' => ndigits += 1,
-        else => {},
-    };
+        i += "cpuX".len;
+        while (buf[i] != ' ') : (i += 1) {}
+        i += 1;
+        cpui += 1;
+    }
+    i += "intr ".len;
+    var j = i;
+    while (buf[j] != ' ') : (j += 1) {}
+    new.intr = utl.unsafeAtou64(buf[i..j]);
+    i = j + 1;
+    // intr 12345[ ]0 678 ...
+
+    while (buf[i] <= '9') : (i += "ctxt".len) {}
+    while (buf[i] != ' ') : (i += 1) {}
+    i += 1;
+    // ctxt [1]2345\n
+
+    j = i;
+    while (buf[j] != '\n') : (j += 1) {}
+    new.ctxt = utl.unsafeAtou64(buf[i..j]);
+
+    // value of ncpus can change - CPUs might go offline/online
+    new.ncpus = cpui;
+    if (new.ncpus > NCPUS_MAX)
+        utl.fatal(&.{"CPU: too many CPUs, recompile"});
 }
 
 pub fn update(stat: *const fs.File, state: *CpuState) void {
-    var statbuf: [4096 << 1]u8 = undefined;
+    var buf: [4096 << 1]u8 = undefined;
 
-    const nread = stat.pread(&statbuf, 0) catch |err| {
+    const nread = stat.pread(&buf, 0) catch |err| {
         utl.fatal(&.{ "CPU: pread: ", @errorName(err) });
     };
-    if (nread == statbuf.len)
+    if (nread == buf.len)
         utl.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
     var new: *Stat = undefined;
     var old: *Stat = undefined;
     state.newStateFlip(&new, &old);
 
-    var cpui: u32 = 0;
-    var lines = mem.tokenizeScalar(u8, statbuf[0..nread], '\n');
-    while (lines.next()) |line| switch (line[0]) {
-        'c' => {
-            if (line[1] == 'p') {
-                unsafeParseCpuLine(line, &new.cpus[cpui]);
-                cpui += 1;
-            } else if (line[1] == 't') {
-                new.ctxt = utl.unsafeAtou64(line["ctxt ".len..]);
-            }
-        },
-        'i' => {
-            var i: usize = "intr ".len;
-            while (line[i] != ' ') : (i += 1) {}
-            new.intr = utl.unsafeAtou64(line["intr ".len..i]);
-        },
-        else => {},
-    };
-    // value of ncpus can change - CPUs might go offline/online
-    new.ncpus = cpui - 1;
-    if (new.ncpus > NCPUS_MAX)
-        utl.fatal(&.{"CPU: too many CPUs, recompile"});
-
+    parseProcStat(&buf, new);
     new.cpus[0].allUserSysDelta(&old.cpus[0], 1, state.slots[0..3]);
     new.cpus[0].allUserSysDelta(&old.cpus[0], new.ncpus, state.slots[3..6]);
     state.slots[6] = utl.F5608.init(new.intr - old.intr);
     state.slots[7] = utl.F5608.init(new.ctxt - old.ctxt);
+}
+
+test "/proc/stat parser" {
+    const t = std.testing;
+
+    const buf =
+        \\cpu  46232 14 14383 12181824 2122 2994 1212 0 0 0
+        \\cpu0 9483 5 1638 1007864 211 917 227 0 0 0
+        \\cpu1 9934 0 1386 1008813 285 200 103 0 0 0
+        \\cpu2 10687 4 2756 1006096 257 272 158 0 0 0
+        \\cpu3 4310 2 2257 1013687 165 195 103 0 0 0
+        \\cpu4 2183 0 1382 1016243 194 205 149 0 0 0
+        \\cpu5 1990 0 1088 1016634 167 550 125 0 0 0
+        \\cpu6 3005 0 1043 1016226 149 135 80 0 0 0
+        \\cpu7 1491 0 811 1018026 141 235 67 0 0 0
+        \\cpu8 848 0 573 1019392 150 78 29 0 0 0
+        \\cpu9 749 0 378 1019750 122 47 24 0 0 0
+        \\cpu10 690 0 295 1019943 136 37 19 0 0 0
+        \\cpu11 858 0 769 1019145 138 119 123 0 0 0
+        \\intr 1894596 0 33004 0 0 0 0 0 0 0 8008 0 0 182 0 0
+        \\ctxt 3055158
+        \\btime 17137
+    ;
+    var s: Stat = .{};
+    parseProcStat(buf, &s);
+    try t.expect(s.cpus[0].fields[0] == 46232);
+    try t.expect(s.cpus[0].fields[1] == 14);
+    try t.expect(s.cpus[0].fields[6] == 1212);
+    try t.expect(s.cpus[0].fields[7] == 0);
+    try t.expect(s.cpus[1].fields[0] == 9483);
+    try t.expect(s.cpus[1].fields[2] == 1638);
+    try t.expect(s.cpus[12].fields[0] == 858);
+    try t.expect(s.cpus[12].fields[1] == 0);
+    try t.expect(s.cpus[12].fields[6] == 123);
+    try t.expect(s.cpus[12].fields[7] == 0);
+    try t.expect(s.intr == 1894596);
+    try t.expect(s.ctxt == 3055158);
 }
 
 const BARS: [5][5][]const u8 = .{
