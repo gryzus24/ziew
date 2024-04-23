@@ -10,11 +10,13 @@ pub fn widget(
     fg: *const color.ColorUnion,
     bg: *const color.ColorUnion,
 ) []const u8 {
-    const tm = c.localtime(&c.time(null));
     var timebuf: [32]u8 = undefined;
+    var tm: c.struct_tm = undefined;
+
+    _ = c.localtime_r(&c.time(null), &tm);
 
     utl.writeBlockStart(stream, fg.getDefault(), bg.getDefault());
-    const nwritten = c.strftime(&timebuf, timebuf.len, strftime_fmt, tm);
+    const nwritten = c.strftime(&timebuf, timebuf.len, strftime_fmt, &tm);
     if (nwritten == 0) {
         utl.writeStr(stream, "<empty>");
     } else {
