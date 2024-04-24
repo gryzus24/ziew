@@ -3,7 +3,7 @@ const cfg = @import("config.zig");
 const fmt = std.fmt;
 const fs = std.fs;
 const io = std.io;
-const os = std.os;
+const linux = std.os.linux;
 
 pub const c = @cImport({
     @cInclude("errno.h"); // errno constants
@@ -266,7 +266,7 @@ pub fn fatal(strings: []const []const u8) noreturn {
     log.log("fatal: ");
     for (strings) |s| log.log(s);
     log.log("\n");
-    os.exit(1);
+    linux.exit(1);
 }
 
 // inline to avoid comptime duplication
@@ -275,7 +275,7 @@ pub inline fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
     const log = openLog();
     defer log.close();
     log.log(makeMsg("fatal: " ++ format ++ "\n", args));
-    os.exit(1);
+    linux.exit(1);
 }
 
 pub fn fatalPos(strings: []const []const u8, errpos: usize) noreturn {
@@ -290,7 +290,7 @@ pub fn fatalPos(strings: []const []const u8, errpos: usize) noreturn {
     @memset(bss_mem[0..errend], ' ');
     log.log(bss_mem[0..errend]);
     log.log("^\n");
-    os.exit(1);
+    linux.exit(1);
 }
 
 pub fn warn(strings: []const []const u8) void {

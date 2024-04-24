@@ -18,7 +18,10 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
         .single_threaded = true,
     });
-    exe.strip = strip orelse false;
+    if (@hasField(@TypeOf(exe.*), "root_module"))
+        exe.root_module.strip = strip orelse false
+    else
+        exe.strip = strip orelse false; // zig 0.11.0 compat
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);

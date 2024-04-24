@@ -157,11 +157,12 @@ pub const WID_TO_OPT_NAMES: [_WIDGET_IDS_NUM][]const []const u8 = blk: {
     var w: [_WIDGET_IDS_NUM][]const []const u8 = undefined;
     for (_OPT_TYPES, 0..) |t, i| {
         const enum_t = @typeInfo(t).Enum;
-        var q: [enum_t.fields.len][]const u8 = undefined;
-        for (enum_t.fields, 0..) |field, j| {
-            q[j] = field.name;
-        }
-        w[i] = &q;
+        const names = inner: {
+            var q: [enum_t.fields.len][]const u8 = undefined;
+            for (enum_t.fields, 0..) |field, j| q[j] = field.name;
+            break :inner q;
+        };
+        w[i] = &names;
     }
     break :blk w;
 };

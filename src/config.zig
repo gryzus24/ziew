@@ -7,7 +7,10 @@ const fs = std.fs;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
-const os = std.os;
+const posix = if (@hasDecl(std, "posix"))
+    std.posix
+else
+    std.os; // zig 0.11.0 compat
 
 pub const Alignment = enum { none, right, left };
 
@@ -90,10 +93,10 @@ fn defaultConfigPath(
     buf: *[typ.CONFIG_FILE_BUF_MAX]u8,
 ) error{ FileNotFound, NoSpaceLeft }![*:0]const u8 {
     var fbs = io.fixedBufferStream(buf);
-    if (os.getenvZ("XDG_CONFIG_HOME")) |xdg_config_home| {
+    if (posix.getenvZ("XDG_CONFIG_HOME")) |xdg_config_home| {
         _ = try fbs.write(xdg_config_home);
         _ = try fbs.write("/ziew/config");
-    } else if (os.getenvZ("HOME")) |home| {
+    } else if (posix.getenvZ("HOME")) |home| {
         _ = try fbs.write(home);
         _ = try fbs.write("/.config/ziew/config");
     } else {
@@ -121,7 +124,7 @@ pub fn readFile(
     };
     defer file.close();
 
-    var nread = file.read(buf) catch |err| utl.fatal(
+    const nread = file.read(buf) catch |err| utl.fatal(
         &.{ "config: read: ", @errorName(err) },
     );
     if (nread >= buf.len) {
@@ -191,7 +194,7 @@ pub fn parse(config_mem: *ConfigMem, buf: []const u8) []const Widget {
 test "config parse" {
     const t = std.testing;
 
-    var buf =
+    const buf =
         \\CPU 0 "{%user}{%sys.5}"
         \\FG %all 0:fff 10:#999
         \\BG 282828
@@ -439,7 +442,7 @@ fn parseColorLine(
         },
         1...1 + COLORS_MAX - 1 => {
             if (mem.indexOfScalar(u8, field, ':')) |sep_i| {
-                var thresh: u8 = fmt.parseUnsigned(u8, field[0..sep_i], 10) catch {
+                const thresh: u8 = fmt.parseUnsigned(u8, field[0..sep_i], 10) catch {
                     return error.BadThreshold;
                 };
                 if (thresh > 100) return error.BadThreshold;

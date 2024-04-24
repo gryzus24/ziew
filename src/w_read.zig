@@ -58,7 +58,7 @@ pub fn widget(
     };
 
     var pos: usize = 0;
-    var end = mem.indexOfAny(u8, _buf[0..nread], ascii.whitespace[1..]) orelse nread;
+    const end = mem.indexOfAny(u8, _buf[0..nread], ascii.whitespace[1..]) orelse nread;
     const content = _buf[0..end];
     var fghex: ?*const [7]u8 = fg.getDefault();
     var bghex: ?*const [7]u8 = bg.getDefault();

@@ -85,12 +85,12 @@ const ProcFiles = struct {
 
 fn showHelpAndExit() noreturn {
     utl.writeStr(io.getStdOut(), "usage: ziew [c <config file>] [h] [v]\n");
-    std.os.exit(0);
+    linux.exit(0);
 }
 
 fn showVersionAndExit() noreturn {
     utl.writeStr(io.getStdOut(), "ziew 0.0.4\n");
-    std.os.exit(0);
+    linux.exit(0);
 }
 
 fn readArgs() ?[*:0]const u8 {
