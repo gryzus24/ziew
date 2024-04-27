@@ -89,6 +89,7 @@ pub const F5608 = struct {
         digits_max: u8,
         alignment: cfg.Alignment,
         precision: u8,
+        unitchar: u8,
     ) void {
         const rounded = self._round(precision);
         const int = rounded.whole();
@@ -107,6 +108,8 @@ pub const F5608 = struct {
                 .{ .width = precision, .alignment = .right, .fill = '0' },
             );
         }
+        if (unitchar != '\x00')
+            writeStr(with_write, &[1]u8{unitchar});
 
         if (alignment == .left)
             writeAlignment(with_write, int, digits_max);
@@ -146,7 +149,7 @@ pub const NumUnit = struct {
                 break :blk @as(u8, 4) + @intFromBool(precision != 0) + precision;
             },
         };
-        const marker: u8 = switch (self.unit) {
+        self.val.write(with_write, digits_max, alignment, p, switch (self.unit) {
             .percent, .cpu_percent => '%',
             .kilo => 'K',
             .mega => 'M',
@@ -157,10 +160,7 @@ pub const NumUnit = struct {
             .si_mega => 'm',
             .si_giga => 'g',
             .si_tera => 't',
-        };
-        self.val.write(with_write, digits_max, alignment, p);
-        if (marker != '\x00')
-            writeStr(with_write, &[1]u8{marker});
+        });
     }
 };
 
