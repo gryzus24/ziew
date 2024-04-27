@@ -17,7 +17,7 @@ The configuration file of *ziew* resides at `$XDG_CONFIG_HOME/ziew/config` (usua
 You can [download the prebuilt binary](https://github.com/gryzus24/ziew/releases/download/v0.0.4/ziew) from the Releases page. If you do not trust it you can always build directly from source.
 
 ### Building from source
-To build it you will need Zig 0.11. Once inside the cloned repository run:
+To build it you will need Zig 0.11.0 or 0.12.0. Once inside the cloned repository run:
 
 ```
 zig build -p . -Doptimize=ReleaseSmall -Dstrip
@@ -106,7 +106,7 @@ Every option and supported color configuration for each *Widget* is documented b
         unsupported
 
     Colors
-      [x] default
+      [+] default
       [ ] conditional (unsupported - no options to compare)
 
     Example config entry
@@ -131,11 +131,11 @@ Every option and supported color configuration for each *Widget* is documented b
         * writeback    - memory actively being written back to the disk.
 
       Specifiers
-        [x] precision
-        [x] alignment
+        [+] precision
+        [+] alignment
 
     Colors
-      [x] default
+      [+] default
       [-] conditional (partial - only % options supported)
 
     Example config entry
@@ -156,18 +156,22 @@ Every option and supported color configuration for each *Widget* is documented b
         * all      - %all * number of online CPUs,
         * intr     - number of serviced interrupts,
         * ctxt     - number of context switches,
+        * forks    - number of forks,
+        * running  - number of processes running right now,
+        * blocked  - number of processes blocked on I/O right now,
+        * softirq  - number of serviced software interrupts,
         * visubars - visualization of %all CPU usage as bars, one bar per CPU.
 
       Specifiers
-        [-] precision (partial - visubars option unsupported)
-        [-] alignment (partial - only % options fully supported)
+        [+] precision (except visubars)
+        [+] alignment (except visubars)
 
     Colors
-      [x] default
+      [+] default
       [-] conditional (partial - only % options supported)
 
     Example config entry
-      CPU 15 "cpu: {%user.<}+{%sys.>} = {%all}"
+      CPU 15 "cpu: {running} {blocked} {visubars} {all.<}"
       FG %all 0:aaa 60:a66 80:f66
 
 **DISK**
@@ -188,11 +192,11 @@ Every option and supported color configuration for each *Widget* is documented b
         * [%]available - available disk space for the normal user.
 
       Specifiers
-        [x] precision
-        [x] alignment
+        [+] precision
+        [+] alignment
 
     Colors
-      [x] default
+      [+] default
       [-] conditional (partial - only % options supported)
 
     Example config entry
@@ -221,7 +225,7 @@ Every option and supported color configuration for each *Widget* is documented b
         unsupported
 
     Colors
-      [x] default
+      [+] default
       [-] conditional (partial - only state option supported)
 
       state: 0 - interface is down,
@@ -248,8 +252,8 @@ Every option and supported color configuration for each *Widget* is documented b
         [-] alignment (partial - state option unsupported)
 
     Colors
-      [x] default
-      [x] conditional
+      [+] default
+      [+] conditional
 
       state: 0 - battery is discharging,
              1 - battery is charging,
@@ -281,7 +285,7 @@ Every option and supported color configuration for each *Widget* is documented b
         unsupported
 
     Colors
-      [x] default
+      [+] default
       [ ] conditional (unsupported - read directly from the file)
 
       color format of the "content" option, specified directly in the file:
