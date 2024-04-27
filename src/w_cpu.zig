@@ -56,11 +56,15 @@ pub const Stat = struct {
     ncpus: u32 = 0,
     intr: u64 = 0,
     ctxt: u64 = 0,
+    forks: u64 = 0,
+    running: u32 = 0,
+    blocked: u32 = 0,
+    softirq: u64 = 0,
     cpus: [1 + NCPUS_MAX]Cpu = .{.{}} ** (1 + NCPUS_MAX),
 };
 
 pub const CpuState = struct {
-    slots: [8]utl.F5608 = .{utl.F5608.init(0)} ** 8,
+    slots: [12]utl.F5608 = .{utl.F5608.init(0)} ** 12,
     left_newest: bool = true,
     left: Stat = .{},
     right: Stat = .{},
@@ -94,6 +98,10 @@ pub const CpuState = struct {
         w |= @intFromBool(@intFromEnum(typ.CpuOpt.sys) != 5);
         w |= @intFromBool(@intFromEnum(typ.CpuOpt.intr) != 6);
         w |= @intFromBool(@intFromEnum(typ.CpuOpt.ctxt) != 7);
+        w |= @intFromBool(@intFromEnum(typ.CpuOpt.forks) != 8);
+        w |= @intFromBool(@intFromEnum(typ.CpuOpt.running) != 9);
+        w |= @intFromBool(@intFromEnum(typ.CpuOpt.blocked) != 10);
+        w |= @intFromBool(@intFromEnum(typ.CpuOpt.softirq) != 11);
         if (w > 0) @compileError("fix CpuOpt enum field order");
     }
 
@@ -103,7 +111,7 @@ pub const CpuState = struct {
                 .@"%all" => self.slots[@intFromEnum(typ.CpuOpt.@"%all")],
                 .@"%user" => self.slots[@intFromEnum(typ.CpuOpt.@"%user")],
                 .@"%sys" => self.slots[@intFromEnum(typ.CpuOpt.@"%sys")],
-                .all, .user, .sys, .intr, .ctxt, .visubars => unreachable,
+                else => unreachable,
             }.roundAndTruncate(),
             mc.colors,
         );
@@ -124,7 +132,7 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         }
         // cpuXX  41208 ... 1061 0 [0] 0\n
         i += 4;
-        // cpuXX  41208 ... 1061 0 0 0\n[c]
+        // cpuXX  41208 ... 1061 0 0 0\n[c] (best case)
         while (buf[i] <= '9') : (i += 1) {}
         if (buf[i] == 'i') break;
 
@@ -137,17 +145,37 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
     var j = i;
     while (buf[j] != ' ') : (j += 1) {}
     new.intr = utl.unsafeAtou64(buf[i..j]);
-    i = j + 1;
-    // intr 12345[ ]0 678 ...
 
-    while (buf[i] <= '9') : (i += "ctxt".len) {}
-    while (buf[i] != ' ') : (i += 1) {}
-    i += 1;
-    // ctxt [1]2345\n
+    i = buf.len - 1 - " 0 0 0 0 0 0 0 0 0 0 0\n".len;
+    while (buf[i] != 'q') : (i -= 1) {}
+    i += "q ".len;
 
     j = i;
-    while (buf[j] != '\n') : (j += 1) {}
-    new.ctxt = utl.unsafeAtou64(buf[i..j]);
+    while (buf[j] != ' ') : (j += 1) {}
+    new.softirq = utl.unsafeAtou64(buf[i..j]);
+
+    // i at: softirq [1]23456 2345 ...
+    i -= "softirq X".len;
+    j = i;
+    while (buf[i] != ' ') : (i -= 1) {}
+    new.blocked = @as(u32, @intCast(utl.unsafeAtou64(buf[i + 1 .. j])));
+
+    i -= "procs_blocked ".len;
+    j = i;
+    while (buf[i] != ' ') : (i -= 1) {}
+    new.running = @as(u32, @intCast(utl.unsafeAtou64(buf[i + 1 .. j])));
+
+    i -= "procs_running ".len;
+    j = i;
+    while (buf[i] != ' ') : (i -= 1) {}
+    new.forks = utl.unsafeAtou64(buf[i + 1 .. j]);
+
+    i -= "btime 0\nprocesses ".len;
+    while (buf[i] != '\n') : (i -= 1) {}
+
+    j = i;
+    while (buf[i] != ' ') : (i -= 1) {}
+    new.ctxt = utl.unsafeAtou64(buf[i + 1 .. j]);
 
     // value of ncpus can change - CPUs might go offline/online
     new.ncpus = cpui;
@@ -168,11 +196,15 @@ pub fn update(stat: *const fs.File, state: *CpuState) void {
     var old: *Stat = undefined;
     state.newStateFlip(&new, &old);
 
-    parseProcStat(&buf, new);
+    parseProcStat(buf[0..nread], new);
     new.cpus[0].allUserSysDelta(&old.cpus[0], 1, state.slots[0..3]);
     new.cpus[0].allUserSysDelta(&old.cpus[0], new.ncpus, state.slots[3..6]);
     state.slots[6] = utl.F5608.init(new.intr - old.intr);
     state.slots[7] = utl.F5608.init(new.ctxt - old.ctxt);
+    state.slots[8] = utl.F5608.init(new.forks - old.forks);
+    state.slots[9] = utl.F5608.init(new.running);
+    state.slots[10] = utl.F5608.init(new.blocked);
+    state.slots[11] = utl.F5608.init(new.softirq - old.softirq);
 }
 
 test "/proc/stat parser" {
@@ -192,9 +224,13 @@ test "/proc/stat parser" {
         \\cpu9 749 0 378 1019750 122 47 24 0 0 0
         \\cpu10 690 0 295 1019943 136 37 19 0 0 0
         \\cpu11 858 0 769 1019145 138 119 123 0 0 0
-        \\intr 1894596 0 33004 0 0 0 0 0 0 0 8008 0 0 182 0 0
+        \\intr 1894596 0 33004 0 0 0 0 0 0 0 8008 0 0 182 0 0 0 0 0 0 0 0 0 0 0
         \\ctxt 3055158
         \\btime 17137
+        \\processes 8594
+        \\procs_running 1
+        \\procs_blocked 0
+        \\softirq 4426117 1410160 300541 4 137919 8958 0 465908 1604918 6 497706
     ;
     var s: Stat = .{};
     parseProcStat(buf, &s);
@@ -210,6 +246,10 @@ test "/proc/stat parser" {
     try t.expect(s.cpus[12].fields[7] == 0);
     try t.expect(s.intr == 1894596);
     try t.expect(s.ctxt == 3055158);
+    try t.expect(s.forks == 8594);
+    try t.expect(s.running == 1);
+    try t.expect(s.blocked == 0);
+    try t.expect(s.softirq == 4426117);
 }
 
 const BARS: [5][5][]const u8 = .{
@@ -264,9 +304,21 @@ pub fn widget(
         } else {
             const value = state.slots[opt.opt];
             const nu: utl.NumUnit = switch (@as(typ.CpuOpt, @enumFromInt(opt.opt))) {
-                .@"%all", .@"%user", .@"%sys" => .{ .val = value, .unit = utl.Unit.percent },
-                .all, .user, .sys => .{ .val = value, .unit = utl.Unit.cpu_percent },
-                .intr, .ctxt => utl.UnitSI(value.whole()),
+                .@"%all",
+                .@"%user",
+                .@"%sys",
+                => .{ .val = value, .unit = utl.Unit.percent },
+                .all,
+                .user,
+                .sys,
+                => .{ .val = value, .unit = utl.Unit.cpu_percent },
+                .intr,
+                .ctxt,
+                .forks,
+                .running,
+                .blocked,
+                .softirq,
+                => utl.UnitSI(value.whole()),
                 .visubars => unreachable,
             };
             nu.write(writer, opt.alignment, opt.precision);

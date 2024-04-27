@@ -88,6 +88,10 @@ pub const CpuOpt = enum {
     sys,
     intr,
     ctxt,
+    forks,
+    running,
+    blocked,
+    softirq,
     visubars,
 };
 pub const DiskOpt = enum {
