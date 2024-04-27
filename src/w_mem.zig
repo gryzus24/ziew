@@ -38,10 +38,10 @@ pub const MemState = struct {
     pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
         return color.firstColorAboveThreshold(
             switch (@as(typ.MemOpt, @enumFromInt(mc.opt))) {
-                .@"%used" => utl.percentOf(self.used(), self.total()),
-                .@"%free" => utl.percentOf(self.free(), self.total()),
-                .@"%available" => utl.percentOf(self.avail(), self.total()),
-                .@"%cached" => utl.percentOf(self.cached(), self.total()),
+                .@"%used" => utl.Percent(self.used(), self.total()),
+                .@"%free" => utl.Percent(self.free(), self.total()),
+                .@"%available" => utl.Percent(self.avail(), self.total()),
+                .@"%cached" => utl.Percent(self.cached(), self.total()),
                 .used => unreachable,
                 .total => unreachable,
                 .free => unreachable,
@@ -103,18 +103,18 @@ pub fn widget(
     utl.writeStr(writer, wf.parts[0]);
     for (wf.iterOpts(), wf.iterParts()[1..]) |*opt, *part| {
         const nu = switch (@as(typ.MemOpt, @enumFromInt(opt.opt))) {
-            .@"%used" => utl.percentOf(state.used(), state.total()),
-            .@"%free" => utl.percentOf(state.free(), state.total()),
-            .@"%available" => utl.percentOf(state.avail(), state.total()),
-            .@"%cached" => utl.percentOf(state.cached(), state.total()),
-            .used => utl.kbToHuman(state.used()),
-            .total => utl.kbToHuman(state.total()),
-            .free => utl.kbToHuman(state.free()),
-            .available => utl.kbToHuman(state.avail()),
-            .buffers => utl.kbToHuman(state.buffers()),
-            .cached => utl.kbToHuman(state.cached()),
-            .dirty => utl.kbToHuman(state.dirty()),
-            .writeback => utl.kbToHuman(state.writeback()),
+            .@"%used" => utl.Percent(state.used(), state.total()),
+            .@"%free" => utl.Percent(state.free(), state.total()),
+            .@"%available" => utl.Percent(state.avail(), state.total()),
+            .@"%cached" => utl.Percent(state.cached(), state.total()),
+            .used => utl.SizeKb(state.used()),
+            .total => utl.SizeKb(state.total()),
+            .free => utl.SizeKb(state.free()),
+            .available => utl.SizeKb(state.avail()),
+            .buffers => utl.SizeKb(state.buffers()),
+            .cached => utl.SizeKb(state.cached()),
+            .dirty => utl.SizeKb(state.dirty()),
+            .writeback => utl.SizeKb(state.writeback()),
         };
         nu.write(writer, opt.alignment, opt.precision);
         utl.writeStr(writer, part.*);

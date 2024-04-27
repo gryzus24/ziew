@@ -13,14 +13,14 @@ pub const c = @cImport({
     @cInclude("time.h"); // strftime() etc.
 });
 
-fn writeAlignment(with_write: anytype, value: u64, maxpad: u8) void {
-    const pad = maxpad -| @as(u8, switch (value) {
+fn writeAlignment(with_write: anytype, value: u64, digits_max: u8) void {
+    const space_left = digits_max -| @as(u8, switch (value) {
         0...9 => 1,
         10...99 => 2,
         100...999 => 3,
         else => 4,
     });
-    writeStr(with_write, "    "[0..pad]);
+    writeStr(with_write, (" " ** 0x10)[0 .. space_left & 0x0f]);
 }
 
 pub const F5608 = struct {
@@ -83,12 +83,10 @@ pub const F5608 = struct {
         return self._round(0).whole();
     }
 
-    pub const AlignmentValueType = enum(u8) { percent = 3, size = 4 };
-
     pub fn write(
         self: @This(),
         with_write: anytype,
-        value_type: AlignmentValueType,
+        digits_max: u8,
         alignment: cfg.Alignment,
         precision: u8,
     ) void {
@@ -96,7 +94,7 @@ pub const F5608 = struct {
         const int = rounded.whole();
 
         if (alignment == .right)
-            writeAlignment(with_write, int, @intFromEnum(value_type));
+            writeAlignment(with_write, int, digits_max);
 
         writeInt(with_write, int);
         if (precision > 0) {
@@ -111,57 +109,103 @@ pub const F5608 = struct {
         }
 
         if (alignment == .left)
-            writeAlignment(with_write, int, @intFromEnum(value_type));
+            writeAlignment(with_write, int, digits_max);
     }
+};
+
+pub const Unit = enum {
+    percent,
+    cpu_percent,
+    kilo,
+    mega,
+    giga,
+    tera,
+    si_one,
+    si_kilo,
+    si_mega,
+    si_giga,
+    si_tera,
 };
 
 pub const NumUnit = struct {
     val: F5608,
-    unit: u8,
+    unit: Unit,
 
     pub fn write(
-        nu: @This(),
+        self: @This(),
         with_write: anytype,
         alignment: cfg.Alignment,
         precision: u8,
     ) void {
-        nu.val.write(
-            with_write,
-            if (nu.unit == '%') .percent else .size,
-            alignment,
-            precision,
-        );
-        writeStr(with_write, &[1]u8{nu.unit});
+        var p = precision;
+        const digits_max: u8 = switch (self.unit) {
+            .percent, .si_kilo, .si_mega, .si_giga, .si_tera => 3,
+            .cpu_percent, .kilo, .mega, .giga, .tera => 4,
+            .si_one => blk: {
+                p = 0;
+                break :blk @as(u8, 4) + @intFromBool(precision != 0) + precision;
+            },
+        };
+        const marker: u8 = switch (self.unit) {
+            .percent, .cpu_percent => '%',
+            .kilo => 'K',
+            .mega => 'M',
+            .giga => 'G',
+            .tera => 'T',
+            .si_one => '\x00',
+            .si_kilo => 'k',
+            .si_mega => 'm',
+            .si_giga => 'g',
+            .si_tera => 't',
+        };
+        self.val.write(with_write, digits_max, alignment, p);
+        if (marker != '\x00')
+            writeStr(with_write, &[1]u8{marker});
     }
 };
 
-pub fn kbToHuman(value: u64) NumUnit {
-    const BYTES_IN_4K = 4096;
-    const BYTES_IN_4M = 4096 * 1024;
-    const BYTES_IN_4G = 4096 * 1024 * 1024;
+pub fn SizeKb(value: u64) NumUnit {
+    const KB4 = 4096;
+    const MB4 = 4096 * 1024;
+    const GB4 = 4096 * 1024 * 1024;
 
     return switch (value) {
-        0...BYTES_IN_4K - 1 => .{
+        0...KB4 - 1 => .{
             .val = F5608.init(value),
-            .unit = 'K',
+            .unit = .kilo,
         },
-        BYTES_IN_4K...BYTES_IN_4M - 1 => .{
+        KB4...MB4 - 1 => .{
             .val = F5608.init(value).div(1024),
-            .unit = 'M',
+            .unit = .mega,
         },
-        BYTES_IN_4M...BYTES_IN_4G - 1 => .{
+        MB4...GB4 - 1 => .{
             .val = F5608.init(value).div(1024 * 1024),
-            .unit = 'G',
+            .unit = .giga,
         },
         else => .{
             .val = F5608.init(value).div(1024 * 1024 * 1024),
-            .unit = 'T',
+            .unit = .tera,
         },
     };
 }
 
-pub fn percentOf(value: u64, total: u64) NumUnit {
-    return .{ .val = F5608.init(value * 100).div(total), .unit = '%' };
+pub fn Percent(value: u64, total: u64) NumUnit {
+    return .{ .val = F5608.init(value * 100).div(total), .unit = .percent };
+}
+
+pub fn UnitSI(value: u64) NumUnit {
+    const K = 1000;
+    const M = 1000 * 1000;
+    const G = 1000 * 1000 * 1000;
+    const T = 1000 * 1000 * 1000 * 1000;
+
+    return switch (value) {
+        0...K - 1 => .{ .val = F5608.init(value), .unit = .si_one },
+        K...M - 1 => .{ .val = F5608.init(value).div(K), .unit = .si_kilo },
+        M...G - 1 => .{ .val = F5608.init(value).div(M), .unit = .si_mega },
+        G...T - 1 => .{ .val = F5608.init(value).div(G), .unit = .si_giga },
+        else => .{ .val = F5608.init(value).div(T), .unit = .si_tera },
+    };
 }
 
 pub inline fn writeStr(with_write: anytype, str: []const u8) void {

@@ -14,9 +14,9 @@ const ColorHandler = struct {
     pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
         return color.firstColorAboveThreshold(
             switch (@as(typ.DiskOpt, @enumFromInt(mc.opt))) {
-                .@"%used" => utl.percentOf(self.used_kb, self.total_kb),
-                .@"%free" => utl.percentOf(self.free_kb, self.total_kb),
-                .@"%available" => utl.percentOf(self.avail_kb, self.total_kb),
+                .@"%used" => utl.Percent(self.used_kb, self.total_kb),
+                .@"%free" => utl.Percent(self.free_kb, self.total_kb),
+                .@"%available" => utl.Percent(self.avail_kb, self.total_kb),
                 .used, .total, .free, .available, .@"-" => unreachable,
             }.val.roundAndTruncate(),
             mc.colors,
@@ -79,13 +79,13 @@ pub fn widget(
     utl.writeStr(writer, wf.parts[1]);
     for (wf.iterOpts()[1..], wf.iterParts()[2..]) |*opt, *part| {
         const nu = switch (@as(typ.DiskOpt, @enumFromInt(opt.opt))) {
-            .@"%used" => utl.percentOf(used_kb, total_kb),
-            .@"%free" => utl.percentOf(free_kb, total_kb),
-            .@"%available" => utl.percentOf(avail_kb, total_kb),
-            .used => utl.kbToHuman(used_kb),
-            .total => utl.kbToHuman(total_kb),
-            .free => utl.kbToHuman(free_kb),
-            .available => utl.kbToHuman(avail_kb),
+            .@"%used" => utl.Percent(used_kb, total_kb),
+            .@"%free" => utl.Percent(free_kb, total_kb),
+            .@"%available" => utl.Percent(avail_kb, total_kb),
+            .used => utl.SizeKb(used_kb),
+            .total => utl.SizeKb(total_kb),
+            .free => utl.SizeKb(free_kb),
+            .available => utl.SizeKb(avail_kb),
             .@"-" => unreachable,
         };
         nu.write(writer, opt.alignment, opt.precision);

@@ -108,8 +108,8 @@ pub fn widget(
         }
     }
 
-    const pfullnow = utl.percentOf(now, full);
-    const pfulldesign = utl.percentOf(now, full_design);
+    const pfullnow = utl.Percent(now, full);
+    const pfulldesign = utl.Percent(now, full_design);
 
     const writer = stream.writer();
     const ch = ColorHandler{

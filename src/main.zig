@@ -39,13 +39,13 @@ fn debugFixedPoint() void {
         const fp = utl.F5608.init(i).div(1 << utl.F5608.FRAC_SHIFT);
 
         fmt.format(stdout, "{d:5} ", .{i}) catch {};
-        fp.write(stdout, .size, .none, 0);
+        fp.write(stdout, 4, .none, 0);
         utl.writeStr(stdout, " ");
-        fp.write(stdout, .size, .none, 1);
+        fp.write(stdout, 4, .none, 1);
         utl.writeStr(stdout, " ");
-        fp.write(stdout, .size, .none, 2);
+        fp.write(stdout, 4, .none, 2);
         utl.writeStr(stdout, " ");
-        fp.write(stdout, .size, .none, 3);
+        fp.write(stdout, 4, .none, 3);
         utl.writeStr(stdout, "  ");
 
         fmt.format(

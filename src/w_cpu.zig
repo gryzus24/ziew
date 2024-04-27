@@ -96,22 +96,13 @@ pub const CpuState = struct {
         w |= @intFromBool(@intFromEnum(typ.CpuOpt.ctxt) != 7);
         if (w > 0) @compileError("fix CpuOpt enum field order");
     }
-    pub fn pall(self: *const @This()) utl.F5608 {
-        return self.slots[@intFromEnum(typ.CpuOpt.@"%all")];
-    }
-    pub fn puser(self: *const @This()) utl.F5608 {
-        return self.slots[@intFromEnum(typ.CpuOpt.@"%user")];
-    }
-    pub fn psys(self: *const @This()) utl.F5608 {
-        return self.slots[@intFromEnum(typ.CpuOpt.@"%sys")];
-    }
 
     pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
         return color.firstColorAboveThreshold(
             switch (@as(typ.CpuOpt, @enumFromInt(mc.opt))) {
-                .@"%all" => self.pall(),
-                .@"%user" => self.puser(),
-                .@"%sys" => self.psys(),
+                .@"%all" => self.slots[@intFromEnum(typ.CpuOpt.@"%all")],
+                .@"%user" => self.slots[@intFromEnum(typ.CpuOpt.@"%user")],
+                .@"%sys" => self.slots[@intFromEnum(typ.CpuOpt.@"%sys")],
                 .all, .user, .sys, .intr, .ctxt, .visubars => unreachable,
             }.roundAndTruncate(),
             mc.colors,
@@ -271,19 +262,16 @@ pub fn widget(
             if (new.ncpus & 1 == 1)
                 utl.writeStr(writer, BARS[lbari][0]);
         } else {
-            var value: utl.F5608 = state.slots[opt.opt];
-            const value_type = @as(
-                utl.F5608.AlignmentValueType,
-                switch (@as(typ.CpuOpt, @enumFromInt(opt.opt))) {
-                    .@"%all", .@"%user", .@"%sys" => .percent,
-                    else => .size, // FIXME: not really a size
-                },
-            );
-            value.write(writer, value_type, opt.alignment, opt.precision);
-            if (value_type == .percent)
-                utl.writeStr(writer, &[1]u8{'%'});
-            utl.writeStr(writer, part.*);
+            const value = state.slots[opt.opt];
+            const nu: utl.NumUnit = switch (@as(typ.CpuOpt, @enumFromInt(opt.opt))) {
+                .@"%all", .@"%user", .@"%sys" => .{ .val = value, .unit = utl.Unit.percent },
+                .all, .user, .sys => .{ .val = value, .unit = utl.Unit.cpu_percent },
+                .intr, .ctxt => utl.UnitSI(value.whole()),
+                .visubars => unreachable,
+            };
+            nu.write(writer, opt.alignment, opt.precision);
         }
+        utl.writeStr(writer, part.*);
     }
     return utl.writeBlockEnd_GetWritten(stream);
 }
