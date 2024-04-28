@@ -168,7 +168,8 @@ Every option and supported color configuration for each *Widget* is documented b
 
     Colors
       [+] default
-      [-] conditional (partial - only % options supported)
+      [-] conditional (partial - only forks, running, blocked and % options
+                       supported)
 
     Example config entry
       CPU 15 "cpu: {running} {blocked} {visubars} {all.<}"
