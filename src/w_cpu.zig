@@ -111,7 +111,10 @@ pub const CpuState = struct {
                 .@"%all" => self.slots[@intFromEnum(typ.CpuOpt.@"%all")],
                 .@"%user" => self.slots[@intFromEnum(typ.CpuOpt.@"%user")],
                 .@"%sys" => self.slots[@intFromEnum(typ.CpuOpt.@"%sys")],
-                else => unreachable,
+                .forks => self.slots[@intFromEnum(typ.CpuOpt.forks)],
+                .running => self.slots[@intFromEnum(typ.CpuOpt.running)],
+                .blocked => self.slots[@intFromEnum(typ.CpuOpt.blocked)],
+                .all, .user, .sys, .intr, .ctxt, .softirq, .visubars => unreachable,
             }.roundAndTruncate(),
             mc.colors,
         );

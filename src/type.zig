@@ -55,9 +55,16 @@ pub const WidgetId = enum {
     pub fn isManyColorsOptnameSupported(self: @This(), optname: []const u8) bool {
         return switch (self) {
             .TIME, .READ => false,
-            .MEM, .CPU, .DISK => optname[0] == '%',
-            .NET => mem.eql(u8, optname, "state"),
-            .BAT => optname[0] == '%' or mem.eql(u8, optname, "state"),
+            .MEM, .DISK => optname[0] == '%',
+            .CPU =>
+            // zig fmt: off
+                               optname[0] == '%'
+                or mem.eql(u8, optname, @tagName(CpuOpt.forks))
+                or mem.eql(u8, optname, @tagName(CpuOpt.running))
+                or mem.eql(u8, optname, @tagName(CpuOpt.blocked)),
+            // zig fmt: on
+            .NET => mem.eql(u8, optname, @tagName(NetOpt.state)),
+            .BAT => optname[0] == '%' or mem.eql(u8, optname, @tagName(BatOpt.state)),
         };
     }
 };
