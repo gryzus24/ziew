@@ -56,38 +56,85 @@ pub const MemState = struct {
     }
 };
 
-pub fn update(meminfo: *const fs.File, old: *MemState) void {
-    const MEMINFO_BUF_SIZE = 2048;
+fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
     const MEMINFO_KEY_LEN = "xxxxxxxx:       ".len;
 
-    var meminfo_buf: [MEMINFO_BUF_SIZE]u8 = undefined;
-    const nread = meminfo.pread(&meminfo_buf, 0) catch |err| {
+    var i: usize = MEMINFO_KEY_LEN;
+    for (0..5) |fieldi| {
+        while (buf[i] == ' ') : (i += 1) {}
+
+        var j = i;
+        while (buf[j] != ' ') : (j += 1) {}
+        new.fields[fieldi] = utl.unsafeAtou64(buf[i..j]);
+        i = j + " kB\n".len + MEMINFO_KEY_LEN;
+    }
+    // we can safely skip /9/ fields
+    i += "0 kb\n".len + 8 * (MEMINFO_KEY_LEN + "0 kb\n".len);
+
+    // look for Dirty
+    while (buf[i] != 'D') : (i += 1) {}
+    i += MEMINFO_KEY_LEN;
+
+    for (5..7) |fieldi| {
+        while (buf[i] == ' ') : (i += 1) {}
+
+        var j = i;
+        while (buf[j] != ' ') : (j += 1) {}
+        new.fields[fieldi] = utl.unsafeAtou64(buf[i..j]);
+        i = j + " kb\n".len + MEMINFO_KEY_LEN;
+    }
+}
+
+pub fn update(meminfo: *const fs.File, state: *MemState) void {
+    var buf: [4096]u8 = undefined;
+    const nread = meminfo.pread(&buf, 0) catch |err| {
         utl.fatal(&.{ "MEM: pread: ", @errorName(err) });
     };
+    if (nread == buf.len)
+        utl.fatal(&.{"MEM: /proc/meminfo doesn't fit in 1 page"});
 
-    var i: usize = MEMINFO_KEY_LEN;
-    var nvals: usize = 0;
-    var ndigits: usize = 0;
-    var skip: bool = false;
-    while (i < nread) : (i += 1) switch (meminfo_buf[i]) {
-        ' ' => {
-            if (ndigits == 0) continue;
-            if (!skip) {
-                old.fields[nvals] = utl.unsafeAtou64(
-                    meminfo_buf[i - ndigits .. i],
-                );
-                nvals += 1;
-                if (nvals == old.fields.len) break;
-                if (nvals == 5) skip = true; // skip lines after 'Cached'
-            }
-            ndigits = 0;
-            i += "kB\n".len;
-            if (meminfo_buf[i + 1] == 'D') skip = false; // Dirty
-            i += MEMINFO_KEY_LEN;
-        },
-        '0'...'9' => ndigits += 1,
-        else => {},
-    };
+    parseProcMeminfo(&buf, state);
+}
+
+test "/proc/meminfo parser" {
+    const t = std.testing;
+
+    const buf =
+        \\MemTotal:       16324532 kB
+        \\MemFree:         6628464 kB
+        \\MemAvailable:   10621004 kB
+        \\Buffers:          234640 kB
+        \\Cached:          3970504 kB
+        \\SwapCached:            0 kB
+        \\Active:          5683660 kB
+        \\Inactive:        3165560 kB
+        \\Active(anon):    4868340 kB
+        \\Inactive(anon):        0 kB
+        \\Active(file):     815320 kB
+        \\Inactive(file):  3165560 kB
+        \\Unevictable:         584 kB
+        \\Mlocked:             584 kB
+        \\SwapTotal:             0 kB
+        \\SwapFree:              0 kB
+        \\Zswap:                 0 kB
+        \\Zswapped:              0 kB
+        \\Dirty:                28 kB
+        \\Writeback:             0 kB
+        \\AnonPages:       4639020 kB
+        \\Mapped:           714056 kB
+        \\Shmem:            224264 kB
+        \\KReclaimable:     352524 kB
+        \\Slab:             453728 kB
+    ;
+    var s: MemState = .{};
+    parseProcMeminfo(buf, &s);
+    try t.expect(s.total() == 16324532);
+    try t.expect(s.free() == 6628464);
+    try t.expect(s.avail() == 10621004);
+    try t.expect(s.buffers() == 234640);
+    try t.expect(s.cached() == 3970504);
+    try t.expect(s.dirty() == 28);
+    try t.expect(s.writeback() == 0);
 }
 
 pub fn widget(
