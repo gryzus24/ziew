@@ -62,11 +62,8 @@ fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
     var i: usize = MEMINFO_KEY_LEN;
     for (0..5) |fieldi| {
         while (buf[i] == ' ') : (i += 1) {}
-
-        var j = i;
-        while (buf[j] != ' ') : (j += 1) {}
-        new.fields[fieldi] = utl.unsafeAtou64(buf[i..j]);
-        i = j + " kB\n".len + MEMINFO_KEY_LEN;
+        new.fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
+        i += " kB\n".len + MEMINFO_KEY_LEN;
     }
     // we can safely skip /9/ fields
     i += "0 kb\n".len + 8 * (MEMINFO_KEY_LEN + "0 kb\n".len);
@@ -77,11 +74,8 @@ fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
 
     for (5..7) |fieldi| {
         while (buf[i] == ' ') : (i += 1) {}
-
-        var j = i;
-        while (buf[j] != ' ') : (j += 1) {}
-        new.fields[fieldi] = utl.unsafeAtou64(buf[i..j]);
-        i = j + " kb\n".len + MEMINFO_KEY_LEN;
+        new.fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
+        i += " kb\n".len + MEMINFO_KEY_LEN;
     }
 }
 

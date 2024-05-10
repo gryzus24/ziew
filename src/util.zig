@@ -364,6 +364,39 @@ pub fn unsafeAtou64(buf: []const u8) u64 {
     return r;
 }
 
+pub inline fn atou64ForwardUntil(
+    buf: []const u8,
+    i: *usize,
+    comptime char: u8,
+) u64 {
+    var j = i.*;
+
+    var r: u64 = buf[j] & 0x0f;
+    j += 1;
+    while (buf[j] != char) : (j += 1)
+        r = r * 10 + (buf[j] & 0x0f);
+
+    i.* = j;
+    return r;
+}
+
+pub inline fn atou64BackwardUntil(
+    buf: []const u8,
+    i: *usize,
+    comptime char: u8,
+) u64 {
+    var j = i.*;
+
+    var unitpos_mul: u64 = 1;
+    var r: u64 = 0;
+    while (buf[j] != char) : (j -= 1) {
+        r += (buf[j] & 0x0f) * unitpos_mul;
+        unitpos_mul *= 10;
+    }
+    i.* = j;
+    return r;
+}
+
 pub fn zeroTerminate(dest: []u8, src: []const u8) ?[:0]const u8 {
     if (src.len >= dest.len) return null;
     @memcpy(dest[0..src.len], src);

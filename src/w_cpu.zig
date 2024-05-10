@@ -126,12 +126,9 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
     var i: usize = "cpu".len;
     while (buf[i] == ' ') : (i += 1) {}
     while (true) {
-        var nfields: u32 = 0;
-        while (nfields < Cpu.NFIELDS) : (nfields += 1) {
-            var j = i;
-            while (buf[j] != ' ') : (j += 1) {}
-            new.cpus[cpui].fields[nfields] = utl.unsafeAtou64(buf[i..j]);
-            i = j + 1;
+        for (0..Cpu.NFIELDS) |fieldi| {
+            new.cpus[cpui].fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
+            i += 1;
         }
         // cpuXX  41208 ... 1061 0 [0] 0\n
         i += 4;
@@ -145,40 +142,29 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         cpui += 1;
     }
     i += "intr ".len;
-    var j = i;
-    while (buf[j] != ' ') : (j += 1) {}
-    new.intr = utl.unsafeAtou64(buf[i..j]);
+    new.intr = utl.atou64ForwardUntil(buf, &i, ' ');
 
     i = buf.len - 1 - " 0 0 0 0 0 0 0 0 0 0 0\n".len;
     while (buf[i] != 'q') : (i -= 1) {}
-    i += "q ".len;
+    // i at: softir[q] 123456 2345 ...
 
-    j = i;
-    while (buf[j] != ' ') : (j += 1) {}
-    new.softirq = utl.unsafeAtou64(buf[i..j]);
+    var j = i + "q ".len;
+    new.softirq = utl.atou64ForwardUntil(buf, &j, ' ');
+    i -= "\nsoftirq".len;
 
-    // i at: softirq [1]23456 2345 ...
-    i -= "softirq X".len;
-    j = i;
-    while (buf[i] != ' ') : (i -= 1) {}
-    new.blocked = @as(u32, @intCast(utl.unsafeAtou64(buf[i + 1 .. j])));
+    new.blocked = @as(u32, @intCast(utl.atou64BackwardUntil(buf, &i, ' ')));
+    i -= "\nprocs_blocked ".len;
 
-    i -= "procs_blocked ".len;
-    j = i;
-    while (buf[i] != ' ') : (i -= 1) {}
-    new.running = @as(u32, @intCast(utl.unsafeAtou64(buf[i + 1 .. j])));
+    new.running = @as(u32, @intCast(utl.atou64BackwardUntil(buf, &i, ' ')));
+    i -= "\nprocs_running ".len;
 
-    i -= "procs_running ".len;
-    j = i;
-    while (buf[i] != ' ') : (i -= 1) {}
-    new.forks = utl.unsafeAtou64(buf[i + 1 .. j]);
+    new.forks = utl.atou64BackwardUntil(buf, &i, ' ');
+    i -= "btime X\nprocesses ".len;
 
-    i -= "btime 0\nprocesses ".len;
     while (buf[i] != '\n') : (i -= 1) {}
+    i -= 1;
 
-    j = i;
-    while (buf[i] != ' ') : (i -= 1) {}
-    new.ctxt = utl.unsafeAtou64(buf[i + 1 .. j]);
+    new.ctxt = utl.atou64BackwardUntil(buf, &i, ' ');
 
     // value of ncpus can change - CPUs might go offline/online
     new.ncpus = cpui;
