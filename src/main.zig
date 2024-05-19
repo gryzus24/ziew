@@ -219,8 +219,10 @@ pub fn main() void {
     const procfiles = ProcFiles.init(widgets);
 
     const sleep_interval = minSleepInterval(widgets);
-    const sleep_s: isize = @intCast(sleep_interval / 10);
-    const sleep_ns: isize = @intCast((sleep_interval % 10) * time.ns_per_s / 10);
+    const sleep_ts: linux.timespec = .{
+        .tv_sec = @intCast(sleep_interval / 10),
+        .tv_nsec = @intCast((sleep_interval % 10) * time.ns_per_s / 10),
+    };
 
     var strftime_fmt_buf: [typ.WIDGET_BUF_MAX / 2]u8 = undefined;
     const strftime_fmt = zeroStrftimeFormat(&strftime_fmt_buf, widgets);
@@ -287,13 +289,9 @@ pub fn main() void {
 
         _ = linux.write(1, &writebuf, pos);
 
-        var req: linux.timespec = .{ .tv_sec = sleep_s, .tv_nsec = sleep_ns };
-        var rem: linux.timespec = undefined;
-        while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &rem)))) {
-            -c.EINTR => {
-                if (g_refresh_all) break;
-                req = rem;
-            },
+        var req = sleep_ts;
+        while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {
+            -c.EINTR => if (g_refresh_all) break,
             -c.EINVAL => unreachable,
             -c.EFAULT => unreachable,
             else => break,
