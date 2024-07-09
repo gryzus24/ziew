@@ -7,10 +7,7 @@ const fs = std.fs;
 const io = std.io;
 const math = std.math;
 const mem = std.mem;
-const posix = if (@hasDecl(std, "posix"))
-    std.posix
-else
-    std.os; // zig 0.11.0 compat
+const posix = std.posix;
 
 pub const Alignment = enum { none, right, left };
 
