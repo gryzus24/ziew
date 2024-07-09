@@ -195,7 +195,7 @@ test "config parse" {
     const t = std.testing;
 
     const buf =
-        \\CPU 0 "{%user}{%sys.5}"
+        \\CPU 0 "{%user}{%sys.3}"
         \\FG %all 0:fff 10:#999
         \\BG 282828
     ;
@@ -215,7 +215,7 @@ test "config parse" {
     try t.expect(_cpu.format.opts[0].precision == OPT_PRECISION_DEFAULT);
     try t.expect(_cpu.format.opts[0].alignment == OPT_ALIGNMENT_DEFAULT);
     try t.expect(_cpu.format.opts[1].opt == @intFromEnum(typ.CpuOpt.@"%sys"));
-    try t.expect(_cpu.format.opts[1].precision == 5);
+    try t.expect(_cpu.format.opts[1].precision == 3);
     try t.expect(_cpu.format.opts[1].alignment == OPT_ALIGNMENT_DEFAULT);
 
     switch (_cpu.fg) {
