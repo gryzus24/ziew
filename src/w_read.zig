@@ -1,88 +1,110 @@
 const std = @import("std");
-const cfg = @import("config.zig");
 const color = @import("color.zig");
+const m = @import("memory.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
 const ascii = std.ascii;
 const fs = std.fs;
 const mem = std.mem;
 
+// == private =================================================================
+
 fn writeBlockError(
     fbs: anytype,
-    fg: *const color.ColorUnion,
-    bg: *const color.ColorUnion,
+    fg: ?*const [7]u8,
+    bg: ?*const [7]u8,
     prefix: []const u8,
     msg: []const u8,
 ) []const u8 {
-    utl.writeBlockStart(fbs, fg.getDefault(), bg.getDefault());
+    utl.writeBlockStart(fbs, fg, bg);
     utl.writeStr(fbs, prefix);
     utl.writeStr(fbs, ": ");
     utl.writeStr(fbs, msg);
     return utl.writeBlockEnd_GetWritten(fbs);
 }
 
-fn acceptColor(str: []const u8, pos: *usize) ?color.Color {
-    const start = utl.skipChars(str, &ascii.whitespace);
-    var i: usize = start;
+fn acceptHex(str: []const u8, pos: *usize) ?*const [7]u8 {
+    var i: usize = 0;
     defer pos.* += i;
 
-    if (start == str.len) return null;
+    i = utl.skipSpacesTabs(str, i) orelse return null;
+    const beg = i;
+
     if (str[i] != '#') return null;
     i += 1;
+    i = utl.skipSpacesTabs(str, i) orelse str.len;
 
-    while (i < str.len and !ascii.isWhitespace(str[i])) : (i += 1) {}
-
-    return color.Color.init(0, str[start..i]) catch null;
+    var hex: typ.Hex = .{};
+    _ = hex.set(str[beg..i]);
+    return hex.get();
 }
 
-pub fn widget(
-    stream: anytype,
-    wf: *const cfg.WidgetFormat,
-    fg: *const color.ColorUnion,
-    bg: *const color.ColorUnion,
-) []const u8 {
-    var _buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
+// == public ==================================================================
 
-    const filepath = utl.zeroTerminate(&_buf, wf.parts[0]) orelse utl.fatal(
-        &.{"READ: filepath too long"},
-    );
-    const basename = fs.path.basename(wf.parts[0]);
+pub const WidgetData = struct {
+    path: [:0]const u8,
+    basename: []const u8,
+    format: typ.Format = .{},
+    fg: typ.Hex = .{},
+    bg: typ.Hex = .{},
 
-    const file = fs.cwd().openFileZ(filepath, .{}) catch |err| {
-        return writeBlockError(stream, fg, bg, basename, @errorName(err));
+    pub fn init(reg: *m.Region, arg: []const u8) !*WidgetData {
+        if (arg.len >= typ.WIDGET_BUF_MAX)
+            utl.fatal(&.{"READ: path too long"});
+
+        const retptr = try reg.frontAlloc(WidgetData);
+
+        retptr.* = .{
+            .path = try reg.frontWriteStrZ(arg),
+            .basename = fs.path.basename(arg),
+        };
+        return retptr;
+    }
+};
+
+pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
+    const wd = w.wid.READ;
+
+    const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| {
+        return writeBlockError(stream, wd.fg.get(), wd.bg.get(), wd.basename, @errorName(e));
     };
     defer file.close();
 
-    const nread = file.read(&_buf) catch |err| {
-        utl.fatal(&.{ "READ: read: ", basename, @errorName(err) });
+    var _buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
+    const nread = file.read(&_buf) catch |e| {
+        utl.fatal(&.{ "READ: read: ", wd.basename, @errorName(e) });
     };
 
     var pos: usize = 0;
     const end = mem.indexOfAny(u8, _buf[0..nread], ascii.whitespace[1..]) orelse nread;
     const content = _buf[0..end];
-    var fghex: ?*const [7]u8 = fg.getDefault();
-    var bghex: ?*const [7]u8 = bg.getDefault();
+    var fghex: ?*const [7]u8 = wd.fg.get();
+    var bghex: ?*const [7]u8 = wd.bg.get();
 
-    for (wf.iterOpts()[1..]) |*opt| {
-        if (@as(typ.ReadOpt, @enumFromInt(opt.opt)) == .content) {
-            if (acceptColor(content[pos..], &pos)) |*f| fghex = f.getHex();
-            if (acceptColor(content[pos..], &pos)) |*b| bghex = b.getHex();
+    for (wd.format.part_opts) |*part| {
+        if (@as(typ.ReadOpt, @enumFromInt(part.opt)) == .content) {
+            if (acceptHex(content[pos..], &pos)) |fg| fghex = fg;
+            if (acceptHex(content[pos..], &pos)) |bg| bghex = bg;
             if (pos < end and ascii.isWhitespace(content[pos])) pos += 1;
             break;
         }
     }
 
     utl.writeBlockStart(stream, fghex, bghex);
-    utl.writeStr(stream, wf.parts[1]);
-    for (wf.iterOpts()[1..], wf.iterParts()[2..]) |*opt, *part| {
-        const str = switch (@as(typ.ReadOpt, @enumFromInt(opt.opt))) {
-            .basename => basename,
-            .content => content[pos..],
-            .raw => content[0..],
-            .@"-" => unreachable,
-        };
-        utl.writeStr(stream, str);
-        utl.writeStr(stream, part.*);
+    for (wd.format.part_opts) |*part| {
+        utl.writeStr(stream, part.part);
+        utl.writeStr(
+            stream,
+            switch (@as(typ.ReadOpt, @enumFromInt(part.opt))) {
+                // zig fmt: off
+                .arg      => wd.path,
+                .basename => wd.basename,
+                .content  => content[pos..],
+                .raw      => content[0..],
+                // zig fmt: on
+            },
+        );
     }
+    utl.writeStr(stream, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);
 }

@@ -1,5 +1,8 @@
 const std = @import("std");
 const cfg = @import("config.zig");
+const m = @import("memory.zig");
+const typ = @import("type.zig");
+const utl = @import("util.zig");
 const w_bat = @import("w_bat.zig");
 const w_cpu = @import("w_cpu.zig");
 const w_dysk = @import("w_dysk.zig");
@@ -7,8 +10,6 @@ const w_mem = @import("w_mem.zig");
 const w_net = @import("w_net.zig");
 const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
-const typ = @import("type.zig");
-const utl = @import("util.zig");
 const c = utl.c;
 const fmt = std.fmt;
 const fs = std.fs;
@@ -17,84 +18,25 @@ const linux = std.os.linux;
 const math = std.math;
 const mem = std.mem;
 const time = std.time;
+const posix = std.posix;
 
-fn debugColors(cm: *const cfg.ConfigMem) void {
-    const print = std.debug.print;
-    print("WIDGETS\n", .{});
-    for (cm.widgets) |w| {
-        print(" WID: {any}\n", .{w.wid});
-        print("  FG: {any}\n", .{w.fg});
-        print("  BG: {any}\n", .{w.bg});
-    }
-    print("NCOLORS: {d}\n", .{cm._ncolors});
-    print("COLORS:\n", .{});
-    for (cm.colors) |color| {
-        print(" {any}\n", .{color});
-    }
-}
-
-fn debugFixedPoint() void {
-    const stdout = io.getStdOut().writer();
-    for (0..(1 << 11) + 2) |i| {
-        const fp = utl.F5608.init(i).div(1 << utl.F5608.FRAC_SHIFT);
-
-        fmt.format(stdout, "{d:5} ", .{i}) catch {};
-        fp.write(stdout, 4, .none, 0);
-        utl.writeStr(stdout, " ");
-        fp.write(stdout, 4, .none, 1);
-        utl.writeStr(stdout, " ");
-        fp.write(stdout, 4, .none, 2);
-        utl.writeStr(stdout, " ");
-        fp.write(stdout, 4, .none, 3);
-        utl.writeStr(stdout, "  ");
-
-        fmt.format(
-            stdout,
-            "{any:.5}",
-            .{@as(f64, @floatFromInt(i)) / (1 << utl.F5608.FRAC_SHIFT)},
-        ) catch {};
-        utl.writeStr(stdout, "\n");
-    }
-}
-
-const ProcFiles = struct {
-    meminfo: ?fs.File,
-    stat: ?fs.File,
-
-    pub fn init(widgets: []const cfg.Widget) ProcFiles {
-        var meminfo: ?fs.File = null;
-        var stat: ?fs.File = null;
-        for (widgets) |*w| {
-            if (w.wid == typ.WidgetId.MEM and meminfo == null) {
-                meminfo = fs.cwd().openFileZ("/proc/meminfo", .{}) catch |err| {
-                    utl.fatal(
-                        &.{ "open: /proc/meminfo: ", @errorName(err) },
-                    );
-                };
-            } else if (w.wid == typ.WidgetId.CPU and stat == null) {
-                stat = fs.cwd().openFileZ("/proc/stat", .{}) catch |err| {
-                    utl.fatal(
-                        &.{ "open: /proc/stat: ", @errorName(err) },
-                    );
-                };
-            }
-        }
-        return .{ .meminfo = meminfo, .stat = stat };
-    }
+const Args = struct {
+    config_path: ?[*:0]const u8,
 };
 
-fn showHelpAndExit() noreturn {
-    utl.writeStr(io.getStdOut(), "usage: ziew [c <config file>] [h] [v]\n");
+fn showHelpAndExit(file: fs.File) noreturn {
+    utl.writeStr(file, "usage: ziew [c <config file>] [h] [v]\n");
     linux.exit(0);
 }
 
-fn showVersionAndExit() noreturn {
-    utl.writeStr(io.getStdOut(), "ziew 0.0.6\n");
+fn showVersionAndExit(file: fs.File) noreturn {
+    utl.writeStr(file, "ziew 0.0.6\n");
     linux.exit(0);
 }
 
-fn readArgs() ?[*:0]const u8 {
+fn readArgs() Args {
     const argv = std.os.argv;
+    const stderr = io.getStdErr();
 
     var config_path: ?[*:0]const u8 = null;
     var get_config_path = false;
@@ -108,11 +50,11 @@ fn readArgs() ?[*:0]const u8 {
                     get_config_path = true;
                     argi += 1;
                 },
-                'h' => showHelpAndExit(),
-                'v' => showVersionAndExit(),
+                'h' => showHelpAndExit(stderr),
+                'v' => showVersionAndExit(stderr),
                 else => {
-                    utl.writeStr(io.getStdOut(), "unknown option\n");
-                    showHelpAndExit();
+                    utl.writeStr(stderr, "unknown option\n");
+                    showHelpAndExit(stderr);
                 },
             }
         }
@@ -122,122 +64,146 @@ fn readArgs() ?[*:0]const u8 {
                 get_config_path = false;
             }
         } else {
-            const stdout = io.getStdOut();
-            utl.writeStr(stdout, "required argument: ");
-            utl.writeStr(stdout, arg[0..len]);
-            utl.writeStr(stdout, " <arg>\n");
-            showHelpAndExit();
+            utl.writeStr(stderr, "required argument: ");
+            utl.writeStr(stderr, arg[0..len]);
+            utl.writeStr(stderr, " <arg>\n");
+            showHelpAndExit(stderr);
         }
     }
-    return config_path;
+    return .{ .config_path = config_path };
 }
 
-fn readConfig(
-    buf: *[typ.CONFIG_FILE_BUF_MAX]u8,
-    cm: *cfg.ConfigMem,
-    path: ?[*:0]const u8,
-) []const cfg.Widget {
-    var widgets: []const cfg.Widget = undefined;
+fn readConfig(reg: *m.Region, config_path: ?[*:0]const u8) []const typ.Widget {
+    var widgets: []const typ.Widget = undefined;
 
     const err = blk: {
-        if (cfg.readFile(buf, path)) |config_view| {
-            widgets = cfg.parse(cm, config_view);
-            if (widgets.len == 0) {
-                utl.warn(&.{"no widgets loaded: using defaults..."});
-                break :blk true;
-            } else {
-                break :blk false;
+        if (config_path) |path| {
+            if (cfg.readFile(reg, path)) |config_view| {
+                var err_line: []const u8 = undefined;
+                var err_pos: usize = undefined;
+                widgets = cfg.parse(reg, config_view, &err_pos, &err_line) catch |e| {
+                    std.debug.print("ERRPOS={}\n", .{err_pos});
+                    utl.fatalPos(
+                        &.{ "config: ", @errorName(e), ": ", err_line },
+                        fmt.count("config: {s}: ", .{@errorName(e)}) + err_pos,
+                    );
+                };
+                if (widgets.len == 0) {
+                    utl.warn(&.{"no widgets loaded: using defaults..."});
+                    break :blk true;
+                } else {
+                    break :blk false;
+                }
+            } else |e| switch (e) {
+                error.FileNotFound => {
+                    utl.warn(&.{"no config file: using defaults..."});
+                    break :blk true;
+                },
+                error.NoSpaceLeft => {
+                    utl.warn(&.{"config file too big: using defaults..."});
+                    break :blk true;
+                },
             }
-        } else |err| switch (err) {
-            error.FileNotFound => {
-                utl.warn(&.{"no config file: using defaults..."});
-                break :blk true;
-            },
+        } else {
+            utl.warn(&.{"unknown config file path: using defaults..."});
+            break :blk true;
         }
     };
     if (err)
-        widgets = cfg.defaultConfig(cm);
+        widgets = cfg.defaultConfig(reg);
 
     return widgets;
 }
 
-fn minSleepInterval(widgets: []const cfg.Widget) typ.DeciSec {
-    var min: typ.DeciSec = typ.WIDGET_INTERVAL_MAX;
-    var gcd: ?typ.DeciSec = null;
-    for (widgets) |*w| {
-        if (w.interval != typ.WIDGET_INTERVAL_MAX) {
-            if (w.interval < min) min = w.interval;
-            gcd = math.gcd(gcd orelse w.interval, w.interval);
-        }
+fn defaultConfigPath(reg: *m.Region) error{NoSpaceLeft}!?[*:0]const u8 {
+    var n: usize = 0;
+    const base = reg.frontSave(u8);
+    if (posix.getenvZ("XDG_CONFIG_HOME")) |xdg_config_home| {
+        n += (try reg.frontWriteStr(xdg_config_home)).len;
+        n += (try reg.frontWriteStr("/ziew/config\x00")).len;
+    } else if (posix.getenvZ("HOME")) |home| {
+        n += (try reg.frontWriteStr(home)).len;
+        n += (try reg.frontWriteStr("/.config/ziew/config\x00")).len;
+    } else {
+        utl.warn(&.{"$HOME and $XDG_CONFIG_HOME not set"});
+        return null;
     }
-    if (gcd orelse min < min) utl.warn(
-        &.{"gcd of intervals < minimum interval, widget refreshes will be inexact"},
-    );
-    // NOTE: gcd is the obvious choice here, but it might prove
-    //       disastrous if the interval is misconfigured...
-    return min;
-}
-
-fn zeroStrftimeFormat(
-    buf: *[typ.WIDGET_BUF_MAX / 2]u8,
-    widgets: []const cfg.Widget,
-) ?[*:0]const u8 {
-    for (widgets) |*w| {
-        if (w.wid == typ.WidgetId.TIME) {
-            return utl.zeroTerminate(buf, w.format.parts[0]) orelse utl.fatal(
-                &.{"time format too long"},
-            );
-        }
-    }
-    return null;
+    return reg.slice(u8, base, n)[0 .. n - 1 :0];
 }
 
 var g_refresh_all = false;
+var g_bss_memory: [8 * mem.page_size]u8 align(16) = undefined;
 
 fn sa_handler(signum: c_int) callconv(.C) void {
     if (signum == linux.SIG.USR1) g_refresh_all = true;
 }
 
-pub fn main() void {
-    var _config_buf: [typ.CONFIG_FILE_BUF_MAX]u8 = undefined;
-    var _config_mem: cfg.ConfigMem = .{};
+pub fn main() !void {
+    var reg = m.Region.init(&g_bss_memory);
 
-    const config_path = readArgs();
-    const widgets = readConfig(&_config_buf, &_config_mem, config_path);
+    const args = readArgs();
+    const config_path = args.config_path orelse (defaultConfigPath(&reg) catch |e| switch (e) {
+        error.NoSpaceLeft => utl.fatal(&.{"config path too long"}),
+    });
+    const widgets = readConfig(&reg, config_path);
 
-    const ret = linux.sigaction(
-        linux.SIG.USR1,
-        &.{
-            .handler = .{ .handler = &sa_handler },
-            .mask = linux.empty_sigset,
-            .flags = linux.SA.RESTART,
-        },
-        null,
-    );
-    if (ret != 0) utl.fatal(&.{"sigaction failed"});
+    if (linux.sigaction(linux.SIG.USR1, &.{
+        .handler = .{ .handler = &sa_handler },
+        .mask = linux.empty_sigset,
+        .flags = linux.SA.RESTART,
+    }, null) != 0) {
+        utl.fatal(&.{"sigaction failed"});
+    }
 
-    const procfiles = ProcFiles.init(widgets);
-
-    const sleep_interval = minSleepInterval(widgets);
-    const sleep_ts: linux.timespec = .{
-        .tv_sec = @intCast(sleep_interval / 10),
-        .tv_nsec = @intCast((sleep_interval % 10) * time.ns_per_s / 10),
+    const sleep_interval_dsec = blk: {
+        var min: typ.DeciSec = typ.WIDGET_INTERVAL_MAX;
+        var gcd: typ.DeciSec = 0;
+        for (widgets) |*w| {
+            // Intervals of `WIDGET_INTERVAL_MAX` are
+            // treated as "refresh once and forget".
+            if (w.interval != typ.WIDGET_INTERVAL_MAX) {
+                min = @min(min, w.interval);
+                gcd = math.gcd(if (gcd == 0) w.interval else gcd, w.interval);
+            }
+        }
+        if (gcd < min) {
+            utl.warn(
+                &.{"gcd of intervals < minimum interval, widget refreshes will be inexact"},
+            );
+        }
+        // NOTE: gcd is the obvious choice here, but it might prove
+        //       disastrous if the interval is misconfigured...
+        break :blk min;
+    };
+    const sleep_interval_ts: linux.timespec = .{
+        .tv_sec = @intCast(sleep_interval_dsec / 10),
+        .tv_nsec = @intCast((sleep_interval_dsec % 10) * time.ns_per_s / 10),
     };
 
-    var strftime_fmt_buf: [typ.WIDGET_BUF_MAX / 2]u8 = undefined;
-    const strftime_fmt = zeroStrftimeFormat(&strftime_fmt_buf, widgets);
+    var cpu_state: ?w_cpu.CpuState = null;
+    var mem_state: ?w_mem.MemState = null;
 
-    var time_to_refresh = [_]typ.DeciSec{0} ** typ.WIDGETS_MAX;
+    for (widgets) |*w| switch (w.wid) {
+        .CPU => {
+            if (cpu_state == null)
+                cpu_state = w_cpu.CpuState.init();
+        },
+        .MEM => {
+            if (mem_state == null)
+                mem_state = w_mem.MemState.init();
+        },
+        else => {},
+    };
 
-    var cpu_state: w_cpu.CpuState = .{};
-    var mem_state: w_mem.MemState = .{};
+    // zig fmt: off
+    var time_to_refresh   = try reg.frontAllocMany(typ.DeciSec, widgets.len);
+    var widget_bufs       = try reg.frontAllocMany([typ.WIDGET_BUF_MAX]u8, widgets.len);
+    var widget_bufs_views = try reg.frontAllocMany([]const u8, widgets.len);
+    var write_buf         = try reg.frontAllocMany(u8, 2 + widgets.len * typ.WIDGET_BUF_MAX);
+    // zig fmt: on
 
-    var writebuf: [2 + typ.WIDGETS_MAX * typ.WIDGET_BUF_MAX]u8 = undefined;
-    var widgetbuf: [typ.WIDGETS_MAX][typ.WIDGET_BUF_MAX]u8 = undefined;
-    var widgetbuf_views: [typ.WIDGETS_MAX][]const u8 = undefined;
-
-    writebuf[0] = ',';
-    writebuf[1] = '[';
+    write_buf[0] = ',';
+    write_buf[1] = '[';
 
     const header =
         \\{"version":1}
@@ -246,7 +212,7 @@ pub fn main() void {
     _ = linux.write(1, header, header.len);
     while (true) {
         if (g_refresh_all) {
-            @memset(&time_to_refresh, 0);
+            @memset(time_to_refresh, 0);
             g_refresh_all = false;
         }
 
@@ -254,46 +220,45 @@ pub fn main() void {
         var mem_updated = false;
 
         for (widgets, 0..) |*w, i| {
-            time_to_refresh[i] -|= sleep_interval;
+            time_to_refresh[i] -|= sleep_interval_dsec;
             if (time_to_refresh[i] == 0) {
                 time_to_refresh[i] = w.interval;
 
-                var fbs = io.fixedBufferStream(&widgetbuf[i]);
+                var fbs = io.fixedBufferStream(&widget_bufs[i]);
 
                 if (w.wid == .CPU and !cpu_updated) {
-                    w_cpu.update(&procfiles.stat.?, &cpu_state);
+                    w_cpu.update(&cpu_state.?);
                     cpu_updated = true;
                 }
                 if (w.wid == .MEM and !mem_updated) {
-                    w_mem.update(&procfiles.meminfo.?, &mem_state);
+                    w_mem.update(&mem_state.?);
                     mem_updated = true;
                 }
-                widgetbuf_views[i] = switch (w.wid) {
-                    .TIME => w_time.widget(&fbs, strftime_fmt.?, &w.fg, &w.bg),
-                    .MEM => w_mem.widget(&fbs, &mem_state, w.format, &w.fg, &w.bg),
-                    .CPU => w_cpu.widget(&fbs, &cpu_state, w.format, &w.fg, &w.bg),
-                    .DISK => w_dysk.widget(&fbs, w.format, &w.fg, &w.bg),
-                    .NET => w_net.widget(&fbs, w.format, &w.fg, &w.bg),
-                    .BAT => w_bat.widget(&fbs, w.format, &w.fg, &w.bg),
-                    .READ => w_read.widget(&fbs, w.format, &w.fg, &w.bg),
+                widget_bufs_views[i] = switch (w.wid) {
+                    .TIME => w_time.widget(&fbs, w),
+                    .MEM => w_mem.widget(&fbs, &mem_state.?, w),
+                    .CPU => w_cpu.widget(&fbs, &cpu_state.?, w),
+                    .DISK => w_dysk.widget(&fbs, w),
+                    .NET => w_net.widget(&fbs, w),
+                    .BAT => w_bat.widget(&fbs, w),
+                    .READ => w_read.widget(&fbs, w),
                 };
             }
         }
 
         var pos: usize = 2;
-        for (widgetbuf_views[0..widgets.len]) |view| {
-            @memcpy(writebuf[pos .. pos + view.len], view);
+        for (widget_bufs_views) |view| {
+            @memcpy(write_buf[pos .. pos + view.len], view);
             pos += view.len;
         }
-        writebuf[pos - 1] = ']'; // get rid of the trailing comma
+        write_buf[pos - 1] = ']'; // get rid of the trailing comma
 
-        _ = linux.write(1, &writebuf, pos);
+        _ = linux.write(1, write_buf.ptr, pos);
 
-        var req = sleep_ts;
+        var req = sleep_interval_ts;
         while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {
             -c.EINTR => if (g_refresh_all) break,
             -c.EINVAL => unreachable,
-            -c.EFAULT => unreachable,
             else => break,
         };
     }

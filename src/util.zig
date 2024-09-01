@@ -1,17 +1,20 @@
 const std = @import("std");
-const cfg = @import("config.zig");
+const typ = @import("type.zig");
 const fmt = std.fmt;
 const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
+const mem = std.mem;
 
+// zig fmt: off
 pub const c = @cImport({
-    @cInclude("errno.h"); // errno constants
-    @cInclude("net/if.h"); // IFF_* definitions
-    @cInclude("sys/ioctl.h"); // SIOCGIFADDR, SIOCGIFFLAGS definitions
+    @cInclude("errno.h");      // errno constants
+    @cInclude("net/if.h");     // IFF_* definitions
+    @cInclude("sys/ioctl.h");  // SIOCGIFADDR, SIOCGIFFLAGS definitions
     @cInclude("sys/statfs.h"); // statfs()
-    @cInclude("time.h"); // strftime() etc.
+    @cInclude("time.h");       // strftime() etc.
 });
+// zig fmt: on
 
 fn writeAlignment(with_write: anytype, value: u64, digits_max: u8) void {
     const space_left = digits_max -| @as(u8, switch (value) {
@@ -37,7 +40,7 @@ pub const F5608 = struct {
     comptime {
         for (ROUND_EPS) |e| {
             if (e <= 1)
-                @compileError("FRAC_SHIFT too low to satisfy the rounding precision");
+                @compileError("FRAC_SHIFT too low to satisfy rounding precision");
         }
     }
 
@@ -87,7 +90,7 @@ pub const F5608 = struct {
         self: @This(),
         with_write: anytype,
         digits_max: u8,
-        alignment: cfg.Alignment,
+        alignment: typ.Alignment,
         precision: u8,
         unitchar: u8,
     ) void {
@@ -137,7 +140,7 @@ pub const NumUnit = struct {
     pub fn write(
         self: @This(),
         with_write: anytype,
-        alignment: cfg.Alignment,
+        alignment: typ.Alignment,
         precision: u8,
     ) void {
         var p = precision;
@@ -256,7 +259,7 @@ pub fn writeBlockStart(
 
 pub fn writeBlockEnd_GetWritten(fbs: anytype) []const u8 {
     const endstr = "\"},";
-    const nwritten = fbs.write(endstr) catch |err| switch (err) {
+    const nwritten = fbs.write(endstr) catch |e| switch (e) {
         error.NoSpaceLeft => @as(usize, 0),
     };
     if (nwritten < endstr.len) {
@@ -293,12 +296,12 @@ fn openLog() Log {
     const file = fs.cwd().createFileZ("/tmp/ziew.log", .{ .truncate = false });
     if (file) |f| {
         f.seekFromEnd(0) catch {};
-    } else |err| switch (err) {
+    } else |e| switch (e) {
         error.AccessDenied => writeStr(
             io.getStdErr(),
             "open: /tmp/ziew.log: probably sticky, only author can modify\n",
         ),
-        else => @panic(makeMsg("openLog: {s}", .{@errorName(err)})),
+        else => @panic(makeMsg("openLog: {s}", .{@errorName(e)})),
     }
     return .{ .file = file catch null };
 }
@@ -322,17 +325,17 @@ pub inline fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
     linux.exit(1);
 }
 
-pub fn fatalPos(strings: []const []const u8, errpos: usize) noreturn {
+pub fn fatalPos(strings: []const []const u8, err_pos: usize) noreturn {
     @setCold(true);
     const log = openLog();
     defer log.close();
     log.log("fatal: ");
     for (strings) |s| log.log(s);
     log.log("\n");
-    var errend = "fatal: ".len + errpos;
-    if (errend > bss_mem.len) errend = bss_mem.len;
-    @memset(bss_mem[0..errend], ' ');
-    log.log(bss_mem[0..errend]);
+    var end = "fatal: ".len + err_pos;
+    if (end > bss_mem.len) end = bss_mem.len;
+    @memset(bss_mem[0..end], ' ');
+    log.log(bss_mem[0..end]);
     log.log("^\n");
     linux.exit(1);
 }
@@ -404,14 +407,6 @@ pub fn zeroTerminate(dest: []u8, src: []const u8) ?[:0]const u8 {
     return dest[0..src.len :0];
 }
 
-pub fn skipChars(str: []const u8, chars: []const u8) usize {
-    var i: usize = 0;
-    while (i < str.len) : (i += 1) {
-        for (chars) |ch| {
-            if (str[i] == ch) break;
-        } else {
-            return i;
-        }
-    }
-    return i;
+pub fn skipSpacesTabs(str: []const u8, pos: usize) ?usize {
+    return mem.indexOfNonePos(u8, str, pos, " \t");
 }

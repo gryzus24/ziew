@@ -1,6 +1,6 @@
 const std = @import("std");
-const cfg = @import("config.zig");
 const color = @import("color.zig");
+const m = @import("memory.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
 const c = utl.c;
@@ -8,10 +8,21 @@ const fmt = std.fmt;
 const io = std.io;
 const linux = std.os.linux;
 
+// == private =================================================================
+
 const INET_BUF_SIZE = (4 * "255".len) + 3;
 
+const ColorHandler = struct {
+    up: bool,
+
+    pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
+        return color.firstColorEqualThreshold(@intFromBool(self.up), oc.colors);
+    }
+};
+
 // the std.os.linux.E enum adds over 15kB of bloat to the executable,
-// use the libc errno constants instead.
+// we used to utilize libc constants to fight against this, but it is
+// ultimately futile - embrace the bloat.
 inline fn errnoInt(r: usize) isize {
     return @as(isize, @bitCast(r));
 }
@@ -97,31 +108,38 @@ fn getFlags(
     };
 }
 
-const ColorHandler = struct {
-    up: bool,
+// == public ==================================================================
 
-    pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
-        return color.firstColorEqualThreshold(@intFromBool(self.up), mc.colors);
+pub const WidgetData = struct {
+    ifr: linux.ifreq,
+    ifname_len: u8,
+    format: typ.Format = .{},
+    fg: typ.Color = .nocolor,
+    bg: typ.Color = .nocolor,
+
+    pub fn init(reg: *m.Region, arg: []const u8) !*WidgetData {
+        var ifr: linux.ifreq = undefined;
+        if (arg.len >= ifr.ifrn.name.len)
+            utl.fatal(&.{ "NET: interface name too long: ", arg });
+
+        const retptr = try reg.frontAlloc(WidgetData);
+
+        @memcpy(ifr.ifrn.name[0..arg.len], arg);
+        ifr.ifrn.name[arg.len] = 0;
+        retptr.* = .{ .ifr = ifr, .ifname_len = @as(u8, @intCast(arg.len)) };
+
+        return retptr;
     }
 };
 
-pub fn widget(
-    stream: anytype,
-    wf: *const cfg.WidgetFormat,
-    fg: *const color.ColorUnion,
-    bg: *const color.ColorUnion,
-) []const u8 {
+pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     const Static = struct {
         var sock: linux.fd_t = 0;
     };
     if (Static.sock == 0)
         Static.sock = openIoctlSocket();
 
-    var ifr: linux.ifreq = undefined;
-    const ifname = wf.parts[0];
-    _ = utl.zeroTerminate(&ifr.ifrn.name, ifname) orelse utl.fatal(
-        &.{ "NET: interface name too long: ", ifname },
-    );
+    const wd = w.wid.NET;
 
     var _inetbuf: [INET_BUF_SIZE]u8 = .{0} ** INET_BUF_SIZE;
     var _flagsbuf: [6]u8 = .{0} ** 6;
@@ -138,28 +156,31 @@ pub fn widget(
     if (@typeInfo(typ.NetOpt).Enum.fields.len >= @bitSizeOf(@TypeOf(demands)))
         @compileError("bump demands bitfield size");
 
-    for (wf.iterOpts()[1..]) |*opt|
-        demands |= @as(u8, 1) << @intCast(opt.opt);
+    for (wd.format.part_opts) |*part|
+        demands |= @as(u8, 1) << @intCast(part.opt);
 
     if (demands & INET > 0)
-        inet = getInet(Static.sock, &ifr, &_inetbuf);
-    if (demands & (FLAGS | STATE) > 0 or fg.* == .color or bg.* == .color)
-        flags = getFlags(Static.sock, &ifr, &_flagsbuf, &up);
+        inet = getInet(Static.sock, &wd.ifr, &_inetbuf);
+    if (demands & (FLAGS | STATE) > 0 or wd.fg == .color or wd.bg == .color)
+        flags = getFlags(Static.sock, &wd.ifr, &_flagsbuf, &up);
 
     const ch: ColorHandler = .{ .up = up };
 
-    utl.writeBlockStart(stream, fg.getColor(ch), bg.getColor(ch));
-    utl.writeStr(stream, wf.parts[1]);
-    for (wf.iterOpts()[1..], wf.iterParts()[2..]) |*opt, *part| {
-        const str = switch (@as(typ.NetOpt, @enumFromInt(opt.opt))) {
-            .ifname => ifname,
-            .inet => inet,
-            .flags => flags,
-            .state => if (up) "up" else "down",
-            .@"-" => unreachable,
-        };
-        utl.writeStr(stream, str);
-        utl.writeStr(stream, part.*);
+    utl.writeBlockStart(stream, wd.fg.getColor(ch), wd.bg.getColor(ch));
+    for (wd.format.part_opts) |*part| {
+        utl.writeStr(stream, part.part);
+        utl.writeStr(
+            stream,
+            switch (@as(typ.NetOpt, @enumFromInt(part.opt))) {
+                // zig fmt: off
+                .arg   => wd.ifr.ifrn.name[0..wd.ifname_len],
+                .inet  => inet,
+                .flags => flags,
+                .state => if (up) "up" else "down",
+                // zig fmt: on
+            },
+        );
     }
+    utl.writeStr(stream, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);
 }

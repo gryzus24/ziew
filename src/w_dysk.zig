@@ -1,6 +1,6 @@
 const std = @import("std");
-const cfg = @import("config.zig");
 const color = @import("color.zig");
+const m = @import("memory.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
 const c = utl.c;
@@ -11,85 +11,105 @@ const ColorHandler = struct {
     avail_kb: u64,
     total_kb: u64,
 
-    pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
+    pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
         return color.firstColorAboveThreshold(
-            switch (@as(typ.DiskOpt, @enumFromInt(mc.opt))) {
+            switch (@as(typ.DiskOpt.ColorSupported, @enumFromInt(oc.opt))) {
                 .@"%used" => utl.Percent(self.used_kb, self.total_kb),
                 .@"%free" => utl.Percent(self.free_kb, self.total_kb),
                 .@"%available" => utl.Percent(self.avail_kb, self.total_kb),
-                .used, .total, .free, .available, .@"-" => unreachable,
             }.val.roundAndTruncate(),
-            mc.colors,
+            oc.colors,
         );
     }
 };
 
-pub fn widget(
-    stream: anytype,
-    wf: *const cfg.WidgetFormat,
-    fg: *const color.ColorUnion,
-    bg: *const color.ColorUnion,
-) []const u8 {
-    var buf: [typ.WIDGET_BUF_MAX / 2]u8 = undefined;
+// == public ==================================================================
 
-    const mountpoint = utl.zeroTerminate(&buf, wf.parts[0]) orelse utl.fatal(
-        &.{"DISK: mountpoint path too long"},
-    );
+pub const WidgetData = struct {
+    mountpoint: [:0]const u8,
+    format: typ.Format = .{},
+    fg: typ.Color = .nocolor,
+    bg: typ.Color = .nocolor,
+
+    pub fn init(reg: *m.Region, arg: []const u8) !*WidgetData {
+        if (arg.len >= typ.WIDGET_BUF_MAX)
+            utl.fatal(&.{"DISK: mountpoint path too long"});
+
+        const retptr = try reg.frontAlloc(WidgetData);
+
+        retptr.* = .{ .mountpoint = try reg.frontWriteStrZ(arg) };
+        return retptr;
+    }
+};
+
+pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
+    const wd = w.wid.DISK;
 
     // TODO: use statvfs instead of this
-    var res: c.struct_statfs = undefined;
-    if (c.statfs(mountpoint, &res) != 0)
-        utl.fatal(&.{ "DISK: bad mountpoint: ", mountpoint });
+    var sfs: c.struct_statfs = undefined;
+    if (c.statfs(wd.mountpoint, &sfs) != 0) {
+        utl.writeBlockStart(stream, wd.fg.getDefault(), wd.bg.getDefault());
+        utl.writeStr(stream, wd.mountpoint);
+        utl.writeStr(stream, ": <not mounted>");
+        return utl.writeBlockEnd_GetWritten(stream);
+    }
 
     // convert block size to 1K for calculations
-    if (res.f_bsize == 4096) {
-        res.f_bsize = 1024;
-        res.f_blocks *= 4;
-        res.f_bfree *= 4;
-        res.f_bavail *= 4;
+    if (sfs.f_bsize == 4096) {
+        sfs.f_bsize = 1024;
+        sfs.f_blocks *= 4;
+        sfs.f_bfree *= 4;
+        sfs.f_bavail *= 4;
     } else {
-        while (res.f_bsize < 1024) {
-            res.f_bsize *= 2;
-            res.f_blocks /= 2;
-            res.f_bfree /= 2;
-            res.f_bavail /= 2;
+        while (sfs.f_bsize < 1024) {
+            sfs.f_bsize *= 2;
+            sfs.f_blocks /= 2;
+            sfs.f_bfree /= 2;
+            sfs.f_bavail /= 2;
         }
-        while (res.f_bsize > 1024) {
-            res.f_bsize /= 2;
-            res.f_blocks *= 2;
-            res.f_bfree *= 2;
-            res.f_bavail *= 2;
+        while (sfs.f_bsize > 1024) {
+            sfs.f_bsize /= 2;
+            sfs.f_blocks *= 2;
+            sfs.f_bfree *= 2;
+            sfs.f_bavail *= 2;
         }
     }
 
-    const total_kb = res.f_blocks;
-    const free_kb = res.f_bfree;
-    const avail_kb = res.f_bavail;
-    const used_kb = res.f_blocks - res.f_bavail;
+    const total_kb = sfs.f_blocks;
+    const free_kb = sfs.f_bfree;
+    const avail_kb = sfs.f_bavail;
+    const used_kb = sfs.f_blocks - sfs.f_bavail;
 
     const writer = stream.writer();
-    const ch = ColorHandler{
+    const ch: ColorHandler = .{
         .used_kb = used_kb,
         .free_kb = free_kb,
         .avail_kb = avail_kb,
         .total_kb = total_kb,
     };
 
-    utl.writeBlockStart(writer, fg.getColor(ch), bg.getColor(ch));
-    utl.writeStr(writer, wf.parts[1]);
-    for (wf.iterOpts()[1..], wf.iterParts()[2..]) |*opt, *part| {
-        const nu = switch (@as(typ.DiskOpt, @enumFromInt(opt.opt))) {
-            .@"%used" => utl.Percent(used_kb, total_kb),
-            .@"%free" => utl.Percent(free_kb, total_kb),
+    utl.writeBlockStart(writer, wd.fg.getColor(ch), wd.bg.getColor(ch));
+    for (wd.format.part_opts) |*part| {
+        utl.writeStr(writer, part.part);
+
+        const diskopt = @as(typ.DiskOpt, @enumFromInt(part.opt));
+        if (diskopt == .arg) {
+            utl.writeStr(writer, wd.mountpoint);
+            continue;
+        }
+        (switch (diskopt) {
+            // zig fmt: off
+            .arg           => unreachable,
+            .@"%used"      => utl.Percent(used_kb, total_kb),
+            .@"%free"      => utl.Percent(free_kb, total_kb),
             .@"%available" => utl.Percent(avail_kb, total_kb),
-            .used => utl.SizeKb(used_kb),
-            .total => utl.SizeKb(total_kb),
-            .free => utl.SizeKb(free_kb),
-            .available => utl.SizeKb(avail_kb),
-            .@"-" => unreachable,
-        };
-        nu.write(writer, opt.alignment, opt.precision);
-        utl.writeStr(writer, part.*);
+            .total         => utl.SizeKb(total_kb),
+            .used          => utl.SizeKb(used_kb),
+            .free          => utl.SizeKb(free_kb),
+            .available     => utl.SizeKb(avail_kb),
+            // zig fmt: on
+        }).write(writer, part.alignment, part.precision);
     }
+    utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);
 }

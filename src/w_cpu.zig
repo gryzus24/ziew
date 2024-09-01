@@ -1,5 +1,4 @@
 const std = @import("std");
-const cfg = @import("config.zig");
 const color = @import("color.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
@@ -8,12 +7,12 @@ const fs = std.fs;
 const math = std.math;
 const mem = std.mem;
 
-pub const NCPUS_MAX = 64;
+const CPUS_MAX = 64;
 
-pub const Cpu = struct {
-    pub const NFIELDS = 8;
+const Cpu = struct {
+    fields: [NR_FIELDS]u64 = .{0} ** NR_FIELDS,
 
-    fields: [NFIELDS]u64 = .{0} ** NFIELDS,
+    const NR_FIELDS = 8;
 
     pub fn user(self: @This()) u64 {
         // user time includes guest time,
@@ -32,102 +31,49 @@ pub const Cpu = struct {
         return self.fields[3] + self.fields[4];
     }
 
-    pub fn allUserSysDelta(
-        self: *const Cpu,
-        oldself: *const Cpu,
-        ncpus: usize,
-        out: *[3]utl.F5608,
-    ) void {
-        const user_delta = self.user() - oldself.user();
-        const sys_delta = self.sys() - oldself.sys();
-        const idle_delta = self.idle() - oldself.idle();
-        const total_delta = user_delta + sys_delta + idle_delta;
+    const Delta = struct {
+        all: utl.F5608 = utl.F5608.init(0),
+        user: utl.F5608 = utl.F5608.init(0),
+        sys: utl.F5608 = utl.F5608.init(0),
+    };
 
-        const u_pdelta = user_delta * 100 * ncpus;
-        const s_pdelta = sys_delta * 100 * ncpus;
+    pub fn delta(self: *const Cpu, oldself: *const Cpu, mul: u64) Delta {
+        const u_delta = self.user() - oldself.user();
+        const s_delta = self.sys() - oldself.sys();
+        const i_delta = self.idle() - oldself.idle();
+        const total_delta = u_delta + s_delta + i_delta;
 
-        out[0] = utl.F5608.init(u_pdelta + s_pdelta).div(total_delta);
-        out[1] = utl.F5608.init(u_pdelta).div(total_delta);
-        out[2] = utl.F5608.init(s_pdelta).div(total_delta);
+        const u_delta_pct = u_delta * 100 * mul;
+        const s_delta_pct = s_delta * 100 * mul;
+
+        return .{
+            .all = utl.F5608.init(u_delta_pct + s_delta_pct).div(total_delta),
+            .user = utl.F5608.init(u_delta_pct).div(total_delta),
+            .sys = utl.F5608.init(s_delta_pct).div(total_delta),
+        };
     }
 };
 
-pub const Stat = struct {
-    ncpus: u32 = 0,
+const Stat = struct {
     intr: u64 = 0,
     ctxt: u64 = 0,
     forks: u64 = 0,
     running: u32 = 0,
     blocked: u32 = 0,
     softirq: u64 = 0,
-    cpus: [1 + NCPUS_MAX]Cpu = .{.{}} ** (1 + NCPUS_MAX),
+    nr_cpu_entries: u32 = 0,
+    cpu_entries: [1 + CPUS_MAX]Cpu = .{.{}} ** (1 + CPUS_MAX),
 };
 
-pub const CpuState = struct {
-    slots: [12]utl.F5608 = .{utl.F5608.init(0)} ** 12,
-    left_newest: bool = true,
-    left: Stat = .{},
-    right: Stat = .{},
-
-    fn getNewOldPtrs(
-        self: *const @This(),
-        new: **const Stat,
-        old: **const Stat,
-    ) void {
-        if (self.left_newest) {
-            new.* = &self.left;
-            old.* = &self.right;
-        } else {
-            new.* = &self.right;
-            old.* = &self.left;
-        }
-    }
-
-    fn newStateFlip(self: *@This(), new: **const Stat, old: **const Stat) void {
-        self.left_newest = !self.left_newest;
-        self.getNewOldPtrs(new, old);
-    }
-
-    comptime {
-        var w: u8 = 0;
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.@"%all") != 0);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.@"%user") != 1);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.@"%sys") != 2);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.all) != 3);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.user) != 4);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.sys) != 5);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.intr) != 6);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.ctxt) != 7);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.forks) != 8);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.running) != 9);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.blocked) != 10);
-        w |= @intFromBool(@intFromEnum(typ.CpuOpt.softirq) != 11);
-        if (w > 0) @compileError("fix CpuOpt enum field order");
-    }
-
-    pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
-        return color.firstColorAboveThreshold(
-            switch (@as(typ.CpuOpt, @enumFromInt(mc.opt))) {
-                .@"%all" => self.slots[@intFromEnum(typ.CpuOpt.@"%all")],
-                .@"%user" => self.slots[@intFromEnum(typ.CpuOpt.@"%user")],
-                .@"%sys" => self.slots[@intFromEnum(typ.CpuOpt.@"%sys")],
-                .forks => self.slots[@intFromEnum(typ.CpuOpt.forks)],
-                .running => self.slots[@intFromEnum(typ.CpuOpt.running)],
-                .blocked => self.slots[@intFromEnum(typ.CpuOpt.blocked)],
-                .all, .user, .sys, .intr, .ctxt, .softirq, .visubars => unreachable,
-            }.roundAndTruncate(),
-            mc.colors,
-        );
-    }
-};
+// == private =================================================================
 
 fn parseProcStat(buf: []const u8, new: *Stat) void {
     var cpui: u32 = 0;
     var i: usize = "cpu".len;
     while (buf[i] == ' ') : (i += 1) {}
     while (true) {
-        for (0..Cpu.NFIELDS) |fieldi| {
-            new.cpus[cpui].fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
+        for (0..Cpu.NR_FIELDS) |fieldi| {
+            new.cpu_entries[cpui].fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
             i += 1;
         }
         // cpuXX  41208 ... 1061 0 [0] 0\n
@@ -140,6 +86,8 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         while (buf[i] != ' ') : (i += 1) {}
         i += 1;
         cpui += 1;
+        if (cpui == new.cpu_entries.len)
+            utl.fatal(&.{"CPU: too many CPUs, recompile with higher CPUS_MAX"});
     }
     i += "intr ".len;
     new.intr = utl.atou64ForwardUntil(buf, &i, ' ');
@@ -152,10 +100,10 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
     new.softirq = utl.atou64ForwardUntil(buf, &j, ' ');
     i -= "\nsoftirq".len;
 
-    new.blocked = @as(u32, @intCast(utl.atou64BackwardUntil(buf, &i, ' ')));
+    new.blocked = @intCast(utl.atou64BackwardUntil(buf, &i, ' '));
     i -= "\nprocs_blocked ".len;
 
-    new.running = @as(u32, @intCast(utl.atou64BackwardUntil(buf, &i, ' ')));
+    new.running = @intCast(utl.atou64BackwardUntil(buf, &i, ' '));
     i -= "\nprocs_running ".len;
 
     new.forks = utl.atou64BackwardUntil(buf, &i, ' ');
@@ -166,34 +114,8 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
 
     new.ctxt = utl.atou64BackwardUntil(buf, &i, ' ');
 
-    // value of ncpus can change - CPUs might go offline/online
-    new.ncpus = cpui;
-    if (new.ncpus > NCPUS_MAX)
-        utl.fatal(&.{"CPU: too many CPUs, recompile"});
-}
-
-pub fn update(stat: *const fs.File, state: *CpuState) void {
-    var buf: [4096 << 1]u8 = undefined;
-
-    const nread = stat.pread(&buf, 0) catch |err| {
-        utl.fatal(&.{ "CPU: pread: ", @errorName(err) });
-    };
-    if (nread == buf.len)
-        utl.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
-
-    var new: *Stat = undefined;
-    var old: *Stat = undefined;
-    state.newStateFlip(&new, &old);
-
-    parseProcStat(buf[0..nread], new);
-    new.cpus[0].allUserSysDelta(&old.cpus[0], 1, state.slots[0..3]);
-    new.cpus[0].allUserSysDelta(&old.cpus[0], new.ncpus, state.slots[3..6]);
-    state.slots[6] = utl.F5608.init(new.intr - old.intr);
-    state.slots[7] = utl.F5608.init(new.ctxt - old.ctxt);
-    state.slots[8] = utl.F5608.init(new.forks - old.forks);
-    state.slots[9] = utl.F5608.init(new.running);
-    state.slots[10] = utl.F5608.init(new.blocked);
-    state.slots[11] = utl.F5608.init(new.softirq - old.softirq);
+    // Value of `nr_cpu_entries` may change - CPUs might go online/offline.
+    new.nr_cpu_entries = cpui;
 }
 
 test "/proc/stat parser" {
@@ -223,16 +145,16 @@ test "/proc/stat parser" {
     ;
     var s: Stat = .{};
     parseProcStat(buf, &s);
-    try t.expect(s.cpus[0].fields[0] == 46232);
-    try t.expect(s.cpus[0].fields[1] == 14);
-    try t.expect(s.cpus[0].fields[6] == 1212);
-    try t.expect(s.cpus[0].fields[7] == 0);
-    try t.expect(s.cpus[1].fields[0] == 9483);
-    try t.expect(s.cpus[1].fields[2] == 1638);
-    try t.expect(s.cpus[12].fields[0] == 858);
-    try t.expect(s.cpus[12].fields[1] == 0);
-    try t.expect(s.cpus[12].fields[6] == 123);
-    try t.expect(s.cpus[12].fields[7] == 0);
+    try t.expect(s.cpu_entries[0].fields[0] == 46232);
+    try t.expect(s.cpu_entries[0].fields[1] == 14);
+    try t.expect(s.cpu_entries[0].fields[6] == 1212);
+    try t.expect(s.cpu_entries[0].fields[7] == 0);
+    try t.expect(s.cpu_entries[1].fields[0] == 9483);
+    try t.expect(s.cpu_entries[1].fields[2] == 1638);
+    try t.expect(s.cpu_entries[12].fields[0] == 858);
+    try t.expect(s.cpu_entries[12].fields[1] == 0);
+    try t.expect(s.cpu_entries[12].fields[6] == 123);
+    try t.expect(s.cpu_entries[12].fields[7] == 0);
     try t.expect(s.intr == 1894596);
     try t.expect(s.ctxt == 3055158);
     try t.expect(s.forks == 8594);
@@ -249,70 +171,138 @@ const BARS: [5][5][]const u8 = .{
     .{ "⡇", "⣇", "⣧", "⣷", "⣿" },
 };
 
-fn barIndexOfDelta(new: *const Cpu, old: *const Cpu) u32 {
-    var slots: [3]utl.F5608 = undefined;
-    new.allUserSysDelta(old, 1, &slots);
-    return switch (slots[0].whole()) {
-        0 => 0,
-        1...25 => 1,
+fn barIntensity(new: *const Cpu, old: *const Cpu) u32 {
+    const pct = new.delta(old, 1).all;
+
+    if (pct.u == 0) return 0;
+    return switch (pct.whole()) {
+        0...25 => 1,
         26...50 => 2,
         51...75 => 3,
         else => 4,
     };
 }
 
+// == public ==================================================================
+
+pub const WidgetData = struct {
+    format: typ.Format = .{},
+    fg: typ.Color = .nocolor,
+    bg: typ.Color = .nocolor,
+};
+
+pub const CpuState = struct {
+    left: Stat = .{},
+    right: Stat = .{},
+    left_newest: bool = true,
+
+    usage_pct: Cpu.Delta = .{},
+    usage_abs: Cpu.Delta = .{},
+
+    proc_stat: fs.File,
+
+    pub fn init() CpuState {
+        return .{
+            .proc_stat = fs.cwd().openFileZ("/proc/stat", .{}) catch |e| {
+                utl.fatal(&.{ "open: /proc/stat: ", @errorName(e) });
+            },
+        };
+    }
+
+    pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
+        const new, const old = self.getNewOldPtrs();
+
+        return color.firstColorAboveThreshold(
+            switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(oc.opt))) {
+                .@"%all" => self.usage_pct.all.roundAndTruncate(),
+                .@"%user" => self.usage_pct.user.roundAndTruncate(),
+                .@"%sys" => self.usage_pct.sys.roundAndTruncate(),
+                .forks => new.forks - old.forks,
+                .running => new.running,
+                .blocked => new.blocked,
+            },
+            oc.colors,
+        );
+    }
+
+    fn getNewOldPtrs(self: *const @This()) struct { *Stat, *Stat } {
+        return if (self.left_newest)
+            .{ @constCast(&self.left), @constCast(&self.right) }
+        else
+            .{ @constCast(&self.right), @constCast(&self.left) };
+    }
+
+    fn newStateFlip(self: *@This()) struct { *Stat, *Stat } {
+        self.left_newest = !self.left_newest;
+        return self.getNewOldPtrs();
+    }
+};
+
+pub fn update(state: *CpuState) void {
+    var buf: [4096 << 1]u8 = undefined;
+
+    const nread = state.proc_stat.pread(&buf, 0) catch |e| {
+        utl.fatal(&.{ "CPU: pread: ", @errorName(e) });
+    };
+    if (nread == buf.len)
+        utl.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
+
+    var new, const old = state.newStateFlip();
+
+    parseProcStat(buf[0..nread], new);
+    state.usage_pct = new.cpu_entries[0].delta(&old.cpu_entries[0], 1);
+    state.usage_abs = new.cpu_entries[0].delta(&old.cpu_entries[0], new.nr_cpu_entries);
+}
+
 pub fn widget(
     stream: anytype,
     state: *const CpuState,
-    wf: *const cfg.WidgetFormat,
-    fg: *const color.ColorUnion,
-    bg: *const color.ColorUnion,
+    w: *const typ.Widget,
 ) []const u8 {
+    const wd = w.wid.CPU;
     const writer = stream.writer();
+    const new, const old = state.getNewOldPtrs();
 
-    utl.writeBlockStart(writer, fg.getColor(state), bg.getColor(state));
-    utl.writeStr(writer, wf.parts[0]);
-    for (wf.iterOpts(), wf.iterParts()[1..]) |*opt, *part| {
-        if (@as(typ.CpuOpt, @enumFromInt(opt.opt)) == .visubars) {
-            var new: *const Stat = undefined;
-            var old: *const Stat = undefined;
-            state.getNewOldPtrs(&new, &old);
+    utl.writeBlockStart(writer, wd.fg.getColor(state), wd.bg.getColor(state));
+    for (wd.format.part_opts) |*part| {
+        utl.writeStr(writer, part.part);
 
-            var lbari: usize = 0;
-            var rbari: usize = 0;
-            for (1..1 + new.ncpus) |i| {
+        const cpuopt = @as(typ.CpuOpt, @enumFromInt(part.opt));
+        if (cpuopt == .visubars) {
+            var left: u32 = 0;
+            var right: u32 = 0;
+            for (1..1 + new.nr_cpu_entries) |i| {
                 if (i & 1 == 1) {
-                    lbari = barIndexOfDelta(&new.cpus[i], &old.cpus[i]);
+                    left = barIntensity(&new.cpu_entries[i], &old.cpu_entries[i]);
                 } else {
-                    rbari = barIndexOfDelta(&new.cpus[i], &old.cpus[i]);
-                    utl.writeStr(writer, BARS[lbari][rbari]);
+                    right = barIntensity(&new.cpu_entries[i], &old.cpu_entries[i]);
+                    utl.writeStr(writer, BARS[left][right]);
                 }
             }
-            if (new.ncpus & 1 == 1)
-                utl.writeStr(writer, BARS[lbari][0]);
-        } else {
-            const value = state.slots[opt.opt];
-            const nu: utl.NumUnit = switch (@as(typ.CpuOpt, @enumFromInt(opt.opt))) {
-                .@"%all",
-                .@"%user",
-                .@"%sys",
-                => .{ .val = value, .unit = utl.Unit.percent },
-                .all,
-                .user,
-                .sys,
-                => .{ .val = value, .unit = utl.Unit.cpu_percent },
-                .intr,
-                .ctxt,
-                .forks,
-                .running,
-                .blocked,
-                .softirq,
-                => utl.UnitSI(value.whole()),
-                .visubars => unreachable,
-            };
-            nu.write(writer, opt.alignment, opt.precision);
+            if (new.nr_cpu_entries & 1 == 1)
+                utl.writeStr(writer, BARS[left][0]);
+
+            continue;
         }
-        utl.writeStr(writer, part.*);
+        const nu: utl.NumUnit = switch (cpuopt) {
+            // zig fmt: off
+            .@"%all"  => .{ .val = state.usage_pct.all,  .unit = utl.Unit.percent },
+            .@"%user" => .{ .val = state.usage_pct.user, .unit = utl.Unit.percent },
+            .@"%sys"  => .{ .val = state.usage_pct.sys,  .unit = utl.Unit.percent },
+            .all      => .{ .val = state.usage_abs.all,  .unit = utl.Unit.cpu_percent },
+            .user     => .{ .val = state.usage_abs.user, .unit = utl.Unit.cpu_percent },
+            .sys      => .{ .val = state.usage_abs.sys,  .unit = utl.Unit.cpu_percent },
+            .intr     => utl.UnitSI(new.intr - old.intr),
+            .ctxt     => utl.UnitSI(new.ctxt - old.ctxt),
+            .forks    => utl.UnitSI(new.forks - old.forks),
+            .running  => utl.UnitSI(new.running),
+            .blocked  => utl.UnitSI(new.blocked),
+            .softirq  => utl.UnitSI(new.softirq - old.softirq),
+            .visubars => unreachable,
+            // zig fmt: on
+        };
+        nu.write(writer, part.alignment, part.precision);
     }
+    utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);
 }

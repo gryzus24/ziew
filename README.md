@@ -32,27 +32,30 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
 
 ### Widget line
 
-    WIDGET INTERVAL "FORMAT"
+    WIDGET INTERVAL [arg="ARGUMENT"] [format="FORMAT"]
 
     WIDGET   - uppercase name of the widget,
     INTERVAL - refresh interval in deciseconds (1/10 of a second),
-    FORMAT   - widget specific format enclosed in double quotes. Format,
-               apart from plain text may contain options which tell the widget
-               what information to display. Options are enclosed in squirrelly
-               brackets and may contain specifiers after a period:
+    ARGUMENT - optional widget specific argument enclosed in double quotes,
+    FORMAT   - optional widget specific format enclosed in double quotes.
 
-                 {OPTION.[PRECISION][ALIGNMENT]}
+               Format, apart from plain text may contain options which tell the
+               widget what information to display. Options are enclosed in
+               squirrelly brackets and may contain specifiers that influence
+               the formatting of numeric data.
 
-               * OPTION    - widget specific option name,
-               * PRECISION - number from 0 to 3 inclusive - specifies digits
-                             of precision (0 if left unspecified),
-               * ALIGNMENT - either < for left alignment or > for right
-                             alignment - reserves space for the longest
-                             representation of a number (no alignment if left
-                             unspecified).
+                OPTION.[PRECISION][ALIGNMENT]
+
+              * OPTION    - widget specific option name,
+              * PRECISION - number from 0 to 3 inclusive - specifies digits
+                            of precision (0 if unspecified),
+              * ALIGNMENT - either < for left alignment or > for right
+                            alignment - reserves space for the longest
+                            representation of a number (no alignment if
+                            unspecified).
 
     Example
-      CPU 25 "CPU {%all.1>} {visubars}"
+      CPU 25 format="CPU {%all.1>} {visubars}"
 
 ### Default color line
 
@@ -79,9 +82,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
       BG CPU %all 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
       FG CPU %user 0:22a 10:default 60:aa2
 
-*Color* lines must come after the *Widget* lines they apply to. You can define multiple widgets and place them in any order you want, but with the following limitations:
-* maximum number of widgets is 16,
-* maximum number of colors is 100.
+*Color* lines must come after the *Widget* lines they apply to. You can define multiple widgets and place them in any order you want.
 
 ### Widgets
 Widget | Data source
@@ -94,163 +95,158 @@ Widget | Data source
 | BAT  | /sys/class/power_supply/*
 | READ | filesystem
 
-Every option and supported color configuration for each *Widget* is documented below.
+Every option and color configuration for each *Widget* is documented below.
 
 **TIME**
 
-    Format
-      This widget is special in that its entire format is documented in
-      strftime(3) and not here.
+    Displays current date and time.
 
-      Specifiers
-        unsupported
+    Required
+      arg="ARGUMENT"
+
+    ARGUMENT
+      This widget is special in that its entire argument format is documented
+      in the strftime(3) man page and not here.
 
     Colors
       [+] default
-      [ ] conditional (unsupported - no options to compare)
+      [ ] conditional (unsupported)
 
     Example config entry
-      TIME 20 "%A %d.%m ~ %H:%M:%S"
+      TIME 20 arg="%A %d.%m ~ %H:%M:%S"
       FG #28ab28
 
 **MEM**
 
+    Displays memory usage information from /proc/meminfo.
+
     Values are displayed in a human readable form in the power of two units:
-    K M G T, or (if available) as a percentage of total memory if prefixed
-    with a % sign.
+    K M G T, or as a percentage of total memory if prefixed with a % sign.
 
-    Format
-      Options
-        * [%]used      - used memory (total - available),
-        * total        - total system memory,
-        * [%]free      - memory which is not utilized at all,
-        * [%]available - memory available for starting new programs,
-        * buffers      - memory used for filesystem metadata cache,
-        * [%]cached    - memory used for the page cache (excludes buffers),
-        * dirty        - memory waiting to get written back to the disk,
-        * writeback    - memory actively being written back to the disk.
+    Required
+      format="FORMAT"
 
-      Specifiers
-        [+] precision
-        [+] alignment
+    FORMAT options
+      * [%]free      - memory which is not utilized at all,
+      * [%]available - memory available for starting new programs,
+      * [%]buffers   - memory used for filesystem metadata cache,
+      * [%]cached    - memory used for the page cache (excludes buffers),
+      * [%]used      - used memory (total - available),
+      * total        - total system memory,
+      * dirty        - memory waiting to get written back to disk,
+      * writeback    - memory actively being written back to disk.
 
     Colors
       [+] default
-      [-] conditional (partial - only % options supported)
+      [-] conditional (only %-prefixed options supported)
 
     Example config entry
-      MEM 20 "mem: {used.2<}:{free.2>} [{cached.0}]"
+      MEM 20 format="mem: {used.2<}:{free.2>} [{cached.0}]"
       FG %used 0:aaa 50:bbb 60:ccc 70:ddd 80:eee 90:fff
 
 **CPU**
 
-    Values are relative to the last interval refresh.
+    Displays cpu usage information from /proc/stat.
 
-    Format
-      Options
-        * %user    - time spent executing user code,
-        * %sys     - time spent executing kernel code,
-        * %all     - time spent executing both user and kernel code,
-        * user     - %user * number of online CPUs,
-        * sys      - %sys * number of online CPUs,
-        * all      - %all * number of online CPUs,
-        * intr     - number of serviced interrupts,
-        * ctxt     - number of context switches,
-        * forks    - number of forks,
-        * running  - number of processes running right now,
-        * blocked  - number of processes blocked on I/O right now,
-        * softirq  - number of serviced software interrupts,
-        * visubars - visualization of %all CPU usage as bars, one bar per CPU.
+    Required
+      format="FORMAT"
 
-      Specifiers
-        [+] precision (except visubars)
-        [+] alignment (except visubars)
+    FORMAT options
+      * [%]all   - time spent executing both user and kernel code,
+      * [%]user  - time spent executing user code,
+      * [%]sys   - time spent executing kernel code,
+      * intr     - number of serviced interrupts,
+      * ctxt     - number of context switches,
+      * forks    - number of forks,
+      * running  - number of processes running right now,
+      * blocked  - number of processes blocked on I/O right now,
+      * softirq  - number of serviced software interrupts,
+      * visubars - visualization of %all CPU usage as bars, one bar per CPU.
 
     Colors
       [+] default
-      [-] conditional (partial - only forks, running, blocked and % options
-                       supported)
+      [-] conditional (only forks, running, blocked and %-prefixed options
+                      supported)
 
     Example config entry
-      CPU 15 "cpu: {running} {blocked} {visubars} {all.<}"
+      CPU 15 format="cpu: {running} {blocked} {visubars} {all.<}"
       FG %all 0:aaa 60:a66 80:f66
 
 **DISK**
 
+    Displays filesystem statistics obtained via the statfs(2) syscall.
+
     Values are displayed in a human readable form in the power of two units:
-    K M G T, or (if available) as a percentage of total disk space if prefixed
+    K M G T, or as a percentage of total filesystem space if prefixed
     with a % sign.
 
-    Required argument at the beginning of the format text
-      <mountpoint>{-}
+    Required
+      arg="<MOUNTPOINT>"
+      format="FORMAT"
 
-    Format
-      Options
-        * [%]used      - used disk space,
-        * total        - total disk space,
-        * [%]free      - free disk space (with reserved blocks included, e.g.
-                         ext4 reserves 5% of total disk space for the super-user),
-        * [%]available - available disk space for the normal user.
-
-      Specifiers
-        [+] precision
-        [+] alignment
+    FORMAT options
+      * arg          - the provided <MOUNTPOINT> name as specified in the
+                       argument,
+      * [%]used      - used filesystem space,
+      * [%]free      - free filesystem space (with reserved blocks included,
+                       e.g. ext4 reserves 5% of total filesystem space for
+                       the super-user),
+      * [%]available - available disk space for the normal user,
+      * total        - total filesystem space.
 
     Colors
       [+] default
-      [-] conditional (partial - only % options supported)
+      [-] conditional (only %-prefixed options supported)
 
     Example config entry
-      DISK 600 "/home{-}/home {available}/{total}"
+      DISK 600 arg="/home" format="{arg} {available}/{total}"
       FG %used 60:a66 80:f66
 
 **NET**
 
-    Required argument at the beginning of the format text
-      <interface>{-}
+    Displays current network interface configuration.
 
-    Format
-      Options
-        * ifname - <interface> name as specified in the argument,
-        * inet   - local IPv4 address,
-        * flags  - a choice of device flags:
-                     * receive (A)ll multicast packets,
-                     * valid (B)roadcast address set,
-                     * supports (M)ulticast,
-                     * interface is in (P)romiscuous mode,
-                     * (R)resources allocated,
-                     * interface is (U)p/running.
-        * state  - interface state, either "up" or "down".
+    Required
+      arg="<INTERFACE>"
+      format="FORMAT"
 
-      Specifiers
-        unsupported
+    FORMAT options
+      * arg   - the provided <INTERFACE> name as specified in the argument,
+      * inet  - local IPv4 address,
+      * flags - a choice of device flags:
+                  * receive (A)ll multicast packets,
+                  * valid (B)roadcast address set,
+                  * supports (M)ulticast,
+                  * interface is in (P)romiscuous mode,
+                  * (R)resources allocated,
+                  * interface is (U)p/running.
+      * state - interface state, either "up" or "down".
 
     Colors
       [+] default
-      [-] conditional (partial - only state option supported)
+      [-] conditional (only state option supported)
 
       state: 0 - interface is down,
              1 - interface is up.
 
     Example config entry
-      NET "enp5s0{-}{ifname}: {inet} {flags}"
+      NET arg="enp5s0" format="{arg}: {inet} {flags}"
       FG state 0:888 1:eee
 
 **BAT**
 
-    Required argument at the beginning of the format text
-      <battery name>{-}
+    Displays power supply statistics from /sys/class/power_supply/<BATTERY>/*.
 
-    Format
-      Options
-        * %fullnow    - charge relative to the current battery capacity,
-        * %fulldesign - charge relative to the designed battery capacity,
-        * state       - battery state, either "Discharging", "Charging",
-                        "Full" or "Not charging".
+    Required
+      arg="<BATTERY>"
+      format="FORMAT"
 
-      Specifiers
-        [-] precision (partial - state option unsupported)
-        [-] alignment (partial - state option unsupported)
+    FORMAT options
+      * arg         - the <BATTERY> name as specified in the argument,
+      * %fullnow    - charge relative to the current battery capacity,
+      * %fulldesign - charge relative to the designed battery capacity,
+      * state       - battery state, either "Discharging", "Charging",
+                      "Full" or "Not charging".
 
     Colors
       [+] default
@@ -263,31 +259,29 @@ Every option and supported color configuration for each *Widget* is documented b
              4 - unknown state.
 
     Example config entry
-      BAT 300 "BAT0{-}BAT: {%fulldesign.2} {state}"
+      BAT 300 arg="BAT0" format="{arg}: {%fulldesign.2} {state}"
       FG state 1:4a4 2:4a4
-      BG %charge 0:a00 15:220 25:
+      BG %fulldesign 0:a00 15:220 25:
 
 **READ**
 
-    This widget reads one line of text from a file given a <filepath>. The line
+    Reads one line of text from a file given a <FILEPATH>. The line in the file
     may start with optional fields specifying the foreground and/or background
     colors.
 
-    Required argument at the beginning of the format text
-      <filepath>{-}
+    Required
+      arg="<FILEPATH>"
+      format="FORMAT"
 
-    Format
-      Options
-        * basename - filename from <filepath>,
-        * content  - line of text from the file with the color fields applied,
-        * raw      - line of text from the file.
-
-      Specifiers
-        unsupported
+    FORMAT options
+      * arg        the <FILEPATH> name as specified in the argument,
+      * basename - filename from the <FILEPATH>,
+      * content  - line of text from the file with the color fields applied,
+      * raw      - line of text from the file.
 
     Colors
       [+] default
-      [ ] conditional (unsupported - read directly from the file)
+      [-] conditional (read directly from the file)
 
       color format of the "content" option, specified directly in the file:
         #[FG RGB] #[BG RGB] [TEXT] - apply FG and BG colors
@@ -296,7 +290,7 @@ Every option and supported color configuration for each *Widget* is documented b
         [TEXT]                     - default colors
 
     Example config entry
-      READ 0 "/home/user/.config/ziew/myfile{-}{basename}: {content}"
+      READ 10 arg="/home/user/.config/ziew/myfile" format="{arg}: {content}"
 
     Example "myfile" content
       #8a8 greenish text

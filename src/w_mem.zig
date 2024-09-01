@@ -1,5 +1,4 @@
 const std = @import("std");
-const cfg = @import("config.zig");
 const color = @import("color.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
@@ -7,54 +6,7 @@ const fmt = std.fmt;
 const fs = std.fs;
 const mem = std.mem;
 
-pub const MemState = struct {
-    fields: [7]u64 = .{0} ** 7,
-
-    pub fn total(self: @This()) u64 {
-        return self.fields[0];
-    }
-    pub fn free(self: @This()) u64 {
-        return self.fields[1];
-    }
-    pub fn avail(self: @This()) u64 {
-        return self.fields[2];
-    }
-    pub fn buffers(self: @This()) u64 {
-        return self.fields[3];
-    }
-    pub fn cached(self: @This()) u64 {
-        return self.fields[4];
-    }
-    pub fn dirty(self: @This()) u64 {
-        return self.fields[5];
-    }
-    pub fn writeback(self: @This()) u64 {
-        return self.fields[6];
-    }
-    pub fn used(self: @This()) u64 {
-        return self.total() - self.avail();
-    }
-
-    pub fn checkManyColors(self: @This(), mc: color.ManyColors) ?*const [7]u8 {
-        return color.firstColorAboveThreshold(
-            switch (@as(typ.MemOpt, @enumFromInt(mc.opt))) {
-                .@"%used" => utl.Percent(self.used(), self.total()),
-                .@"%free" => utl.Percent(self.free(), self.total()),
-                .@"%available" => utl.Percent(self.avail(), self.total()),
-                .@"%cached" => utl.Percent(self.cached(), self.total()),
-                .used => unreachable,
-                .total => unreachable,
-                .free => unreachable,
-                .available => unreachable,
-                .buffers => unreachable,
-                .cached => unreachable,
-                .dirty => unreachable,
-                .writeback => unreachable,
-            }.val.roundAndTruncate(),
-            mc.colors,
-        );
-    }
-};
+// == private =================================================================
 
 fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
     const MEMINFO_KEY_LEN = "xxxxxxxx:       ".len;
@@ -77,17 +29,6 @@ fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
         new.fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
         i += " kb\n".len + MEMINFO_KEY_LEN;
     }
-}
-
-pub fn update(meminfo: *const fs.File, state: *MemState) void {
-    var buf: [4096]u8 = undefined;
-    const nread = meminfo.pread(&buf, 0) catch |err| {
-        utl.fatal(&.{ "MEM: pread: ", @errorName(err) });
-    };
-    if (nread == buf.len)
-        utl.fatal(&.{"MEM: /proc/meminfo doesn't fit in 1 page"});
-
-    parseProcMeminfo(&buf, state);
 }
 
 test "/proc/meminfo parser" {
@@ -120,7 +61,7 @@ test "/proc/meminfo parser" {
         \\KReclaimable:     352524 kB
         \\Slab:             453728 kB
     ;
-    var s: MemState = .{};
+    var s: MemState = MemState.init();
     parseProcMeminfo(buf, &s);
     try t.expect(s.total() == 16324532);
     try t.expect(s.free() == 6628464);
@@ -131,34 +72,109 @@ test "/proc/meminfo parser" {
     try t.expect(s.writeback() == 0);
 }
 
+// == public ==================================================================
+
+pub const WidgetData = struct {
+    format: typ.Format = .{},
+    fg: typ.Color = .nocolor,
+    bg: typ.Color = .nocolor,
+};
+
+pub const MemState = struct {
+    fields: [7]u64 = .{0} ** 7,
+    proc_meminfo: fs.File,
+
+    pub fn init() MemState {
+        return .{
+            .proc_meminfo = fs.cwd().openFileZ("/proc/meminfo", .{}) catch |e| {
+                utl.fatal(&.{ "open: /proc/meminfo: ", @errorName(e) });
+            },
+        };
+    }
+
+    pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
+        return color.firstColorAboveThreshold(
+            utl.Percent(
+                switch (@as(typ.MemOpt.ColorSupported, @enumFromInt(oc.opt))) {
+                    .@"%free" => self.free(),
+                    .@"%available" => self.avail(),
+                    .@"%buffers" => self.buffers(),
+                    .@"%cached" => self.cached(),
+                    .@"%used" => self.used(),
+                },
+                self.total(),
+            ).val.roundAndTruncate(),
+            oc.colors,
+        );
+    }
+
+    fn total(self: @This()) u64 {
+        return self.fields[0];
+    }
+    fn free(self: @This()) u64 {
+        return self.fields[1];
+    }
+    fn avail(self: @This()) u64 {
+        return self.fields[2];
+    }
+    fn buffers(self: @This()) u64 {
+        return self.fields[3];
+    }
+    fn cached(self: @This()) u64 {
+        return self.fields[4];
+    }
+    fn dirty(self: @This()) u64 {
+        return self.fields[5];
+    }
+    fn writeback(self: @This()) u64 {
+        return self.fields[6];
+    }
+    fn used(self: @This()) u64 {
+        return self.total() - self.avail();
+    }
+};
+
+pub fn update(state: *MemState) void {
+    var buf: [4096]u8 = undefined;
+    const nread = state.proc_meminfo.pread(&buf, 0) catch |e| {
+        utl.fatal(&.{ "MEM: pread: ", @errorName(e) });
+    };
+    if (nread == buf.len)
+        utl.fatal(&.{"MEM: /proc/meminfo doesn't fit in 1 page"});
+
+    parseProcMeminfo(&buf, state);
+}
+
 pub fn widget(
     stream: anytype,
     state: *const MemState,
-    wf: *const cfg.WidgetFormat,
-    fg: *const color.ColorUnion,
-    bg: *const color.ColorUnion,
+    w: *const typ.Widget,
 ) []const u8 {
+    const wd = w.wid.MEM;
     const writer = stream.writer();
 
-    utl.writeBlockStart(writer, fg.getColor(state), bg.getColor(state));
-    utl.writeStr(writer, wf.parts[0]);
-    for (wf.iterOpts(), wf.iterParts()[1..]) |*opt, *part| {
-        const nu = switch (@as(typ.MemOpt, @enumFromInt(opt.opt))) {
-            .@"%used" => utl.Percent(state.used(), state.total()),
-            .@"%free" => utl.Percent(state.free(), state.total()),
+    utl.writeBlockStart(writer, wd.fg.getColor(state), wd.bg.getColor(state));
+    for (wd.format.part_opts) |*part| {
+        utl.writeStr(writer, part.part);
+        const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {
+            // zig fmt: off
+            .@"%free"      => utl.Percent(state.free(), state.total()),
             .@"%available" => utl.Percent(state.avail(), state.total()),
-            .@"%cached" => utl.Percent(state.cached(), state.total()),
-            .used => utl.SizeKb(state.used()),
-            .total => utl.SizeKb(state.total()),
-            .free => utl.SizeKb(state.free()),
-            .available => utl.SizeKb(state.avail()),
-            .buffers => utl.SizeKb(state.buffers()),
-            .cached => utl.SizeKb(state.cached()),
-            .dirty => utl.SizeKb(state.dirty()),
-            .writeback => utl.SizeKb(state.writeback()),
+            .@"%cached"    => utl.Percent(state.cached(), state.total()),
+            .@"%buffers"   => utl.Percent(state.buffers(), state.total()),
+            .@"%used"      => utl.Percent(state.used(), state.total()),
+            .total         => utl.SizeKb(state.total()),
+            .free          => utl.SizeKb(state.free()),
+            .available     => utl.SizeKb(state.avail()),
+            .buffers       => utl.SizeKb(state.buffers()),
+            .cached        => utl.SizeKb(state.cached()),
+            .used          => utl.SizeKb(state.used()),
+            .dirty         => utl.SizeKb(state.dirty()),
+            .writeback     => utl.SizeKb(state.writeback()),
+            // zig fmt: on
         };
-        nu.write(writer, opt.alignment, opt.precision);
-        utl.writeStr(writer, part.*);
+        nu.write(writer, part.alignment, part.precision);
     }
+    utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);
 }
