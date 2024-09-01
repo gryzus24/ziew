@@ -1,6 +1,7 @@
 const std = @import("std");
 const color = @import("color.zig");
 const typ = @import("type.zig");
+const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
 const fs = std.fs;
@@ -32,9 +33,9 @@ const Cpu = struct {
     }
 
     const Delta = struct {
-        all: utl.F5608 = utl.F5608.init(0),
-        user: utl.F5608 = utl.F5608.init(0),
-        sys: utl.F5608 = utl.F5608.init(0),
+        all: unt.F5608 = unt.F5608.init(0),
+        user: unt.F5608 = unt.F5608.init(0),
+        sys: unt.F5608 = unt.F5608.init(0),
     };
 
     pub fn delta(self: *const Cpu, oldself: *const Cpu, mul: u64) Delta {
@@ -47,9 +48,9 @@ const Cpu = struct {
         const s_delta_pct = s_delta * 100 * mul;
 
         return .{
-            .all = utl.F5608.init(u_delta_pct + s_delta_pct).div(total_delta),
-            .user = utl.F5608.init(u_delta_pct).div(total_delta),
-            .sys = utl.F5608.init(s_delta_pct).div(total_delta),
+            .all = unt.F5608.init(u_delta_pct + s_delta_pct).div(total_delta),
+            .user = unt.F5608.init(u_delta_pct).div(total_delta),
+            .sys = unt.F5608.init(s_delta_pct).div(total_delta),
         };
     }
 };
@@ -284,20 +285,20 @@ pub fn widget(
 
             continue;
         }
-        const nu: utl.NumUnit = switch (cpuopt) {
+        const nu: unt.NumUnit = switch (cpuopt) {
             // zig fmt: off
-            .@"%all"  => .{ .val = state.usage_pct.all,  .unit = utl.Unit.percent },
-            .@"%user" => .{ .val = state.usage_pct.user, .unit = utl.Unit.percent },
-            .@"%sys"  => .{ .val = state.usage_pct.sys,  .unit = utl.Unit.percent },
-            .all      => .{ .val = state.usage_abs.all,  .unit = utl.Unit.cpu_percent },
-            .user     => .{ .val = state.usage_abs.user, .unit = utl.Unit.cpu_percent },
-            .sys      => .{ .val = state.usage_abs.sys,  .unit = utl.Unit.cpu_percent },
-            .intr     => utl.UnitSI(new.intr - old.intr),
-            .ctxt     => utl.UnitSI(new.ctxt - old.ctxt),
-            .forks    => utl.UnitSI(new.forks - old.forks),
-            .running  => utl.UnitSI(new.running),
-            .blocked  => utl.UnitSI(new.blocked),
-            .softirq  => utl.UnitSI(new.softirq - old.softirq),
+            .@"%all"  => .{ .val = state.usage_pct.all,  .unit = unt.Unit.percent },
+            .@"%user" => .{ .val = state.usage_pct.user, .unit = unt.Unit.percent },
+            .@"%sys"  => .{ .val = state.usage_pct.sys,  .unit = unt.Unit.percent },
+            .all      => .{ .val = state.usage_abs.all,  .unit = unt.Unit.cpu_percent },
+            .user     => .{ .val = state.usage_abs.user, .unit = unt.Unit.cpu_percent },
+            .sys      => .{ .val = state.usage_abs.sys,  .unit = unt.Unit.cpu_percent },
+            .intr     => unt.UnitSI(new.intr - old.intr),
+            .ctxt     => unt.UnitSI(new.ctxt - old.ctxt),
+            .forks    => unt.UnitSI(new.forks - old.forks),
+            .running  => unt.UnitSI(new.running),
+            .blocked  => unt.UnitSI(new.blocked),
+            .softirq  => unt.UnitSI(new.softirq - old.softirq),
             .visubars => unreachable,
             // zig fmt: on
         };

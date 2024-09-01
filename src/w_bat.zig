@@ -2,6 +2,7 @@ const std = @import("std");
 const color = @import("color.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
+const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
 const fs = std.fs;
@@ -65,8 +66,8 @@ const Bat = struct {
         } else {
             return color.firstColorAboveThreshold(
                 switch (batopt_cs) {
-                    .@"%fullnow" => utl.Percent(self.now, self.full),
-                    .@"%fulldesign" => utl.Percent(self.now, self.full_design),
+                    .@"%fullnow" => unt.Percent(self.now, self.full),
+                    .@"%fulldesign" => unt.Percent(self.now, self.full_design),
                     .state => unreachable,
                 }.val.roundAndTruncate(),
                 oc.colors,
@@ -165,8 +166,8 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
         (switch (batopt) {
             // zig fmt: off
             .arg            => unreachable,
-            .@"%fullnow"    => utl.Percent(bat.now, bat.full),
-            .@"%fulldesign" => utl.Percent(bat.now, bat.full_design),
+            .@"%fullnow"    => unt.Percent(bat.now, bat.full),
+            .@"%fulldesign" => unt.Percent(bat.now, bat.full_design),
             .state          => unreachable,
             // zig fmt: on
         }).write(writer, part.alignment, part.precision);

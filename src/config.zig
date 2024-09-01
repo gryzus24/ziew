@@ -2,6 +2,7 @@ const std = @import("std");
 const color = @import("color.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
+const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const w_bat = @import("w_bat.zig");
 const w_cpu = @import("w_cpu.zig");
@@ -310,7 +311,7 @@ fn acceptWidgetFormatString(
                     break :blk opt_str[dot.? + 1 ..];
                 };
                 for (specifiers) |ch| switch (ch) {
-                    '0'...'9' => current.precision = @min(ch & 0x0f, utl.F5608.PRECISION_MAX),
+                    '0'...'9' => current.precision = @min(ch & 0x0f, unt.PRECISION_DIGITS_MAX),
                     '<' => current.alignment = .left,
                     '>' => current.alignment = .right,
                     else => return error.UnknownSpecifier,

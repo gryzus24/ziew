@@ -2,6 +2,7 @@ const std = @import("std");
 const color = @import("color.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
+const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const c = utl.c;
 
@@ -14,9 +15,9 @@ const ColorHandler = struct {
     pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
         return color.firstColorAboveThreshold(
             switch (@as(typ.DiskOpt.ColorSupported, @enumFromInt(oc.opt))) {
-                .@"%used" => utl.Percent(self.used_kb, self.total_kb),
-                .@"%free" => utl.Percent(self.free_kb, self.total_kb),
-                .@"%available" => utl.Percent(self.avail_kb, self.total_kb),
+                .@"%used" => unt.Percent(self.used_kb, self.total_kb),
+                .@"%free" => unt.Percent(self.free_kb, self.total_kb),
+                .@"%available" => unt.Percent(self.avail_kb, self.total_kb),
             }.val.roundAndTruncate(),
             oc.colors,
         );
@@ -100,13 +101,13 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
         (switch (diskopt) {
             // zig fmt: off
             .arg           => unreachable,
-            .@"%used"      => utl.Percent(used_kb, total_kb),
-            .@"%free"      => utl.Percent(free_kb, total_kb),
-            .@"%available" => utl.Percent(avail_kb, total_kb),
-            .total         => utl.SizeKb(total_kb),
-            .used          => utl.SizeKb(used_kb),
-            .free          => utl.SizeKb(free_kb),
-            .available     => utl.SizeKb(avail_kb),
+            .@"%used"      => unt.Percent(used_kb, total_kb),
+            .@"%free"      => unt.Percent(free_kb, total_kb),
+            .@"%available" => unt.Percent(avail_kb, total_kb),
+            .total         => unt.SizeKb(total_kb),
+            .used          => unt.SizeKb(used_kb),
+            .free          => unt.SizeKb(free_kb),
+            .available     => unt.SizeKb(avail_kb),
             // zig fmt: on
         }).write(writer, part.alignment, part.precision);
     }

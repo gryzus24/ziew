@@ -1,6 +1,7 @@
 const std = @import("std");
 const color = @import("color.zig");
 const typ = @import("type.zig");
+const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
 const fs = std.fs;
@@ -94,7 +95,7 @@ pub const MemState = struct {
 
     pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
         return color.firstColorAboveThreshold(
-            utl.Percent(
+            unt.Percent(
                 switch (@as(typ.MemOpt.ColorSupported, @enumFromInt(oc.opt))) {
                     .@"%free" => self.free(),
                     .@"%available" => self.avail(),
@@ -158,19 +159,19 @@ pub fn widget(
         utl.writeStr(writer, part.part);
         const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {
             // zig fmt: off
-            .@"%free"      => utl.Percent(state.free(), state.total()),
-            .@"%available" => utl.Percent(state.avail(), state.total()),
-            .@"%cached"    => utl.Percent(state.cached(), state.total()),
-            .@"%buffers"   => utl.Percent(state.buffers(), state.total()),
-            .@"%used"      => utl.Percent(state.used(), state.total()),
-            .total         => utl.SizeKb(state.total()),
-            .free          => utl.SizeKb(state.free()),
-            .available     => utl.SizeKb(state.avail()),
-            .buffers       => utl.SizeKb(state.buffers()),
-            .cached        => utl.SizeKb(state.cached()),
-            .used          => utl.SizeKb(state.used()),
-            .dirty         => utl.SizeKb(state.dirty()),
-            .writeback     => utl.SizeKb(state.writeback()),
+            .@"%free"      => unt.Percent(state.free(), state.total()),
+            .@"%available" => unt.Percent(state.avail(), state.total()),
+            .@"%cached"    => unt.Percent(state.cached(), state.total()),
+            .@"%buffers"   => unt.Percent(state.buffers(), state.total()),
+            .@"%used"      => unt.Percent(state.used(), state.total()),
+            .total         => unt.SizeKb(state.total()),
+            .free          => unt.SizeKb(state.free()),
+            .available     => unt.SizeKb(state.avail()),
+            .buffers       => unt.SizeKb(state.buffers()),
+            .cached        => unt.SizeKb(state.cached()),
+            .used          => unt.SizeKb(state.used()),
+            .dirty         => unt.SizeKb(state.dirty()),
+            .writeback     => unt.SizeKb(state.writeback()),
             // zig fmt: on
         };
         nu.write(writer, part.alignment, part.precision);
