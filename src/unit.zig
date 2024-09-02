@@ -122,7 +122,7 @@ pub const F5608 = struct {
 
 pub const Unit = enum {
     percent,
-    cpu_percent,
+    percent_cpu,
     kilo,
     mega,
     giga,
@@ -147,14 +147,14 @@ pub const NumUnit = struct {
         var p = precision;
         const digits_max: u8 = switch (self.unit) {
             .percent, .si_kilo, .si_mega, .si_giga, .si_tera => 3,
-            .cpu_percent, .kilo, .mega, .giga, .tera => 4,
+            .percent_cpu, .kilo, .mega, .giga, .tera => 4,
             .si_one => blk: {
                 p = 0;
                 break :blk @as(u8, 4) + @intFromBool(precision != 0) + precision;
             },
         };
         self.val.write(with_write, digits_max, alignment, p, switch (self.unit) {
-            .percent, .cpu_percent => '%',
+            .percent, .percent_cpu => '%',
             .kilo => 'K',
             .mega => 'M',
             .giga => 'G',
