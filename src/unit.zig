@@ -4,7 +4,7 @@ const typ = @import("type.zig");
 
 // == public ==================================================================
 
-pub const PRECISION_DIGITS_MAX = F5608.ROUND_EPS.len;
+pub const PRECISION_DIGITS_MAX: u2 = F5608.FRAC_ROUNDING_STEPS.len;
 
 pub const F5608 = struct {
     u: u64,
@@ -34,8 +34,8 @@ pub const F5608 = struct {
     }
 
     pub fn round(self: @This(), precision: u8) F5608 {
-        return if (precision < ROUND_EPS.len)
-            self._roundup(ROUND_EPS[precision])
+        return if (precision < FRAC_ROUNDING_STEPS.len)
+            self._roundup(FRAC_ROUNDING_STEPS[precision])
         else
             self;
     }
@@ -49,7 +49,7 @@ pub const F5608 = struct {
         with_write: anytype,
         digits_max: u8,
         alignment: typ.Alignment,
-        precision: u8,
+        precision: u2,
         unitchar: u8,
     ) void {
         const rounded = self.round(precision);
@@ -59,15 +59,39 @@ pub const F5608 = struct {
             writeAlignment(with_write, int, digits_max);
 
         utl.writeInt(with_write, int);
-        if (precision > 0) {
-            const fpmul = FRAC_PRECISION_MULS[@min(precision, FRAC_PRECISION_MULS.len - 1)];
+        if (precision != 0) {
+            switch (precision) {
+                1 => {
+                    const n = (rounded.frac() * 10) / (1 << FRAC_SHIFT);
+                    utl.writeStr(with_write, &.{
+                        '.',
+                        '0' | @as(u8, @intCast(n)),
+                    });
+                },
+                2 => {
+                    const n = (rounded.frac() * 100) / (1 << FRAC_SHIFT);
+                    utl.writeStr(with_write, &.{
+                        '.',
+                        '0' | @as(u8, @intCast(n / 10 % 10)),
+                        '0' | @as(u8, @intCast(n % 10)),
+                    });
+                },
+                3 => {
+                    const n = (rounded.frac() * 1000) / (1 << FRAC_SHIFT);
+                    utl.writeStr(with_write, &.{
+                        '.',
+                        '0' | @as(u8, @intCast(n / 100 % 10)),
+                        '0' | @as(u8, @intCast(n / 10 % 10)),
+                        '0' | @as(u8, @intCast(n % 10)),
+                    });
+                },
+                else => {
+                    if (@bitSizeOf(@TypeOf(precision)) != 2)
+                        @compileError("well...");
 
-            utl.writeStr(with_write, &[1]u8{'.'});
-            utl.writeIntOpts(
-                with_write,
-                (rounded.frac() * fpmul) / (1 << FRAC_SHIFT),
-                .{ .width = precision, .alignment = .right, .fill = '0' },
-            );
+                    unreachable;
+                },
+            }
         }
         if (unitchar != '\x00')
             utl.writeStr(with_write, &[1]u8{unitchar});
@@ -78,15 +102,14 @@ pub const F5608 = struct {
 
     const FRAC_SHIFT = 8;
     const FRAC_MASK: u64 = (1 << FRAC_SHIFT) - 1;
-    const FRAC_PRECISION_MULS: [4]u64 = .{ 1, 10, 100, 1000 };
 
-    const ROUND_EPS = [_]u64{
+    const FRAC_ROUNDING_STEPS: [3]u64 = .{
         ((1 << FRAC_SHIFT) + 1) / 2,
         ((1 << FRAC_SHIFT) + 19) / 20,
         ((1 << FRAC_SHIFT) + 199) / 200,
     };
     comptime {
-        for (ROUND_EPS) |e| {
+        for (FRAC_ROUNDING_STEPS) |e| {
             if (e <= 1)
                 @compileError("FRAC_SHIFT too low to satisfy rounding precision");
         }
@@ -119,7 +142,7 @@ pub const NumUnit = struct {
         self: @This(),
         with_write: anytype,
         alignment: typ.Alignment,
-        precision: u8,
+        precision: u2,
     ) void {
         var p = precision;
         const digits_max: u8 = switch (self.unit) {

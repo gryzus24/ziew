@@ -24,10 +24,6 @@ pub inline fn writeInt(writer: anytype, value: u64) void {
     fmt.formatInt(value, 10, .lower, .{}, writer) catch {};
 }
 
-pub inline fn writeIntOpts(writer: anytype, value: u64, options: fmt.FormatOptions) void {
-    fmt.formatInt(value, 10, .lower, options, writer) catch {};
-}
-
 pub fn writeBlockStart(
     with_write: anytype,
     fg_color: ?*const [7]u8,
