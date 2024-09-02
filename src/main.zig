@@ -82,7 +82,6 @@ fn readConfig(reg: *m.Region, config_path: ?[*:0]const u8) []const typ.Widget {
                 var err_line: []const u8 = undefined;
                 var err_pos: usize = undefined;
                 widgets = cfg.parse(reg, config_view, &err_pos, &err_line) catch |e| {
-                    std.debug.print("ERRPOS={}\n", .{err_pos});
                     utl.fatalPos(
                         &.{ "config: ", @errorName(e), ": ", err_line },
                         fmt.count("config: {s}: ", .{@errorName(e)}) + err_pos,
