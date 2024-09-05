@@ -104,7 +104,7 @@ pub const MemState = struct {
                     .@"%used" => self.used(),
                 },
                 self.total(),
-            ).val.roundAndTruncate(),
+            ).n.roundAndTruncate(),
             oc.colors,
         );
     }
@@ -174,7 +174,7 @@ pub fn widget(
             .writeback     => unt.SizeKb(state.writeback()),
             // zig fmt: on
         };
-        nu.write(writer, part.alignment, part.precision);
+        nu.write(writer, part.alignment, part.width, part.precision);
     }
     utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);

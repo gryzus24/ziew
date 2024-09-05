@@ -22,8 +22,9 @@ pub const Alignment = enum { none, right, left };
 pub const PartOpt = struct {
     part: []const u8,
     opt: u8 = 0,
-    precision: u2 = 0,
     alignment: Alignment = .none,
+    width: u8 = 3,
+    precision: u8 = 0,
 };
 
 pub const Format = struct {

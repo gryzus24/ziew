@@ -287,12 +287,12 @@ pub fn widget(
         }
         const nu: unt.NumUnit = switch (cpuopt) {
             // zig fmt: off
-            .@"%all"  => .{ .val = state.usage_pct.all,  .unit = unt.Unit.percent },
-            .@"%user" => .{ .val = state.usage_pct.user, .unit = unt.Unit.percent },
-            .@"%sys"  => .{ .val = state.usage_pct.sys,  .unit = unt.Unit.percent },
-            .all      => .{ .val = state.usage_abs.all,  .unit = unt.Unit.percent_cpu },
-            .user     => .{ .val = state.usage_abs.user, .unit = unt.Unit.percent_cpu },
-            .sys      => .{ .val = state.usage_abs.sys,  .unit = unt.Unit.percent_cpu },
+            .@"%all"  => .{ .n = state.usage_pct.all,  .u = .percent },
+            .@"%user" => .{ .n = state.usage_pct.user, .u = .percent },
+            .@"%sys"  => .{ .n = state.usage_pct.sys,  .u = .percent },
+            .all      => .{ .n = state.usage_abs.all,  .u = .percent },
+            .user     => .{ .n = state.usage_abs.user, .u = .percent },
+            .sys      => .{ .n = state.usage_abs.sys,  .u = .percent },
             .intr     => unt.UnitSI(new.intr - old.intr),
             .ctxt     => unt.UnitSI(new.ctxt - old.ctxt),
             .forks    => unt.UnitSI(new.forks - old.forks),
@@ -302,7 +302,7 @@ pub fn widget(
             .visubars => unreachable,
             // zig fmt: on
         };
-        nu.write(writer, part.alignment, part.precision);
+        nu.write(writer, part.alignment, part.width, part.precision);
     }
     utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);

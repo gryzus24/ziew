@@ -211,3 +211,16 @@ pub fn zeroTerminate(dest: []u8, src: []const u8) ?[:0]const u8 {
 pub fn skipSpacesTabs(str: []const u8, pos: usize) ?usize {
     return mem.indexOfNonePos(u8, str, pos, " \t");
 }
+
+pub fn nrDigits(n: u64) u5 {
+    var result: u5 = 1;
+    var t = n;
+    while (true) {
+        if (t < 10) return result;
+        if (t < 100) return result + 1;
+        if (t < 1000) return result + 2;
+        if (t < 10000) return result + 3;
+        t /= 10000;
+        result += 4;
+    }
+}

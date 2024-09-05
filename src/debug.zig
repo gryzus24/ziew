@@ -1,6 +1,7 @@
 const std = @import("std");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
+const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
 const io = std.io;
@@ -8,23 +9,24 @@ const linux = std.os.linux;
 
 pub fn debugFixedPoint() void {
     const stdout = io.getStdErr().writer();
-    for (0..(1 << 11) + 2) |i| {
-        const fp = utl.F5608.init(i).div(1 << utl.F5608.FRAC_SHIFT);
+    for (0..(1 << 12) + 2) |i| {
+        const fp = unt.F5608.init(i).div(1 << 8);
+        const nu: unt.NumUnit = .{ .n = fp, .u = .si_one };
 
         fmt.format(stdout, "{d:5} ", .{i}) catch {};
-        fp.write(stdout, 4, .none, 0);
+        nu.write(stdout, .none, 0, 0);
         utl.writeStr(stdout, " ");
-        fp.write(stdout, 4, .none, 1);
+        nu.write(stdout, .none, 0, 1);
         utl.writeStr(stdout, " ");
-        fp.write(stdout, 4, .none, 2);
+        nu.write(stdout, .none, 0, 2);
         utl.writeStr(stdout, " ");
-        fp.write(stdout, 4, .none, 3);
+        nu.write(stdout, .none, 0, 3);
         utl.writeStr(stdout, "  ");
 
         fmt.format(
             stdout,
             "{any:.5}",
-            .{@as(f64, @floatFromInt(i)) / (1 << utl.F5608.FRAC_SHIFT)},
+            .{@as(f64, @floatFromInt(i)) / (1 << 8)},
         ) catch {};
         utl.writeStr(stdout, "\n");
     }

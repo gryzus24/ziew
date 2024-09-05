@@ -18,7 +18,7 @@ const ColorHandler = struct {
                 .@"%used" => unt.Percent(self.used_kb, self.total_kb),
                 .@"%free" => unt.Percent(self.free_kb, self.total_kb),
                 .@"%available" => unt.Percent(self.avail_kb, self.total_kb),
-            }.val.roundAndTruncate(),
+            }.n.roundAndTruncate(),
             oc.colors,
         );
     }
@@ -109,7 +109,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
             .free          => unt.SizeKb(free_kb),
             .available     => unt.SizeKb(avail_kb),
             // zig fmt: on
-        }).write(writer, part.alignment, part.precision);
+        }).write(writer, part.alignment, part.width, part.precision);
     }
     utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);

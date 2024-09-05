@@ -4,7 +4,7 @@ const typ = @import("type.zig");
 
 // == public ==================================================================
 
-pub const PRECISION_DIGITS_MAX: u2 = F5608.FRAC_ROUNDING_STEPS.len;
+pub const PRECISION_DIGITS_MAX: comptime_int = F5608.FRAC_ROUNDING_STEPS.len;
 
 pub const F5608 = struct {
     u: u64,
@@ -44,62 +44,6 @@ pub const F5608 = struct {
         return self.round(0).whole();
     }
 
-    pub fn write(
-        self: @This(),
-        with_write: anytype,
-        digits_max: u8,
-        alignment: typ.Alignment,
-        precision: u2,
-        unitchar: u8,
-    ) void {
-        const rounded = self.round(precision);
-        const int = rounded.whole();
-
-        if (alignment == .right)
-            writeAlignment(with_write, int, digits_max);
-
-        utl.writeInt(with_write, int);
-        if (precision != 0) {
-            switch (precision) {
-                1 => {
-                    const n = (rounded.frac() * 10) / (1 << FRAC_SHIFT);
-                    utl.writeStr(with_write, &.{
-                        '.',
-                        '0' | @as(u8, @intCast(n)),
-                    });
-                },
-                2 => {
-                    const n = (rounded.frac() * 100) / (1 << FRAC_SHIFT);
-                    utl.writeStr(with_write, &.{
-                        '.',
-                        '0' | @as(u8, @intCast(n / 10 % 10)),
-                        '0' | @as(u8, @intCast(n % 10)),
-                    });
-                },
-                3 => {
-                    const n = (rounded.frac() * 1000) / (1 << FRAC_SHIFT);
-                    utl.writeStr(with_write, &.{
-                        '.',
-                        '0' | @as(u8, @intCast(n / 100 % 10)),
-                        '0' | @as(u8, @intCast(n / 10 % 10)),
-                        '0' | @as(u8, @intCast(n % 10)),
-                    });
-                },
-                else => {
-                    if (@bitSizeOf(@TypeOf(precision)) != 2)
-                        @compileError("well...");
-
-                    unreachable;
-                },
-            }
-        }
-        if (unitchar != '\x00')
-            utl.writeStr(with_write, &[1]u8{unitchar});
-
-        if (alignment == .left)
-            writeAlignment(with_write, int, digits_max);
-    }
-
     const FRAC_SHIFT = 8;
     const FRAC_MASK: u64 = (1 << FRAC_SHIFT) - 1;
 
@@ -120,51 +64,123 @@ pub const F5608 = struct {
     }
 };
 
-pub const Unit = enum {
-    percent,
-    percent_cpu,
-    kilo,
-    mega,
-    giga,
-    tera,
-    si_one,
-    si_kilo,
-    si_mega,
-    si_giga,
-    si_tera,
+pub const Unit = enum(u8) {
+    percent = '%',
+    kilo = 'K',
+    mega = 'M',
+    giga = 'G',
+    tera = 'T',
+    si_one = '\x00',
+    si_kilo = 'k',
+    si_mega = 'm',
+    si_giga = 'g',
+    si_tera = 't',
 };
 
 pub const NumUnit = struct {
-    val: F5608,
-    unit: Unit,
+    n: F5608,
+    u: Unit,
+
+    fn roundedPadPrecision(
+        self: @This(),
+        width: u8,
+        precision: u8,
+    ) struct { F5608, u8, u8 } {
+        const rounded = self.n.round(precision);
+        const rounded_nr_digits = utl.nrDigits(rounded.whole());
+
+        if (self.u == .si_one or precision != 0) {
+            return .{
+                rounded,
+                @intFromBool(self.u == .si_one) + width -| rounded_nr_digits,
+                precision,
+            };
+        }
+        if (rounded_nr_digits >= width)
+            return .{ rounded, 0, precision };
+
+        // `nr_digits` might be one less than `rounded_nr_digits`.
+        const nr_digits = utl.nrDigits(self.n.whole());
+        const nr_frac_digits = width - nr_digits - 1;
+
+        // Can't do much - only the decimal point fits.
+        if (nr_frac_digits == 0)
+            return .{ rounded, 1, 0 };
+
+        if (nr_frac_digits >= PRECISION_DIGITS_MAX)
+            return .{
+                self.n,
+                nr_frac_digits - PRECISION_DIGITS_MAX,
+                PRECISION_DIGITS_MAX,
+            };
+
+        const r = self.n.round(nr_frac_digits);
+        if (utl.nrDigits(r.whole()) == nr_digits)
+            return .{ r, 0, nr_frac_digits };
+
+        // Got rounded up - take one digit off the fractional part and make sure
+        // there is one space of padding inserted if `nr_decimal_digits` hits 0.
+        return .{
+            self.n.round(nr_frac_digits - 1),
+            @intFromBool(nr_frac_digits == 1),
+            nr_frac_digits - 1,
+        };
+    }
 
     pub fn write(
         self: @This(),
         with_write: anytype,
         alignment: typ.Alignment,
-        precision: u2,
+        width: u8,
+        precision: u8,
     ) void {
-        var p = precision;
-        const digits_max: u8 = switch (self.unit) {
-            .percent, .si_kilo, .si_mega, .si_giga, .si_tera => 3,
-            .percent_cpu, .kilo, .mega, .giga, .tera => 4,
-            .si_one => blk: {
-                p = 0;
-                break :blk @as(u8, 4) + @intFromBool(precision != 0) + precision;
-            },
-        };
-        self.val.write(with_write, digits_max, alignment, p, switch (self.unit) {
-            .percent, .percent_cpu => '%',
-            .kilo => 'K',
-            .mega => 'M',
-            .giga => 'G',
-            .tera => 'T',
-            .si_one => '\x00',
-            .si_kilo => 'k',
-            .si_mega => 'm',
-            .si_giga => 'g',
-            .si_tera => 't',
-        });
+        const rounded, const pad, const new_precision =
+            self.roundedPadPrecision(width, precision);
+
+        if (alignment == .right)
+            utl.writeStr(with_write, (" " ** 0x10)[0 .. pad & 0x0f]);
+
+        utl.writeInt(with_write, rounded.whole());
+        if (new_precision != 0) {
+            switch (new_precision) {
+                0 => unreachable,
+                1 => {
+                    const n = (rounded.frac() * 10) / (1 << F5608.FRAC_SHIFT);
+                    utl.writeStr(with_write, &.{
+                        '.',
+                        '0' | @as(u8, @intCast(n)),
+                    });
+                },
+                2 => {
+                    const n = (rounded.frac() * 100) / (1 << F5608.FRAC_SHIFT);
+                    utl.writeStr(with_write, &.{
+                        '.',
+                        '0' | @as(u8, @intCast(n / 10 % 10)),
+                        '0' | @as(u8, @intCast(n % 10)),
+                    });
+                },
+                3 => {
+                    const n = (rounded.frac() * 1000) / (1 << F5608.FRAC_SHIFT);
+                    utl.writeStr(with_write, &.{
+                        '.',
+                        '0' | @as(u8, @intCast(n / 100 % 10)),
+                        '0' | @as(u8, @intCast(n / 10 % 10)),
+                        '0' | @as(u8, @intCast(n % 10)),
+                    });
+                },
+                else => {
+                    if (PRECISION_DIGITS_MAX > 3)
+                        @compileError("well...");
+
+                    unreachable;
+                },
+            }
+        }
+        if (self.u != .si_one)
+            utl.writeStr(with_write, &[1]u8{@intFromEnum(self.u)});
+
+        if (alignment == .left)
+            utl.writeStr(with_write, (" " ** 0x10)[0 .. pad & 0x0f]);
     }
 };
 
@@ -175,26 +191,26 @@ pub fn SizeKb(value: u64) NumUnit {
 
     return switch (value) {
         0...KB4 - 1 => .{
-            .val = F5608.init(value),
-            .unit = .kilo,
+            .n = F5608.init(value),
+            .u = .kilo,
         },
         KB4...MB4 - 1 => .{
-            .val = F5608.init(value).div(1024),
-            .unit = .mega,
+            .n = F5608.init(value).div(1024),
+            .u = .mega,
         },
         MB4...GB4 - 1 => .{
-            .val = F5608.init(value).div(1024 * 1024),
-            .unit = .giga,
+            .n = F5608.init(value).div(1024 * 1024),
+            .u = .giga,
         },
         else => .{
-            .val = F5608.init(value).div(1024 * 1024 * 1024),
-            .unit = .tera,
+            .n = F5608.init(value).div(1024 * 1024 * 1024),
+            .u = .tera,
         },
     };
 }
 
 pub fn Percent(value: u64, total: u64) NumUnit {
-    return .{ .val = F5608.init(value * 100).div(total), .unit = .percent };
+    return .{ .n = F5608.init(value * 100).div(total), .u = .percent };
 }
 
 pub fn UnitSI(value: u64) NumUnit {
@@ -204,22 +220,10 @@ pub fn UnitSI(value: u64) NumUnit {
     const T = 1000 * 1000 * 1000 * 1000;
 
     return switch (value) {
-        0...K - 1 => .{ .val = F5608.init(value), .unit = .si_one },
-        K...M - 1 => .{ .val = F5608.init(value).div(K), .unit = .si_kilo },
-        M...G - 1 => .{ .val = F5608.init(value).div(M), .unit = .si_mega },
-        G...T - 1 => .{ .val = F5608.init(value).div(G), .unit = .si_giga },
-        else => .{ .val = F5608.init(value).div(T), .unit = .si_tera },
+        0...K - 1 => .{ .n = F5608.init(value), .u = .si_one },
+        K...M - 1 => .{ .n = F5608.init(value).div(K), .u = .si_kilo },
+        M...G - 1 => .{ .n = F5608.init(value).div(M), .u = .si_mega },
+        G...T - 1 => .{ .n = F5608.init(value).div(G), .u = .si_giga },
+        else => .{ .n = F5608.init(value).div(T), .u = .si_tera },
     };
-}
-
-// == private =================================================================
-
-fn writeAlignment(with_write: anytype, value: u64, digits_max: u8) void {
-    const space_left = digits_max -| @as(u8, switch (value) {
-        0...9 => 1,
-        10...99 => 2,
-        100...999 => 3,
-        else => 4,
-    });
-    utl.writeStr(with_write, (" " ** 0x10)[0 .. space_left & 0x0f]);
 }

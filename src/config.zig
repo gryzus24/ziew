@@ -127,6 +127,7 @@ const ParseError = error{
     UnknownOption,
     UnknownParam,
     UnknownSpecifier,
+    ExcessOfSpecifiers,
     WidgetRequiresArgParam,
     WidgetRequiresFormatParam,
 } || error{NoSpaceLeft};
@@ -299,23 +300,50 @@ fn acceptWidgetFormatString(
             inside_brackets = false;
 
             current.opt = optblk: for (typ.WID_OPT_NAMES[@intFromEnum(wid)], 0..) |name, j| {
-                const opt_str = buf[opt_beg..i];
-                const dot = mem.indexOfScalar(u8, opt_str, '.');
-                const opt_name = opt_str[0 .. dot orelse opt_str.len];
+                const opt_full = buf[opt_beg..i];
+                const colon = mem.indexOfScalar(u8, opt_full, ':') orelse opt_full.len;
+                const opt_name = opt_full[0..colon];
+                const opt_spec = opt_full[colon..];
 
                 if (!mem.eql(u8, name, opt_name)) continue;
 
-                const specifiers = blk: {
-                    if (dot == null) break :blk "";
-                    if (dot == opt_str.len - 1) break :blk "";
-                    break :blk opt_str[dot.? + 1 ..];
-                };
-                for (specifiers) |ch| switch (ch) {
-                    '0'...'9' => current.precision = @min(ch & 0x0f, unt.PRECISION_DIGITS_MAX),
-                    '<' => current.alignment = .left,
-                    '>' => current.alignment = .right,
-                    else => return error.UnknownSpecifier,
-                };
+                if (opt_spec.len != 0) {
+                    var state: enum { alignment, width, precision } = .alignment;
+                    for (opt_spec[1..]) |ch| switch (state) {
+                        .alignment => {
+                            switch (ch) {
+                                '<' => {
+                                    current.alignment = .left;
+                                    state = .width;
+                                },
+                                '>' => {
+                                    current.alignment = .right;
+                                    state = .width;
+                                },
+                                '.' => state = .precision,
+                                else => return error.UnknownSpecifier,
+                            }
+                        },
+                        .width => {
+                            switch (ch) {
+                                '0'...'9' => current.width = ch & 0x0f,
+                                '.' => state = .precision,
+                                else => return error.UnknownSpecifier,
+                            }
+                        },
+                        .precision => {
+                            switch (ch) {
+                                '0'...'9' => {
+                                    current.precision = @min(
+                                        ch & 0x0f,
+                                        unt.PRECISION_DIGITS_MAX,
+                                    );
+                                },
+                                else => return error.ExcessOfSpecifiers,
+                            }
+                        },
+                    };
+                }
                 break :optblk @intCast(j);
             } else {
                 return error.UnknownOption;
@@ -424,11 +452,11 @@ pub fn defaultConfig(reg: *m.Region) []const typ.Widget {
         \\NET 20 arg="enp5s0" format="{arg}: {inet} {flags}"
         \\FG state 0:a44 1:4a4
         \\DISK 200 arg="/" format="{arg} {available}"
-        \\CPU 20 format="CPU{%all.1>}"
+        \\CPU 20 format="CPU{%all:>1}"
         \\FG %all 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-        \\MEM 20 format="MEM {used} : {free} +{cached.0}"
+        \\MEM 20 format="MEM {used} : {free} +{cached:>4}"
         \\FG %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-        \\BAT 300 arg="BAT0" format="BAT {%fulldesign.2} {state}"
+        \\BAT 300 arg="BAT0" format="BAT {%fulldesign:.2} {state}"
         \\FG state 1:4a4 2:4a4
         \\BG %fulldesign 0:a00 15:220 25:
         \\TIME 20 arg="%A %d.%m ~ %H:%M:%S "
