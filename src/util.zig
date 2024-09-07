@@ -110,7 +110,6 @@ fn openLog() Log {
 pub fn fatal(strings: []const []const u8) noreturn {
     @setCold(true);
     const log = openLog();
-    defer log.close();
     log.log("fatal: ");
     for (strings) |s| log.log(s);
     log.log("\n");
@@ -121,7 +120,6 @@ pub fn fatal(strings: []const []const u8) noreturn {
 pub inline fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
     const log = openLog();
-    defer log.close();
     log.log(makeMsg("fatal: " ++ format ++ "\n", args));
     linux.exit(1);
 }
@@ -129,7 +127,6 @@ pub inline fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
 pub fn fatalPos(strings: []const []const u8, err_pos: usize) noreturn {
     @setCold(true);
     const log = openLog();
-    defer log.close();
     log.log("fatal: ");
     for (strings) |s| log.log(s);
     log.log("\n");
