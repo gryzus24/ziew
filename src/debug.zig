@@ -32,6 +32,50 @@ pub fn debugFixedPoint() void {
     }
 }
 
+pub fn debugNumUnit() void {
+    const stdout = io.getStdOut();
+    const stdout_writer = stdout.writer();
+    const values: [5]u64 = .{ 948, 9480, 94800, 948000, 9480000 };
+    const width_max = 7;
+    const precision_max = 3;
+
+    utl.writeStr(stdout_writer, "\n");
+    for (values) |val| {
+        const nu = unt.UnitSI(val);
+
+        std.debug.print("V {}\n", .{val});
+        for (0..width_max + 1) |width| {
+            std.debug.print("{} ", .{width});
+            for (0..precision_max + 2) |precision| {
+                var w: u8 = @intCast(width);
+                var p: u8 = @intCast(precision);
+                if (p == precision_max + 1)
+                    p = unt.PRECISION_AUTO_VALUE;
+
+                const o: unt.NumUnit.WriteOptions = .{
+                    .alignment = .right,
+                    .width = w,
+                    .precision = p,
+                };
+
+                utl.writeStr(stdout_writer, "|");
+                nu.write(stdout_writer, o);
+                utl.writeStr(stdout_writer, "|");
+
+                if (w < 2)
+                    w = 2;
+                if (p == unt.PRECISION_AUTO_VALUE)
+                    p = 0;
+                for (0..(width_max - w) + (precision_max - p)) |_| {
+                    utl.writeStr(stdout_writer, " ");
+                }
+                utl.writeStr(stdout_writer, "\t");
+            }
+            utl.writeStr(stdout_writer, "\n");
+        }
+    }
+}
+
 fn _printColor(prefix: []const u8, co: typ.Color) void {
     const print = std.debug.print;
     switch (co) {

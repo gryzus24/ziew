@@ -313,11 +313,11 @@ fn acceptWidgetFormatString(
                         .alignment => {
                             switch (ch) {
                                 '<' => {
-                                    current.alignment = .left;
+                                    current.wopts.alignment = .left;
                                     state = .width;
                                 },
                                 '>' => {
-                                    current.alignment = .right;
+                                    current.wopts.alignment = .right;
                                     state = .width;
                                 },
                                 '.' => state = .precision,
@@ -326,7 +326,7 @@ fn acceptWidgetFormatString(
                         },
                         .width => {
                             switch (ch) {
-                                '0'...'9' => current.width = ch & 0x0f,
+                                '0'...'9' => current.wopts.width = ch & 0x0f,
                                 '.' => state = .precision,
                                 else => return error.UnknownSpecifier,
                             }
@@ -334,7 +334,7 @@ fn acceptWidgetFormatString(
                         .precision => {
                             switch (ch) {
                                 '0'...'9' => {
-                                    current.precision = @min(
+                                    current.wopts.precision = @min(
                                         ch & 0x0f,
                                         unt.PRECISION_DIGITS_MAX,
                                     );

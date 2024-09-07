@@ -1,9 +1,11 @@
 const std = @import("std");
-const utl = @import("util.zig");
 const typ = @import("type.zig");
+const utl = @import("util.zig");
+const fmt = std.fmt;
 
 // == public ==================================================================
 
+pub const PRECISION_AUTO_VALUE: comptime_int = @as(u8, @bitCast(@as(i8, -1)));
 pub const PRECISION_DIGITS_MAX: comptime_int = F5608.FRAC_ROUNDING_STEPS.len;
 
 pub const F5608 = struct {
@@ -34,10 +36,11 @@ pub const F5608 = struct {
     }
 
     pub fn round(self: @This(), precision: u8) F5608 {
-        return if (precision < FRAC_ROUNDING_STEPS.len)
-            self._roundup(FRAC_ROUNDING_STEPS[precision])
-        else
-            self;
+        if (precision >= FRAC_ROUNDING_STEPS.len)
+            return self;
+
+        const step = FRAC_ROUNDING_STEPS[precision];
+        return .{ .u = (self.u + step - 1) / step * step };
     }
 
     pub fn roundAndTruncate(self: @This()) u64 {
@@ -58,129 +61,154 @@ pub const F5608 = struct {
                 @compileError("FRAC_SHIFT too low to satisfy rounding precision");
         }
     }
-
-    fn _roundup(self: @This(), quants: u64) F5608 {
-        return .{ .u = (self.u + quants - 1) / quants * quants };
-    }
-};
-
-pub const Unit = enum(u8) {
-    percent = '%',
-    kilo = 'K',
-    mega = 'M',
-    giga = 'G',
-    tera = 'T',
-    si_one = '\x00',
-    si_kilo = 'k',
-    si_mega = 'm',
-    si_giga = 'g',
-    si_tera = 't',
 };
 
 pub const NumUnit = struct {
     n: F5608,
     u: Unit,
 
-    fn roundedPadPrecision(
-        self: @This(),
-        width: u8,
-        precision: u8,
-    ) struct { F5608, u8, u8 } {
-        const rounded = self.n.round(precision);
-        const rounded_nr_digits = utl.nrDigits(rounded.whole());
+    pub const Unit = enum(u8) {
+        percent = '%',
+        kilo = 'K',
+        mega = 'M',
+        giga = 'G',
+        tera = 'T',
+        si_one = '\x00',
+        si_kilo = 'k',
+        si_mega = 'm',
+        si_giga = 'g',
+        si_tera = 't',
+    };
 
-        if (self.u == .si_one or precision != 0) {
-            return .{
-                rounded,
-                @intFromBool(self.u == .si_one) + width -| rounded_nr_digits,
-                precision,
-            };
-        }
-        if (rounded_nr_digits >= width)
-            return .{ rounded, 0, precision };
+    pub const Alignment = enum { none, right, left };
 
-        // `nr_digits` might be one less than `rounded_nr_digits`.
+    pub const WriteOptions = struct {
+        alignment: Alignment = .none,
+        width: u8 = 3,
+        precision: u8 = PRECISION_AUTO_VALUE,
+    };
+
+    fn roundedPadPrecisionAuto(self: @This(), width: u8) struct { F5608, u8, u8 } {
+        const rounded0 = self.n.round(0);
+        const rounded0_nr_digits = utl.nrDigits(rounded0.whole());
+
+        if (rounded0_nr_digits >= width)
+            return .{ rounded0, 0, 0 };
+
         const nr_digits = utl.nrDigits(self.n.whole());
-        const nr_frac_digits = width - nr_digits - 1;
+        const frac_digits_space = width - nr_digits - 1;
 
         // Can't do much - only the decimal point fits.
-        if (nr_frac_digits == 0)
-            return .{ rounded, 1, 0 };
+        if (frac_digits_space == 0)
+            return .{ rounded0, 1, 0 };
 
-        if (nr_frac_digits >= PRECISION_DIGITS_MAX)
+        if (frac_digits_space >= PRECISION_DIGITS_MAX)
             return .{
                 self.n,
-                nr_frac_digits - PRECISION_DIGITS_MAX,
+                frac_digits_space - PRECISION_DIGITS_MAX,
                 PRECISION_DIGITS_MAX,
             };
 
-        const r = self.n.round(nr_frac_digits);
+        const r = self.n.round(frac_digits_space);
         if (utl.nrDigits(r.whole()) == nr_digits)
-            return .{ r, 0, nr_frac_digits };
+            return .{ r, 0, frac_digits_space };
 
         // Got rounded up - take one digit off the fractional part and make sure
-        // there is one space of padding inserted if `nr_decimal_digits` hits 0.
+        // there is one space of padding inserted if `frac_digits_space` hits 0.
         return .{
-            self.n.round(nr_frac_digits - 1),
-            @intFromBool(nr_frac_digits == 1),
-            nr_frac_digits - 1,
+            self.n.round(frac_digits_space - 1),
+            @intFromBool(frac_digits_space == 1),
+            frac_digits_space - 1,
         };
     }
 
     pub fn write(
         self: @This(),
         with_write: anytype,
-        alignment: typ.Alignment,
-        width: u8,
-        precision: u8,
+        opts: WriteOptions,
     ) void {
-        const rounded, const pad, const new_precision =
-            self.roundedPadPrecision(width, precision);
+        const alignment = opts.alignment;
+        var width = opts.width;
+        var precision = opts.precision;
 
-        if (alignment == .right)
-            utl.writeStr(with_write, (" " ** 0x10)[0 .. pad & 0x0f]);
-
-        utl.writeInt(with_write, rounded.whole());
-        if (new_precision != 0) {
-            switch (new_precision) {
-                0 => unreachable,
-                1 => {
-                    const n = (rounded.frac() * 10) / (1 << F5608.FRAC_SHIFT);
-                    utl.writeStr(with_write, &.{
-                        '.',
-                        '0' | @as(u8, @intCast(n)),
-                    });
-                },
-                2 => {
-                    const n = (rounded.frac() * 100) / (1 << F5608.FRAC_SHIFT);
-                    utl.writeStr(with_write, &.{
-                        '.',
-                        '0' | @as(u8, @intCast(n / 10 % 10)),
-                        '0' | @as(u8, @intCast(n % 10)),
-                    });
-                },
-                3 => {
-                    const n = (rounded.frac() * 1000) / (1 << F5608.FRAC_SHIFT);
-                    utl.writeStr(with_write, &.{
-                        '.',
-                        '0' | @as(u8, @intCast(n / 100 % 10)),
-                        '0' | @as(u8, @intCast(n / 10 % 10)),
-                        '0' | @as(u8, @intCast(n % 10)),
-                    });
-                },
-                else => {
-                    if (PRECISION_DIGITS_MAX > 3)
-                        @compileError("well...");
-
-                    unreachable;
-                },
-            }
+        if (self.u == .si_one) {
+            width += 1;
+            precision = 0;
         }
-        if (self.u != .si_one)
-            utl.writeStr(with_write, &[1]u8{@intFromEnum(self.u)});
+        width &= 0x0f; // space for the integer part of a number
+
+        var rounded: F5608 = undefined;
+        var pad: u8 = undefined;
+        if (precision == PRECISION_AUTO_VALUE) {
+            rounded, pad, precision = self.roundedPadPrecisionAuto(width);
+        } else {
+            rounded = self.n.round(precision);
+            pad = width -| utl.nrDigits(rounded.whole());
+        }
+
+        // should be enough
+        var buf: [32]u8 = .{' '} ** 32;
+        var i = buf.len;
 
         if (alignment == .left)
-            utl.writeStr(with_write, (" " ** 0x10)[0 .. pad & 0x0f]);
+            i -= pad;
+
+        if (self.u != .si_one) {
+            i -= 1;
+            buf[i] = @intFromEnum(self.u);
+        }
+
+        switch (precision) {
+            0 => {},
+            1 => {
+                const n = (rounded.frac() * 10) / (1 << F5608.FRAC_SHIFT);
+                i -= 2;
+                buf[i..][0..2].* = .{ '.', '0' | @as(u8, @intCast(n)) };
+            },
+            2 => {
+                const n = (rounded.frac() * 100) / (1 << F5608.FRAC_SHIFT);
+                i -= 3;
+                buf[i..][0..3].* = .{
+                    '.',
+                    '0' | @as(u8, @intCast(n / 10 % 10)),
+                    '0' | @as(u8, @intCast(n % 10)),
+                };
+            },
+            3 => {
+                const n = (rounded.frac() * 1000) / (1 << F5608.FRAC_SHIFT);
+                i -= 4;
+                buf[i..][0..4].* = .{
+                    '.',
+                    '0' | @as(u8, @intCast(n / 100 % 10)),
+                    '0' | @as(u8, @intCast(n / 10 % 10)),
+                    '0' | @as(u8, @intCast(n % 10)),
+                };
+            },
+            else => {
+                if (PRECISION_DIGITS_MAX > 3)
+                    @compileError("well...");
+
+                unreachable;
+            },
+        }
+
+        var n = rounded.whole();
+        while (n >= 100) : (n /= 100) {
+            i -= 2;
+            buf[i..][0..2].* = fmt.digits2(n % 100);
+        }
+        if (n < 10) {
+            i -= 1;
+            buf[i] = '0' | @as(u8, @intCast(n));
+        } else {
+            i -= 2;
+            buf[i..][0..2].* = fmt.digits2(n);
+        }
+
+        if (alignment == .right)
+            i -= pad;
+
+        utl.writeStr(with_write, buf[i..]);
     }
 };
 

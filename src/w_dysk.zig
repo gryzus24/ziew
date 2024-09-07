@@ -109,7 +109,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
             .free          => unt.SizeKb(free_kb),
             .available     => unt.SizeKb(avail_kb),
             // zig fmt: on
-        }).write(writer, part.alignment, part.width, part.precision);
+        }).write(writer, part.wopts);
     }
     utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);

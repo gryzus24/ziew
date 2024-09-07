@@ -170,7 +170,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
             .@"%fulldesign" => unt.Percent(bat.now, bat.full_design),
             .state          => unreachable,
             // zig fmt: on
-        }).write(writer, part.alignment, part.width, part.precision);
+        }).write(writer, part.wopts);
     }
     utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);

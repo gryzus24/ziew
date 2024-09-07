@@ -1,5 +1,6 @@
 const cfg = @import("config.zig");
 const std = @import("std");
+const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const w_bat = @import("w_bat.zig");
 const w_cpu = @import("w_cpu.zig");
@@ -17,14 +18,10 @@ const meta = std.meta;
 // 1/10th of a second
 pub const DeciSec = u64;
 
-pub const Alignment = enum { none, right, left };
-
 pub const PartOpt = struct {
     part: []const u8,
     opt: u8 = 0,
-    alignment: Alignment = .none,
-    width: u8 = 3,
-    precision: u8 = 0,
+    wopts: unt.NumUnit.WriteOptions = .{},
 };
 
 pub const Format = struct {

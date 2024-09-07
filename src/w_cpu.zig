@@ -302,7 +302,7 @@ pub fn widget(
             .visubars => unreachable,
             // zig fmt: on
         };
-        nu.write(writer, part.alignment, part.width, part.precision);
+        nu.write(writer, part.wopts);
     }
     utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);
