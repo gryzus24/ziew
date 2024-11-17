@@ -164,7 +164,7 @@ test "/proc/stat parser" {
     try t.expect(s.softirq == 4426117);
 }
 
-const BARS: [5][5][]const u8 = .{
+const BRLBARS: [5][5][]const u8 = .{
     .{ "⠀", "⢀", "⢠", "⢰", "⢸" },
     .{ "⡀", "⣀", "⣠", "⣰", "⣸" },
     .{ "⡄", "⣄", "⣤", "⣴", "⣼" },
@@ -172,7 +172,7 @@ const BARS: [5][5][]const u8 = .{
     .{ "⡇", "⣇", "⣧", "⣷", "⣿" },
 };
 
-fn barIntensity(new: *const Cpu, old: *const Cpu) u32 {
+fn brlBarIntensity(new: *const Cpu, old: *const Cpu) u32 {
     const pct = new.delta(old, 1).all;
 
     if (pct.u == 0) return 0;
@@ -182,6 +182,18 @@ fn barIntensity(new: *const Cpu, old: *const Cpu) u32 {
         51...75 => 3,
         else => 4,
     };
+}
+
+const BLKBARS: [9][]const u8 = .{
+    " ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█",
+};
+
+fn blkBarIntensity(new: *const Cpu, old: *const Cpu) u32 {
+    const pct = new.delta(old, 1).all;
+
+    if (pct.u == 0) return 0;
+    const r = (pct.u - 1) / (comptime unt.F5608.init(100).div(8).u);
+    return @as(u32, @intCast(r)) + 1;
 }
 
 // == public ==================================================================
@@ -269,20 +281,28 @@ pub fn widget(
         utl.writeStr(writer, part.part);
 
         const cpuopt = @as(typ.CpuOpt, @enumFromInt(part.opt));
-        if (cpuopt == .visubars) {
+        if (cpuopt == .brlbars) {
             var left: u32 = 0;
             var right: u32 = 0;
             for (1..1 + new.nr_cpu_entries) |i| {
                 if (i & 1 == 1) {
-                    left = barIntensity(&new.cpu_entries[i], &old.cpu_entries[i]);
+                    left = brlBarIntensity(&new.cpu_entries[i], &old.cpu_entries[i]);
                 } else {
-                    right = barIntensity(&new.cpu_entries[i], &old.cpu_entries[i]);
-                    utl.writeStr(writer, BARS[left][right]);
+                    right = brlBarIntensity(&new.cpu_entries[i], &old.cpu_entries[i]);
+                    utl.writeStr(writer, BRLBARS[left][right]);
                 }
             }
             if (new.nr_cpu_entries & 1 == 1)
-                utl.writeStr(writer, BARS[left][0]);
+                utl.writeStr(writer, BRLBARS[left][0]);
 
+            continue;
+        } else if (cpuopt == .blkbars) {
+            for (1..1 + new.nr_cpu_entries) |i| {
+                utl.writeStr(
+                    writer,
+                    BLKBARS[blkBarIntensity(&new.cpu_entries[i], &old.cpu_entries[i])],
+                );
+            }
             continue;
         }
         const nu: unt.NumUnit = switch (cpuopt) {
@@ -299,7 +319,8 @@ pub fn widget(
             .running  => unt.UnitSI(new.running),
             .blocked  => unt.UnitSI(new.blocked),
             .softirq  => unt.UnitSI(new.softirq - old.softirq),
-            .visubars => unreachable,
+            .brlbars  => unreachable,
+            .blkbars  => unreachable,
             // zig fmt: on
         };
         nu.write(writer, part.wopts);

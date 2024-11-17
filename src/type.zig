@@ -200,7 +200,8 @@ pub const CpuOpt = enum {
     running,
     blocked,
     softirq,
-    visubars,
+    brlbars,
+    blkbars,
 
     pub const ColorSupported = MakeEnumSubset(@This(), &.{
         .@"%all", .@"%user", .@"%sys", .forks, .running, .blocked,
