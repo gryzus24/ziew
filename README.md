@@ -44,18 +44,21 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                squirrelly brackets and may contain specifiers that influence
                the formatting of numeric data.
 
-                OPTION.[PRECISION][ALIGNMENT]
+                OPTION:[ALIGNMENT][WIDTH][.PRECISION]
 
               * OPTION    - widget specific option name,
-              * PRECISION - number from 0 to 3 inclusive - specifies digits
-                            of precision (0 if unspecified),
               * ALIGNMENT - either < for left alignment or > for right
                             alignment - reserves space for the longest
                             representation of a number (no alignment if
-                            unspecified).
+                            unspecified),
+              * WIDTH     - number of cells available for the integral part
+                            of a number (4 if unspecified),
+              * PRECISION - number from 0 to 3 inclusive - specifies digits
+                            of precision (adjusted automatically based on
+                            width if unspecified).
 
     Example
-      CPU 25 format="CPU {%all.1>} {visubars}"
+      CPU 25 format="CPU {%all:>3} {blkbars}"
 
 ### Default color line
 
@@ -141,7 +144,7 @@ Every option and color configuration for each *Widget* is documented below.
       [-] conditional (only %-prefixed options supported)
 
     Example config entry
-      MEM 20 format="mem: {used.2<}:{free.2>} [{cached.0}]"
+      MEM 20 format="mem: {used:<2}:{free:>2} [{cached:.0}]"
       FG %used 0:aaa 50:bbb 60:ccc 70:ddd 80:eee 90:fff
 
 **CPU**
@@ -152,16 +155,19 @@ Every option and color configuration for each *Widget* is documented below.
       format="FORMAT"
 
     FORMAT options
-      * [%]all   - time spent executing both user and kernel code,
-      * [%]user  - time spent executing user code,
-      * [%]sys   - time spent executing kernel code,
-      * intr     - number of serviced interrupts,
-      * ctxt     - number of context switches,
-      * forks    - number of forks,
-      * running  - number of processes running right now,
-      * blocked  - number of processes blocked on I/O right now,
-      * softirq  - number of serviced software interrupts,
-      * visubars - visualization of %all CPU usage as bars, one bar per CPU.
+      * [%]all  - time spent executing both user and kernel code,
+      * [%]user - time spent executing user code,
+      * [%]sys  - time spent executing kernel code,
+      * intr    - number of serviced interrupts,
+      * ctxt    - number of context switches,
+      * forks   - number of forks,
+      * running - number of processes running right now,
+      * blocked - number of processes blocked on I/O right now,
+      * softirq - number of serviced software interrupts,
+      * brlbars - visualization of %all CPU usage as narrow (Braille
+                  characters) bars, one bar per CPU,
+      * blkbars - same as above, but needs more space, as it uses actual block
+                  characters with more granularity.
 
     Colors
       [+] default
@@ -169,7 +175,7 @@ Every option and color configuration for each *Widget* is documented below.
                       supported)
 
     Example config entry
-      CPU 15 format="cpu: {running} {blocked} {visubars} {all.<}"
+      CPU 15 format="cpu: {running} {blocked} {brlbars} {all:<}"
       FG %all 0:aaa 60:a66 80:f66
 
 **DISK**
@@ -259,7 +265,7 @@ Every option and color configuration for each *Widget* is documented below.
              4 - unknown state.
 
     Example config entry
-      BAT 300 arg="BAT0" format="{arg}: {%fulldesign.2} {state}"
+      BAT 300 arg="BAT0" format="{arg}: {%fulldesign:>2} {state}"
       FG state 1:4a4 2:4a4
       BG %fulldesign 0:a00 15:220 25:
 
