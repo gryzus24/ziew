@@ -32,7 +32,7 @@ fn acceptHex(str: []const u8, pos: *usize) ?*const [7]u8 {
 
     if (str[i] != '#') return null;
     i += 1;
-    i = utl.skipSpacesTabs(str, i) orelse str.len;
+    i = mem.indexOfAnyPos(u8, str, i, " \t") orelse str.len;
 
     var hex: typ.Hex = .{};
     _ = hex.set(str[beg..i]);
