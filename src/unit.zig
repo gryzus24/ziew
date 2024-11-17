@@ -84,7 +84,7 @@ pub const NumUnit = struct {
 
     pub const WriteOptions = struct {
         alignment: Alignment = .none,
-        width: u8 = 3,
+        width: u8 = 4,
         precision: u8 = PRECISION_AUTO_VALUE,
     };
 
@@ -213,9 +213,9 @@ pub const NumUnit = struct {
 };
 
 pub fn SizeKb(value: u64) NumUnit {
-    const KB4 = 4096;
-    const MB4 = 4096 * 1024;
-    const GB4 = 4096 * 1024 * 1024;
+    const KB4 = 8192;
+    const MB4 = 8192 * 1024;
+    const GB4 = 8192 * 1024 * 1024;
 
     return switch (value) {
         0...KB4 - 1 => .{
