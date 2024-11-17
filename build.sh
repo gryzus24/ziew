@@ -1,7 +1,7 @@
 #!/bin/sh
 
 usage() {
-    printf '%s: <debug|small|fast> <install|test>\n' "$0"
+    printf '%s: <debug|small|fast> <install|test> [args...]\n' "$0"
 }
 
 OPT=
