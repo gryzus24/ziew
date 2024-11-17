@@ -35,13 +35,13 @@ pub fn debugFixedPoint() void {
 pub fn debugNumUnit() void {
     const stdout = io.getStdOut();
     const stdout_writer = stdout.writer();
-    const values: [5]u64 = .{ 948, 9480, 94800, 948000, 9480000 };
+    const values: [8]u64 = .{ 9, 94, 948, 1023, 9480, 94800, 948000, 9480000 };
     const width_max = 7;
     const precision_max = 3;
 
     utl.writeStr(stdout_writer, "\n");
     for (values) |val| {
-        const nu = unt.UnitSI(val);
+        const nu = unt.SizeKb(val);
 
         std.debug.print("V {}\n", .{val});
         for (0..width_max + 1) |width| {
