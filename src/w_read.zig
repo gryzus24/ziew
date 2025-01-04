@@ -9,6 +9,12 @@ const mem = std.mem;
 
 // == private =================================================================
 
+const FILE_END_MARKERS = ascii.whitespace[1..] ++ .{'\x00'};
+comptime {
+    if (mem.indexOfScalar(u8, FILE_END_MARKERS, ' ') != null)
+        @compileError("0x20 in file end markers");
+}
+
 fn writeBlockError(
     fbs: anytype,
     fg: ?*const [7]u8,
@@ -37,6 +43,12 @@ fn acceptHex(str: []const u8, pos: *usize) ?typ.Hex {
     var hex: typ.Hex = .{};
     _ = hex.set(str[beg..i]);
     return hex;
+}
+
+fn readFileUntil(file: fs.File, endmarkers: []const u8, buf: *[typ.WIDGET_BUF_MAX]u8) ![]const u8 {
+    const n = try file.read(buf);
+    const end = mem.indexOfAny(u8, buf[0..n], endmarkers) orelse n;
+    return buf[0..end];
 }
 
 // == public ==================================================================
@@ -71,13 +83,11 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     defer file.close();
 
     var _buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
-    const nread = file.read(&_buf) catch |e| {
+    const content = readFileUntil(file, FILE_END_MARKERS, &_buf) catch |e| {
         utl.fatal(&.{ "READ: read: ", wd.basename, @errorName(e) });
     };
 
     var pos: usize = 0;
-    const end = mem.indexOfAny(u8, _buf[0..nread], ascii.whitespace[1..]) orelse nread;
-    const content = _buf[0..end];
     var fghex: typ.Hex = wd.fg;
     var bghex: typ.Hex = wd.bg;
 
@@ -85,7 +95,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
         if (@as(typ.ReadOpt, @enumFromInt(part.opt)) == .content) {
             if (acceptHex(content[pos..], &pos)) |fg| fghex = fg;
             if (acceptHex(content[pos..], &pos)) |bg| bghex = bg;
-            if (pos < end and ascii.isWhitespace(content[pos])) pos += 1;
+            if (pos < content.len and ascii.isWhitespace(content[pos])) pos += 1;
             break;
         }
     }
