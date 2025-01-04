@@ -23,7 +23,7 @@ fn writeBlockError(
     return utl.writeBlockEnd_GetWritten(fbs);
 }
 
-fn acceptHex(str: []const u8, pos: *usize) ?*const [7]u8 {
+fn acceptHex(str: []const u8, pos: *usize) ?typ.Hex {
     var i: usize = 0;
     defer pos.* += i;
 
@@ -36,7 +36,7 @@ fn acceptHex(str: []const u8, pos: *usize) ?*const [7]u8 {
 
     var hex: typ.Hex = .{};
     _ = hex.set(str[beg..i]);
-    return hex.get();
+    return hex;
 }
 
 // == public ==================================================================
@@ -78,8 +78,8 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     var pos: usize = 0;
     const end = mem.indexOfAny(u8, _buf[0..nread], ascii.whitespace[1..]) orelse nread;
     const content = _buf[0..end];
-    var fghex: ?*const [7]u8 = wd.fg.get();
-    var bghex: ?*const [7]u8 = wd.bg.get();
+    var fghex: typ.Hex = wd.fg;
+    var bghex: typ.Hex = wd.bg;
 
     for (wd.format.part_opts) |*part| {
         if (@as(typ.ReadOpt, @enumFromInt(part.opt)) == .content) {
@@ -90,7 +90,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
         }
     }
 
-    utl.writeBlockStart(stream, fghex, bghex);
+    utl.writeBlockStart(stream, fghex.get(), bghex.get());
     for (wd.format.part_opts) |*part| {
         utl.writeStr(stream, part.part);
         utl.writeStr(
