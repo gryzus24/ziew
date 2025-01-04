@@ -36,7 +36,6 @@ fn showVersionAndExit(file: fs.File) noreturn {
 
 fn readArgs() Args {
     const argv = std.os.argv;
-    const stderr = io.getStdErr();
 
     var config_path: ?[*:0]const u8 = null;
     var get_config_path = false;
@@ -50,11 +49,11 @@ fn readArgs() Args {
                     get_config_path = true;
                     argi += 1;
                 },
-                'h' => showHelpAndExit(stderr),
-                'v' => showVersionAndExit(stderr),
+                'h' => showHelpAndExit(utl.stderr),
+                'v' => showVersionAndExit(utl.stderr),
                 else => {
-                    utl.writeStr(stderr, "unknown option\n");
-                    showHelpAndExit(stderr);
+                    utl.writeStr(utl.stderr, "unknown option\n");
+                    showHelpAndExit(utl.stderr);
                 },
             }
         }
@@ -64,13 +63,35 @@ fn readArgs() Args {
                 get_config_path = false;
             }
         } else {
-            utl.writeStr(stderr, "required argument: ");
-            utl.writeStr(stderr, arg[0..len]);
-            utl.writeStr(stderr, " <arg>\n");
-            showHelpAndExit(stderr);
+            utl.writeStr(utl.stderr, "required argument: ");
+            utl.writeStr(utl.stderr, arg[0..len]);
+            utl.writeStr(utl.stderr, " <arg>\n");
+            showHelpAndExit(utl.stderr);
         }
     }
     return .{ .config_path = config_path };
+}
+
+fn fatalConfigParse(e: anyerror, err: cfg.LineParseError) noreturn {
+    @setCold(true);
+    const log = utl.openLog();
+    const prefix = "fatal: ";
+    log.log(prefix);
+    log.log("config: ");
+    log.log(@errorName(e));
+    log.log("\n");
+    log.log(utl.bssPrint("{:<7}{s}\n", .{ err.nr, err.line }));
+    const beg = @min(err.ebeg, utl.bss.len);
+    const len = @min(err.elen, utl.bss.len);
+    if (len != 0) {
+        log.log(" " ** prefix.len);
+        @memset(utl.bss[0..beg], ' ');
+        log.log(utl.bss[0..beg]);
+        @memset(utl.bss[0..len], '^');
+        log.log(utl.bss[0..len]);
+        log.log("\n");
+    }
+    linux.exit(1);
 }
 
 fn readConfig(reg: *m.Region, config_path: ?[*:0]const u8) []const typ.Widget {
@@ -79,13 +100,9 @@ fn readConfig(reg: *m.Region, config_path: ?[*:0]const u8) []const typ.Widget {
     const err = blk: {
         if (config_path) |path| {
             if (cfg.readFile(reg, path)) |config_view| {
-                var err_line: []const u8 = undefined;
-                var err_pos: usize = undefined;
-                widgets = cfg.parse(reg, config_view, &err_pos, &err_line) catch |e| {
-                    utl.fatalPos(
-                        &.{ "config: ", @errorName(e), ": ", err_line },
-                        fmt.count("config: {s}: ", .{@errorName(e)}) + err_pos,
-                    );
+                var err: cfg.LineParseError = undefined;
+                widgets = cfg.parse(reg, config_view, &err) catch |e| {
+                    fatalConfigParse(e, err);
                 };
                 if (widgets.len == 0) {
                     utl.warn(&.{"no widgets loaded: using defaults..."});

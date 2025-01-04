@@ -16,6 +16,9 @@ pub const c = @cImport({
 });
 // zig fmt: on
 
+pub const stdout = io.getStdOut();
+pub const stderr = io.getStdErr();
+
 pub inline fn writeStr(with_write: anytype, str: []const u8) void {
     _ = with_write.write(str) catch {};
 }
@@ -74,17 +77,11 @@ pub fn writeBlockEnd_GetWritten(fbs: anytype) []const u8 {
 
 // == LOGGING =================================================================
 
-var bss_mem: [512]u8 = undefined;
-
-fn makeMsg(comptime format: []const u8, args: anytype) []const u8 {
-    return fmt.bufPrint(&bss_mem, format, args) catch return &bss_mem;
-}
-
 const Log = struct {
     file: ?fs.File,
 
     pub fn log(self: @This(), msg: []const u8) void {
-        writeStr(io.getStdErr(), msg);
+        writeStr(stderr, msg);
         if (self.file) |f| writeStr(f, msg);
     }
 
@@ -93,16 +90,22 @@ const Log = struct {
     }
 };
 
-fn openLog() Log {
+pub var bss: [512]u8 = undefined;
+
+pub fn bssPrint(comptime format: []const u8, args: anytype) []const u8 {
+    return fmt.bufPrint(&bss, format, args) catch return &.{};
+}
+
+pub fn openLog() Log {
     const file = fs.cwd().createFileZ("/tmp/ziew.log", .{ .truncate = false });
     if (file) |f| {
         f.seekFromEnd(0) catch {};
     } else |e| switch (e) {
         error.AccessDenied => writeStr(
-            io.getStdErr(),
+            stderr,
             "open: /tmp/ziew.log: probably sticky, only author can modify\n",
         ),
-        else => @panic(makeMsg("openLog: {s}", .{@errorName(e)})),
+        else => @panic(bssPrint("openLog: {s}", .{@errorName(e)})),
     }
     return .{ .file = file catch null };
 }
@@ -120,21 +123,7 @@ pub fn fatal(strings: []const []const u8) noreturn {
 pub inline fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
     @setCold(true);
     const log = openLog();
-    log.log(makeMsg("fatal: " ++ format ++ "\n", args));
-    linux.exit(1);
-}
-
-pub fn fatalPos(strings: []const []const u8, err_pos: usize) noreturn {
-    @setCold(true);
-    const log = openLog();
-    log.log("fatal: ");
-    for (strings) |s| log.log(s);
-    log.log("\n");
-    var end = "fatal: ".len + err_pos;
-    if (end > bss_mem.len) end = bss_mem.len;
-    @memset(bss_mem[0..end], ' ');
-    log.log(bss_mem[0..end]);
-    log.log("^\n");
+    log.log(bssPrint("fatal: " ++ format ++ "\n", args));
     linux.exit(1);
 }
 
@@ -150,12 +139,12 @@ pub fn warn(strings: []const []const u8) void {
 // == MISC ====================================================================
 
 pub fn repr(str: ?[]const u8) void {
-    const stderr = io.getStdErr().writer();
+    const writer = stderr.writer();
     if (str) |s| {
-        std.zig.fmtEscapes(s).format("", .{}, stderr) catch {};
-        writeStr(stderr, "\n");
+        std.zig.fmtEscapes(s).format("", .{}, writer) catch {};
+        writeStr(writer, "\n");
     } else {
-        writeStr(stderr, "<null>\n");
+        writeStr(writer, "<null>\n");
     }
 }
 

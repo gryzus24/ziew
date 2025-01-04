@@ -128,6 +128,28 @@ pub const Region = struct {
         return retptr[0..str.len :0];
     }
 
+    pub fn frontPushVec(self: *@This(), vec: anytype) !*@TypeOf(vec.*[0]) {
+        const T = @TypeOf(vec.*[0]);
+        var retptr = try self.frontAllocMany(T, 1);
+        if (vec.len == 0) {
+            vec.* = retptr;
+        } else {
+            vec.len += 1;
+        }
+        return &retptr[0];
+    }
+
+    pub fn backPushVec(self: *@This(), vec: anytype) !*@TypeOf(vec.*[0]) {
+        const T = @TypeOf(vec.*[0]);
+        var retptr = try self.backAllocMany(T, 1);
+        if (vec.len > 0) {
+            retptr.len = vec.len + 1;
+            mem.copyForwards(T, retptr, vec.*);
+        }
+        vec.* = retptr;
+        return &vec.*[vec.len - 1];
+    }
+
     pub fn slice(self: *const @This(), comptime T: type, start: SavePoint, n: usize) []T {
         return mem.bytesAsSlice(T, self.head[start..][0 .. @sizeOf(T) * n]);
     }

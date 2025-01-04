@@ -146,7 +146,7 @@ pub const WidgetId = union(Tag) {
         return true;
     }
 
-    pub fn requiresFormatParamameter(self: @This()) bool {
+    pub fn requiresFormatParam(self: @This()) bool {
         _ = meta.intToEnum(FormatRequired, @intFromEnum(self)) catch return false;
         return true;
     }

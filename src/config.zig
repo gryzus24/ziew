@@ -29,37 +29,20 @@ const WidgetAllocator = struct {
     thresh_hexes: []typ.ThreshHex = &.{},
 
     pub fn newWidget(self: *@This(), wid: typ.WidgetId) !*typ.Widget {
-        var new = try self.reg.backAllocMany(typ.Widget, 1);
-        if (self.widgets.len > 0) {
-            new.len = self.widgets.len + 1;
-            mem.copyForwards(typ.Widget, new, self.widgets);
-        }
-        self.widgets = new;
-        const ret = &self.widgets[self.widgets.len - 1];
-
+        const ret = try self.reg.backPushVec(&self.widgets);
         ret.* = .{ .wid = wid };
         return ret;
     }
 
     pub fn newPartOpt(self: *@This(), str: []const u8) !*typ.PartOpt {
-        var new = try self.reg.frontAllocMany(typ.PartOpt, 1);
-        if (self.format_parts.len == 0) {
-            self.format_parts = new;
-        } else {
-            self.format_parts.len += 1;
-        }
-        new[0] = .{ .part = str };
-        return &new[0];
+        const ret = try self.reg.frontPushVec(&self.format_parts);
+        ret.* = .{ .part = str };
+        return ret;
     }
 
     pub fn newThreshHex(self: *@This(), thresh: u8, hex: []const u8) !*typ.ThreshHex {
-        var new = try self.reg.frontAllocMany(typ.ThreshHex, 1);
-        if (self.thresh_hexes.len == 0) {
-            self.thresh_hexes = new;
-        } else {
-            self.thresh_hexes.len += 1;
-        }
-        new[0] = .{
+        const ret = try self.reg.frontPushVec(&self.thresh_hexes);
+        ret.* = .{
             .thresh = thresh,
             .hex = blk: {
                 var t: typ.Hex = .{};
@@ -67,7 +50,7 @@ const WidgetAllocator = struct {
                 break :blk t;
             },
         };
-        return &new[0];
+        return ret;
     }
 
     pub fn toOwnedWidgets(self: *@This()) []typ.Widget {
@@ -89,218 +72,193 @@ const WidgetAllocator = struct {
     }
 };
 
-const Identifier = union(enum) {
-    widget: typ.WidgetId,
-    color: enum { fg, bg },
+const Field = struct {
+    str: []const u8,
 };
 
-const StringRange = struct {
-    beg: usize,
-    end: usize,
+const Line = struct {
+    nr: usize,
+    fields: []Field = &.{},
 };
 
-const WidgetParams = struct {
-    arg: ?StringRange = null,
-    format: ?StringRange = null,
+const ConfigAllocator = struct {
+    reg: *m.Region,
+    lines: []Line = &.{},
+    fields: []Field = &.{},
+
+    pub fn newLine(self: *@This(), nr: usize) !*Line {
+        const ret = try self.reg.backPushVec(&self.lines);
+        ret.* = .{ .nr = nr };
+        return ret;
+    }
+
+    pub fn newField(self: *@This(), str: []const u8) !*Field {
+        const ret = try self.reg.frontPushVec(&self.fields);
+        ret.* = .{ .str = str };
+        return ret;
+    }
+
+    pub fn toOwnedLines(self: *@This()) []Line {
+        const ret = self.lines;
+        self.lines = &.{};
+        return ret;
+    }
+
+    pub fn toOwnedFields(self: *@This()) []Field {
+        const ret = self.fields;
+        self.fields = &.{};
+        return ret;
+    }
+};
+
+const StitchedLine = struct {
+    line: []const u8 = &.{},
+    ebeg: usize,
+    elen: usize,
 };
 
 const ParseError = error{
-    @"arg=... Missing",
-    @"format=... Missing",
+    BadArg,
     BadHex,
     BadInterval,
     BadThreshold,
-    BracketMismatch,
-    EmptyString,
-    ExpectedOnlyOneArgParam,
-    ExpectedOnlyOneFormatParam,
-    ExpectedString,
-    Huh,
-    MissingEqualSign,
+    ExcessOfSpecifiers,
+    MismatchedBrackets,
+    MissingArg,
     MissingFields,
-    NoBeginningQuote,
-    NoInterval,
-    NoMatchingQuote,
-    NoThreshold,
-    UnexpectedField,
+    MissingFormat,
+    MissingIdentifier,
+    MissingInterval,
+    MissingOptionOrColor,
+    MissingThreshold,
+    MissingThresholdColorField,
+    ThresholdTooBig,
     UnknownIdentifier,
     UnknownOption,
-    UnknownParam,
+    UnknownOrUnsupportedOption,
     UnknownSpecifier,
-    ExcessOfSpecifiers,
-    WidgetRequiresArgParam,
-    WidgetRequiresFormatParam,
+    UnsupportedOption,
+    WidgetSupportsOnlyDefaultColors,
 } || error{NoSpaceLeft};
 
-fn acceptIdentifier(
-    buf: []const u8,
-    buf_pos: usize,
-    err_pos: *usize,
-    out: *Identifier,
-) !usize {
-    var i = buf_pos;
-    errdefer err_pos.* = i;
+fn lineFieldSplit(reg: *m.Region, buf: []const u8) ![]Line {
+    var ca: ConfigAllocator = .{ .reg = reg };
+    var lineno: usize = 0;
 
-    const beg = i;
-    i = mem.indexOfAnyPos(u8, buf, i, " \t") orelse buf.len;
+    var lines = std.mem.splitScalar(u8, buf, '\n');
+    while (lines.next()) |_line| {
+        lineno += 1;
+        const line = std.mem.trim(u8, _line, " \t");
 
-    const identifier = buf[beg..i];
-    if (typ.strStartToTaggedWidgetId(identifier)) |wid| {
-        out.* = .{ .widget = wid };
-    } else if (mem.eql(u8, identifier, "FG")) {
-        out.* = .{ .color = .fg };
-    } else if (mem.eql(u8, identifier, "BG")) {
-        out.* = .{ .color = .bg };
-    } else {
-        return error.UnknownIdentifier;
+        if (line.len == 0) continue;
+        if (line[0] == '#') continue;
+
+        var fields = try ca.newLine(lineno);
+        var beg: usize = 0;
+        var in_quote = false;
+        var skip_ws = false;
+        for (line, 0..) |ch, i| {
+            switch (ch) {
+                ' ', '\t' => {
+                    if (in_quote) continue;
+                    if (!skip_ws) {
+                        skip_ws = true;
+                        _ = try ca.newField(line[beg..i]);
+                    }
+                    beg = i + 1;
+                },
+                '"' => {
+                    in_quote = !in_quote;
+                    skip_ws = false;
+                },
+                else => {
+                    skip_ws = false;
+                },
+            }
+        }
+        _ = try ca.newField(line[beg..]);
+        fields.fields = ca.toOwnedFields();
     }
-    return i;
+    return ca.toOwnedLines();
 }
 
-fn acceptInterval(
-    buf: []const u8,
-    buf_pos: usize,
-    err_pos: *usize,
-    out: *typ.DeciSec,
-) !usize {
-    var i = buf_pos;
-    errdefer err_pos.* = i;
+fn fieldWidget(field: Field) ?typ.WidgetId {
+    return if (typ.strStartToTaggedWidgetId(field.str)) |wid|
+        wid
+    else
+        null;
+}
 
-    const beg = i;
-    while (i < buf.len) switch (buf[i]) {
-        '0'...'9' => i += 1,
-        ' ', '\t' => break,
-        else => return error.BadInterval,
-    };
-    var ret = fmt.parseUnsigned(
-        typ.DeciSec,
-        buf[beg..i],
-        10,
-    ) catch |e| switch (e) {
+const ColorType = enum { fg, bg };
+fn fieldColor(field: Field) ?ColorType {
+    if (mem.startsWith(u8, field.str, "FG")) {
+        return .fg;
+    } else if (mem.startsWith(u8, field.str, "BG")) {
+        return .bg;
+    } else {
+        return null;
+    }
+}
+
+const ColorOptResult = union(enum) {
+    opt: u8,
+    err: enum { unknown, unsupported },
+};
+fn fieldColorOpt(wid: typ.WidgetId.ColorSupported, field: Field) ColorOptResult {
+    for (
+        typ.WID_OPT_COLOR_SUPPORTED[@intFromEnum(wid)],
+        typ.WID_OPT_NAMES[@intFromEnum(wid)],
+        0..,
+    ) |color_supported, name, j| {
+        if (mem.eql(u8, field.str, name)) {
+            return if (color_supported)
+                .{ .opt = @intCast(j) }
+            else
+                .{ .err = .unsupported };
+        }
+    } else {
+        return .{ .err = .unknown };
+    }
+}
+
+fn acceptInterval(str: []const u8) !usize {
+    var ret = fmt.parseUnsigned(typ.DeciSec, str, 10) catch |e| switch (e) {
         error.Overflow => return typ.WIDGET_INTERVAL_MAX,
-        error.InvalidCharacter => unreachable,
+        error.InvalidCharacter => return error.BadInterval,
     };
     if (ret == 0 or ret > typ.WIDGET_INTERVAL_MAX)
         ret = typ.WIDGET_INTERVAL_MAX;
 
-    out.* = ret;
-    return i;
+    return ret;
 }
 
-fn acceptString(
-    buf: []const u8,
-    buf_pos: usize,
-    err_pos: *usize,
-    out: *StringRange,
-    flag: enum { non_empty, allow_empty },
-) !usize {
-    var i = buf_pos;
-    errdefer err_pos.* = i;
-
-    if (buf_pos >= buf.len) return error.ExpectedString;
-    if (buf[i] != '"') return error.NoBeginningQuote;
-    i += 1; // skip '"'
-
-    const beg = i;
-    i = mem.indexOfScalarPos(u8, buf, i, '"') orelse return error.NoMatchingQuote;
-    const end = i;
-    i += 1; // skip '"'
-
-    if (beg == end and flag == .non_empty) return error.EmptyString;
-
-    out.* = .{ .beg = beg, .end = end };
-    return i;
-}
-
-fn expectExact(buf: []const u8, pos: usize, str: []const u8) usize {
-    return if (mem.startsWith(u8, buf[pos..], str)) pos + str.len else pos;
-}
-
-fn acceptWidgetParams(
-    buf: []const u8,
-    buf_pos: usize,
-    err_pos: *usize,
-    out: *WidgetParams,
-) !usize {
-    var i = buf_pos;
-    errdefer err_pos.* = i;
-
-    out.* = .{};
-
-    var arg_seen = false;
-    var format_seen = false;
-    while (i < buf.len) {
-        const param_type: enum { arg, format } = blk: {
-            const prev = i;
-            i = expectExact(buf, i, "arg");
-            if (i != prev) {
-                if (arg_seen) return error.ExpectedOnlyOneArgParam;
-                arg_seen = true;
-                break :blk .arg;
-            }
-            i = expectExact(buf, i, "format");
-            if (i != prev) {
-                if (format_seen) return error.ExpectedOnlyOneFormatParam;
-                format_seen = true;
-                break :blk .format;
-            }
-            return error.UnknownParam;
-        };
-        const prev = i;
-        i = expectExact(buf, i, "=");
-        if (prev == i) return error.MissingEqualSign;
-
-        var strange: StringRange = undefined;
-        i = try acceptString(
-            buf,
-            i,
-            err_pos,
-            &strange,
-            if (param_type == .arg) .non_empty else .allow_empty,
-        );
-        switch (param_type) {
-            .arg => out.*.arg = strange,
-            .format => out.*.format = strange,
-        }
-        i = utl.skipSpacesTabs(buf, i) orelse break;
-    }
-    return i;
-}
-
-fn acceptWidgetFormatString(
+fn acceptFormatString(
     wa: *WidgetAllocator,
-    buf: []const u8,
-    buf_pos: usize,
-    err_pos: *usize,
+    str: []const u8,
     wid: typ.WidgetId.FormatRequired,
     out: *typ.Format,
-) !usize {
-    var i = buf_pos;
-    errdefer err_pos.* = i;
+) !void {
+    var current: *typ.PartOpt = undefined;
 
-    var strange: StringRange = undefined;
-    _ = try acceptString(buf, i, err_pos, &strange, .allow_empty);
-    i = strange.beg;
-
+    var i: usize = 0;
     var inside_brackets = false;
     var str_beg = i;
     var opt_beg = i;
-    var current: *typ.PartOpt = undefined;
 
-    while (i < strange.end) : (i += 1) switch (buf[i]) {
+    while (i < str.len) : (i += 1) switch (str[i]) {
         '{' => {
-            if (inside_brackets) return error.BracketMismatch;
+            if (inside_brackets) return error.MismatchedBrackets;
             inside_brackets = true;
 
-            current = try wa.newPartOpt(buf[str_beg..i]);
+            current = try wa.newPartOpt(str[str_beg..i]);
             opt_beg = i + 1;
         },
         '}' => {
-            if (!inside_brackets) return error.BracketMismatch;
+            if (!inside_brackets) return error.MismatchedBrackets;
             inside_brackets = false;
 
             current.opt = optblk: for (typ.WID_OPT_NAMES[@intFromEnum(wid)], 0..) |name, j| {
-                const opt_full = buf[opt_beg..i];
+                const opt_full = str[opt_beg..i];
                 const colon = mem.indexOfScalar(u8, opt_full, ':') orelse opt_full.len;
                 const opt_name = opt_full[0..colon];
                 const opt_spec = opt_full[colon..];
@@ -352,77 +310,63 @@ fn acceptWidgetFormatString(
         },
         else => {},
     };
-    if (inside_brackets) return error.BracketMismatch;
+    if (inside_brackets) return error.MismatchedBrackets;
 
     out.*.part_opts = wa.toOwnedFormatParts();
-    out.*.part_last = buf[str_beg..strange.end];
-
-    return strange.end + 1; // skip '"'
+    out.*.part_last = str[str_beg..];
 }
 
-fn acceptColor(
-    wa: *WidgetAllocator,
-    buf: []const u8,
-    buf_pos: usize,
-    err_pos: *usize,
-    wid: typ.WidgetId,
-    out: *typ.Color,
-) !usize {
-    var i = buf_pos;
-    errdefer err_pos.* = i;
+fn accessField(fields: []Field, i: usize) ?Field {
+    return if (i < fields.len) fields[i] else null;
+}
 
-    const beg = i;
-    i = mem.indexOfAnyPos(u8, buf, i, " \t") orelse buf.len;
-    const field = buf[beg..i];
-    i = utl.skipSpacesTabs(buf, i) orelse buf.len;
-
-    var opt: u8 = undefined;
-    const expects_default_color = blk: {
-        if (!wid.supportsColor()) break :blk true;
-        for (
-            typ.WID_OPT_COLOR_SUPPORTED[@intFromEnum(wid)],
-            typ.WID_OPT_NAMES[@intFromEnum(wid)],
-            0..,
-        ) |color_supported, name, j| {
-            if (color_supported and mem.eql(u8, field, name)) {
-                opt = @intCast(j);
-                break :blk false;
-            }
-        } else {
-            if (i == buf.len) break :blk true;
-            return error.UnknownOption;
-        }
-    };
-
-    if (expects_default_color) {
-        if (i != buf.len) return error.UnexpectedField;
-        out.* = .{
-            .default = blk: {
-                var hex: typ.Hex = .{};
-                if (!hex.set(field)) return error.BadHex;
-                break :blk hex;
-            },
-        };
+fn unquoteField(field: Field, prefix: []const u8) ![]const u8 {
+    if (mem.startsWith(u8, field.str, prefix)) {
+        const t = mem.trim(u8, field.str[prefix.len..], " \t");
+        return mem.trim(u8, t, "\"");
     } else {
-        if (i == buf.len) return error.MissingFields;
-        while (true) {
-            const prev = i;
-            const sep = mem.indexOfScalarPos(u8, buf, i, ':') orelse return error.NoThreshold;
-            const thresh = fmt.parseUnsigned(u8, buf[prev..sep], 10) catch |e| switch (e) {
-                error.Overflow, error.InvalidCharacter => return error.BadThreshold,
-            };
-            if (thresh > 100) return error.BadThreshold;
-
-            i = mem.indexOfAnyPos(u8, buf, sep + 1, " \t") orelse buf.len;
-            _ = try wa.newThreshHex(thresh, buf[sep + 1 .. i]);
-            i = utl.skipSpacesTabs(buf, i) orelse break;
-        }
-        out.* = .{ .color = .{ .opt = opt, .colors = wa.toOwnedThreshHexes() } };
+        return error.BadArg;
     }
-    return i;
+}
+
+fn stitchFields(reg: *m.Region, fields: []Field, err_field: usize) !StitchedLine {
+    const base = reg.frontSave(u8);
+    var n: usize = 0;
+
+    var ebeg: usize = 0;
+    var elen: usize = 0;
+    for (fields, 0..) |field, i| {
+        if (i != 0)
+            n += (try reg.frontWriteStr(" ")).len;
+        if (i == err_field)
+            ebeg = n;
+        n += (try reg.frontWriteStr(field.str)).len;
+        if (i == err_field)
+            elen = n - ebeg;
+    }
+    return .{
+        .line = reg.slice(u8, base, n),
+        .ebeg = ebeg,
+        .elen = elen,
+    };
+}
+
+// Imagine this is a macro.
+fn SET_FG_BG(widget_data: anytype, color_type: ColorType, fg_bg: anytype) void {
+    switch (color_type) {
+        .fg => widget_data.fg = fg_bg,
+        .bg => widget_data.bg = fg_bg,
+    }
 }
 
 // == public ==================================================================
+
+pub const LineParseError = struct {
+    nr: usize,
+    line: []const u8,
+    ebeg: usize,
+    elen: usize,
+};
 
 pub fn readFile(
     reg: *m.Region,
@@ -461,226 +405,384 @@ pub fn defaultConfig(reg: *m.Region) []const typ.Widget {
         \\BG %fulldesign 0:a00 15:220 25:
         \\TIME 20 arg="%A %d.%m ~ %H:%M:%S "
     ;
-    var err_pos: usize = undefined;
-    var err_line: []const u8 = undefined;
-    return parse(reg, default_config, &err_pos, &err_line) catch unreachable;
+    var err: LineParseError = undefined;
+    return parse(reg, default_config, &err) catch unreachable;
 }
 
 pub fn parse(
     reg: *m.Region,
-    _buf: []const u8, // underscored as I kept typing `buf` instead of `line`
-    err_pos: *usize,
-    err_line: *[]const u8,
+    buf: []const u8,
+    err: *LineParseError,
 ) ParseError![]const typ.Widget {
+    err.* = .{ .nr = 0, .line = &.{}, .ebeg = 0, .elen = 0 };
+
     var wa: WidgetAllocator = .{ .reg = reg };
-    var lines = mem.tokenizeScalar(u8, _buf, '\n');
     var current: *typ.Widget = undefined;
+    var current_field = ~@as(usize, 0);
 
-    while (lines.next()) |_line| {
-        const line = mem.trim(u8, _line, " \t");
+    const lines = try lineFieldSplit(reg, buf);
+    for (lines) |line| {
+        const fields = line.fields;
 
-        if (line.len == 0) continue;
-        if (line[0] == '#') continue;
+        errdefer err.* = blk: {
+            const r = stitchFields(
+                reg,
+                fields,
+                current_field,
+            ) catch |e| switch (e) {
+                error.NoSpaceLeft => StitchedLine{
+                    .line = "config: parse: NoSpaceLeft",
+                    .ebeg = 0,
+                    .elen = 0,
+                },
+            };
+            break :blk .{
+                .nr = line.nr,
+                .line = r.line,
+                .ebeg = r.ebeg,
+                .elen = r.elen,
+            };
+        };
 
-        err_pos.* = 0;
-        err_line.* = line;
+        current_field = 0;
+        const f_wid_or_color = accessField(fields, current_field) orelse {
+            return error.MissingIdentifier; // unreachable
+        };
 
-        var i: usize = 0;
-        var identifier: Identifier = undefined;
-        i = try acceptIdentifier(line, i, err_pos, &identifier);
-        switch (identifier) {
-            .widget => |wid| {
-                current = try wa.newWidget(wid);
-                i = utl.skipSpacesTabs(line, i) orelse return error.NoInterval;
-                i = try acceptInterval(line, i, err_pos, &current.interval);
+        if (fieldWidget(f_wid_or_color)) |wid| {
+            current_field = 1;
+            const f_interval = accessField(fields, current_field) orelse {
+                return error.MissingInterval;
+            };
+            current = try wa.newWidget(wid);
+            current.interval = try acceptInterval(f_interval.str);
 
-                const arg_required = wid.requiresArgParam();
-                const format_required = wid.requiresFormatParamameter();
+            const arg_required = wid.requiresArgParam();
+            const fmt_required = wid.requiresFormatParam();
+            var arg_field: usize = 0;
+            var fmt_field: usize = 0;
 
-                var params: WidgetParams = undefined;
-                i = utl.skipSpacesTabs(line, i) orelse {
-                    if (arg_required) return error.@"arg=... Missing";
-                    if (format_required) return error.@"format=... Missing";
-                    return error.Huh;
+            current_field = 2;
+            for (fields[current_field..], current_field..) |field, i| {
+                if (mem.startsWith(u8, field.str, "arg=")) {
+                    arg_field = i;
+                } else if (mem.startsWith(u8, field.str, "format=")) {
+                    fmt_field = i;
+                }
+            }
+            current_field = ~@as(usize, 0);
+            if (arg_required and arg_field == 0) return error.MissingArg;
+            if (fmt_required and fmt_field == 0) return error.MissingFormat;
+            current_field = arg_field;
+            if (arg_required and arg_field > 0) {
+                const arg = try unquoteField(fields[arg_field], "arg=");
+                switch (wid.castTo(typ.WidgetId.ArgRequired)) {
+                    .TIME => current.wid.TIME = try w_time.WidgetData.init(reg, arg),
+                    .DISK => current.wid.DISK = try w_dysk.WidgetData.init(reg, arg),
+                    .NET => current.wid.NET = try w_net.WidgetData.init(reg, arg),
+                    .BAT => current.wid.BAT = try w_bat.WidgetData.init(reg, arg),
+                    .READ => current.wid.READ = try w_read.WidgetData.init(reg, arg),
+                }
+            }
+            current_field = fmt_field;
+            if (fmt_required and fmt_field > 0) {
+                const fmt_wid = wid.castTo(typ.WidgetId.FormatRequired);
+                const ref = switch (fmt_wid) {
+                    .MEM => blk: {
+                        current.wid.MEM = try reg.frontAlloc(w_mem.WidgetData);
+                        current.wid.MEM.* = .{};
+                        break :blk &current.wid.MEM.format;
+                    },
+                    .CPU => blk: {
+                        current.wid.CPU = try reg.frontAlloc(w_cpu.WidgetData);
+                        current.wid.CPU.* = .{};
+                        break :blk &current.wid.CPU.format;
+                    },
+                    .DISK => &current.wid.DISK.format,
+                    .NET => &current.wid.NET.format,
+                    .BAT => &current.wid.BAT.format,
+                    .READ => &current.wid.READ.format,
                 };
-                _ = try acceptWidgetParams(line, i, err_pos, &params);
+                try acceptFormatString(
+                    &wa,
+                    try unquoteField(fields[fmt_field], "format="),
+                    fmt_wid,
+                    ref,
+                );
+            }
+        } else if (fieldColor(f_wid_or_color)) |color_type| {
+            if (wa.widgets.len == 0) {
+                utl.warn(&.{
+                    "config: color without a widget: ",
+                    (try stitchFields(reg, fields, 0)).line,
+                });
+                continue;
+            }
 
-                if (params.arg) |strange| {
-                    if (arg_required) {
-                        const arg = line[strange.beg..strange.end];
-                        switch (wid.castTo(typ.WidgetId.ArgRequired)) {
-                            .TIME => current.wid.TIME = try w_time.WidgetData.init(reg, arg),
-                            .DISK => current.wid.DISK = try w_dysk.WidgetData.init(reg, arg),
-                            .NET => current.wid.NET = try w_net.WidgetData.init(reg, arg),
-                            .BAT => current.wid.BAT = try w_bat.WidgetData.init(reg, arg),
-                            .READ => current.wid.READ = try w_read.WidgetData.init(reg, arg),
-                        }
-                    }
-                } else if (arg_required) {
-                    return error.WidgetRequiresArgParam;
-                }
-
-                if (params.format) |strange| {
-                    if (format_required) {
-                        const format_wid = wid.castTo(typ.WidgetId.FormatRequired);
-                        const ref = switch (format_wid) {
-                            .MEM => blk: {
-                                current.wid.MEM = try reg.frontAlloc(w_mem.WidgetData);
-                                current.wid.MEM.* = .{};
-                                break :blk &current.wid.MEM.format;
-                            },
-                            .CPU => blk: {
-                                current.wid.CPU = try reg.frontAlloc(w_cpu.WidgetData);
-                                current.wid.CPU.* = .{};
-                                break :blk &current.wid.CPU.format;
-                            },
-                            .DISK => &current.wid.DISK.format,
-                            .NET => &current.wid.NET.format,
-                            .BAT => &current.wid.BAT.format,
-                            .READ => &current.wid.READ.format,
-                        };
-                        _ = try acceptWidgetFormatString(
-                            &wa,
-                            line,
-                            strange.beg - 1,
-                            err_pos,
-                            format_wid,
-                            ref,
-                        );
-                    }
-                } else if (format_required) {
-                    return error.WidgetRequiresFormatParam;
-                }
-            },
-            .color => |color_type| {
-                if (wa.widgets.len == 0) {
-                    utl.warn(&.{ "config: color without a widget: ", line });
-                    continue;
-                }
-                var co: typ.Color = undefined;
-                i = utl.skipSpacesTabs(line, i) orelse return error.MissingFields;
-                i = try acceptColor(&wa, line, i, err_pos, current.wid, &co);
-
+            current_field = 1;
+            const second_field = accessField(fields, current_field) orelse {
+                return error.MissingOptionOrColor;
+            };
+            var co: typ.Color = undefined;
+            var opt: u8 = undefined;
+            const wants_default_color = blk: {
                 if (current.wid.supportsColor()) {
-                    switch (current.wid.castTo(typ.WidgetId.ColorSupported)) {
-                        .MEM => switch (color_type) {
-                            .fg => current.wid.MEM.fg = co,
-                            .bg => current.wid.MEM.bg = co,
+                    switch (fieldColorOpt(
+                        current.wid.castTo(typ.WidgetId.ColorSupported),
+                        second_field,
+                    )) {
+                        .opt => |o| {
+                            opt = o;
+                            break :blk false;
                         },
-                        .CPU => switch (color_type) {
-                            .fg => current.wid.CPU.fg = co,
-                            .bg => current.wid.CPU.bg = co,
-                        },
-                        .DISK => switch (color_type) {
-                            .fg => current.wid.DISK.fg = co,
-                            .bg => current.wid.DISK.bg = co,
-                        },
-                        .NET => switch (color_type) {
-                            .fg => current.wid.NET.fg = co,
-                            .bg => current.wid.NET.bg = co,
-                        },
-                        .BAT => switch (color_type) {
-                            .fg => current.wid.BAT.fg = co,
-                            .bg => current.wid.BAT.bg = co,
-                        },
-                    }
-                } else {
-                    switch (current.wid.castTo(typ.WidgetId.ColorOnlyDefault)) {
-                        .TIME => switch (color_type) {
-                            .fg => current.wid.TIME.fg = co.default,
-                            .bg => current.wid.TIME.bg = co.default,
-                        },
-                        .READ => switch (color_type) {
-                            .fg => current.wid.READ.fg = co.default,
-                            .bg => current.wid.READ.bg = co.default,
+                        .err => |e| switch (e) {
+                            .unknown => if (fields.len > 2)
+                                return error.UnknownOption
+                            else
+                                break :blk true, // might be a hex color
+                            .unsupported => return error.UnsupportedOption,
                         },
                     }
                 }
-            },
+                break :blk true;
+            };
+            if (wants_default_color) {
+                if (fields.len > 2) {
+                    current_field = 2;
+                    return error.WidgetSupportsOnlyDefaultColors;
+                }
+                co = .{
+                    .default = blk: {
+                        var hex: typ.Hex = .{};
+                        if (!hex.set(second_field.str)) return error.BadHex;
+                        break :blk hex;
+                    },
+                };
+            } else {
+                current_field = ~@as(usize, 0);
+                if (fields.len <= 2) return error.MissingThresholdColorField;
+                current_field = 2;
+                for (fields[current_field..]) |field| {
+                    const sep = mem.indexOfScalar(u8, field.str, ':') orelse {
+                        return error.MissingThreshold;
+                    };
+                    const thresh = fmt.parseUnsigned(u8, field.str[0..sep], 10) catch |e| switch (e) {
+                        error.Overflow, error.InvalidCharacter => return error.BadThreshold,
+                    };
+                    if (thresh > 100) return error.ThresholdTooBig;
+                    _ = try wa.newThreshHex(thresh, field.str[sep + 1 ..]);
+                    current_field += 1;
+                }
+                co = .{
+                    .color = .{
+                        .opt = opt,
+                        .colors = wa.toOwnedThreshHexes(),
+                    },
+                };
+            }
+            if (current.wid.supportsColor()) {
+                switch (current.wid.castTo(typ.WidgetId.ColorSupported)) {
+                    .MEM => SET_FG_BG(current.wid.MEM, color_type, co),
+                    .CPU => SET_FG_BG(current.wid.CPU, color_type, co),
+                    .DISK => SET_FG_BG(current.wid.DISK, color_type, co),
+                    .NET => SET_FG_BG(current.wid.NET, color_type, co),
+                    .BAT => SET_FG_BG(current.wid.BAT, color_type, co),
+                }
+            } else {
+                switch (current.wid.castTo(typ.WidgetId.ColorOnlyDefault)) {
+                    .TIME => SET_FG_BG(current.wid.TIME, color_type, co.default),
+                    .READ => SET_FG_BG(current.wid.READ, color_type, co.default),
+                }
+            }
+        } else {
+            return error.UnknownIdentifier;
         }
     }
-    err_pos.* = 0;
-    err_line.* = &.{};
     return wa.toOwnedWidgets();
 }
 
 test parse {
     const t = std.testing;
-    var buf: [4096]u8 align(16) = undefined;
+    var buf: [2 * 4096]u8 align(16) = undefined;
     var reg = m.Region.init(&buf);
-    var err_pos: usize = undefined;
-    var err_line: []const u8 = undefined;
+    var err: LineParseError = undefined;
 
     var s: []const u8 = "A";
-    try t.expectError(error.UnknownIdentifier, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 1);
+    try t.expectError(error.UnknownIdentifier, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 1);
+
     s = "CPU";
-    try t.expectError(error.NoInterval, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 0);
+    try t.expectError(error.MissingInterval, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 0);
+
     s = "CPU a";
-    try t.expectError(error.BadInterval, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 4);
+    try t.expectError(error.BadInterval, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 4);
+    try t.expect(err.elen == 1);
+
     s = "CPU 1";
-    try t.expectError(error.@"format=... Missing", parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 0);
+    try t.expectError(error.MissingFormat, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 0);
+
     s = "CPU 1 arg";
-    try t.expectError(error.MissingEqualSign, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 9);
+    try t.expectError(error.MissingFormat, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 0);
+
     s = "CPU 1 arg=";
-    try t.expectError(error.ExpectedString, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 10);
+    try t.expectError(error.MissingFormat, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 0);
+
     s = "CPU 1 arg=\"";
-    try t.expectError(error.NoMatchingQuote, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 10);
+    try t.expectError(error.MissingFormat, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 0);
+
     s = "CPU 1 arg=\"\"";
-    try t.expectError(error.EmptyString, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 10);
+    try t.expectError(error.MissingFormat, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 0);
+
     s = "CPU 1 arg=\" \"";
-    try t.expectError(error.WidgetRequiresFormatParam, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 0);
+    try t.expectError(error.MissingFormat, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 0);
+
     s = "CPU 1 arg=\" \" format =";
-    try t.expectError(error.MissingEqualSign, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 20);
+    try t.expectError(error.MissingFormat, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 0);
+
     s = "CPU 1 arg=\" \" format=\"{\"";
-    try t.expectError(error.BracketMismatch, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 23);
+    try t.expectError(error.MismatchedBrackets, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 14);
+    try t.expect(err.elen == 10);
+
     s = "CPU 1 arg=\" \" format=\"{}\"";
-    try t.expectError(error.UnknownOption, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 23);
-    s = "CPU 1 arg=\" \" format=\"{}\"";
-    try t.expectError(error.UnknownOption, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 23);
+    try t.expectError(error.UnknownOption, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 14);
+    try t.expect(err.elen == 11);
+
     s = "CPU 1 arg=\" \" format=\"{a}\"";
-    try t.expectError(error.UnknownOption, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 24);
-    s = "CPU 1 arg=\" \" format=\"{a}\"";
-    try t.expectError(error.UnknownOption, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 24);
-    s = "CPU 1 arg=\" \" format=\"{all.a}\"";
-    try t.expectError(error.UnknownSpecifier, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 28);
-    s = "CPU 1 arg=\" \" format=\"{all.1}}\"";
-    try t.expectError(error.BracketMismatch, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 29);
-    s = "CPU 1 arg=\" \" format=\"{all.1}\"\nF";
-    try t.expectError(error.UnknownIdentifier, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 1);
-    s = "CPU 1 arg=\" \" format=\"{all.1}\"\nFG";
-    try t.expectError(error.MissingFields, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 0);
-    s = "CPU 1 arg=\" \" format=\"{all.1}\"\nFG %";
-    try t.expectError(error.BadHex, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 4);
-    s = "CPU 1 arg=\" \" format=\"{all.1}\"\nFG %all";
-    try t.expectError(error.MissingFields, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 7);
-    s = "CPU 1 arg=\" \" format=\"{all.1}\"\nFG %all a";
-    try t.expectError(error.NoThreshold, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 8);
-    s = "CPU 1 arg=\" \" format=\"{all.1}\"\nFG %all :";
-    try t.expectError(error.BadThreshold, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 8);
-    s = "CPU 1 arg=\" \" format=\"{all.1}\"\nFG %all 2:333 3: 4:1";
-    try t.expectError(error.BadHex, parse(&reg, s, &err_pos, &err_line));
-    try t.expect(err_pos == 20);
+    try t.expectError(error.UnknownOption, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 14);
+    try t.expect(err.elen == 12);
+
+    s = "CPU 1 arg=\" \" format=\"{all:a}\"";
+    try t.expectError(error.UnknownSpecifier, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 14);
+    try t.expect(err.elen == 16);
+
+    s = "CPU 1 arg=\" \" format=\"{all:.1}}\"";
+    try t.expectError(error.MismatchedBrackets, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, s));
+    try t.expect(err.nr == 1);
+    try t.expect(err.ebeg == 14);
+    try t.expect(err.elen == 18);
+
+    s = "CPU 1 arg=\" \" format=\"{all:.1}\"\nF";
+    try t.expectError(error.UnknownIdentifier, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, "F"));
+    try t.expect(err.nr == 2);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 1);
+
+    s = "CPU 1 arg=\" \" format=\"{all:.1}\"\nFG";
+    try t.expectError(error.MissingOptionOrColor, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, "FG"));
+    try t.expect(err.nr == 2);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 0);
+
+    s = "CPU 1 arg=\" \" format=\"{all:.1}\"\nFG 2a";
+    try t.expectError(error.BadHex, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, "FG 2a"));
+    try t.expect(err.nr == 2);
+    try t.expect(err.ebeg == 3);
+    try t.expect(err.elen == 2);
+
+    s = "TIME 20 arg=\"%A %d.%m ~ %H:%M:%S\"\nFG 2a";
+    try t.expectError(error.BadHex, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, "FG 2a"));
+    try t.expect(err.nr == 2);
+    try t.expect(err.ebeg == 3);
+    try t.expect(err.elen == 2);
+
+    s = "CPU 1 arg=\" \" format=\"{all:.1}\"\nFG %all";
+    try t.expectError(error.MissingThresholdColorField, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, "FG %all"));
+    try t.expect(err.nr == 2);
+    try t.expect(err.ebeg == 0);
+    try t.expect(err.elen == 0);
+
+    s = "TIME 20 arg=\"%A %d.%m ~ %H:%M:%S\"\nFG %all";
+    try t.expectError(error.BadHex, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, "FG %all"));
+    try t.expect(err.nr == 2);
+    try t.expect(err.ebeg == 3);
+    try t.expect(err.elen == 4);
+
+    s = "CPU 1 arg=\" \" format=\"{all:.1}\"\nFG %all a";
+    try t.expectError(error.MissingThreshold, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, "FG %all a"));
+    try t.expect(err.nr == 2);
+    try t.expect(err.ebeg == 8);
+    try t.expect(err.elen == 1);
+
+    s = "TIME 20 arg=\"%A %d.%m ~ %H:%M:%S\"\nFG %all a";
+    try t.expectError(error.WidgetSupportsOnlyDefaultColors, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, "FG %all a"));
+    try t.expect(err.nr == 2);
+    try t.expect(err.ebeg == 8);
+    try t.expect(err.elen == 1);
+
+    s = "CPU 1 arg=\" \" format=\"{all:.1}\"\nFG 777";
+    const widgets = parse(&reg, s, &err) catch unreachable;
+    try t.expect(widgets.len == 1);
+
+    s = "CPU 1 arg=\" \" format=\"{all:.1}\"\nFG %all :";
+    try t.expectError(error.BadThreshold, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, "FG %all :"));
+    try t.expect(err.nr == 2);
+    try t.expect(err.ebeg == 8);
+    try t.expect(err.elen == 1);
+
+    s = "CPU 1 arg=\" \" format=\"{all:.1}\"\nFG %all 2:333 3: 4:1 5:#222";
+    try t.expectError(error.BadHex, parse(&reg, s, &err));
+    try t.expect(mem.eql(u8, err.line, "FG %all 2:333 3: 4:1 5:#222"));
+    try t.expect(err.nr == 2);
+    try t.expect(err.ebeg == 17);
+    try t.expect(err.elen == 3);
 }

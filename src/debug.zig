@@ -8,38 +8,37 @@ const io = std.io;
 const linux = std.os.linux;
 
 pub fn debugFixedPoint() void {
-    const stdout = io.getStdErr().writer();
+    const writer = utl.stderr.writer();
     for (0..(1 << 12) + 2) |i| {
         const fp = unt.F5608.init(i).div(1 << 8);
         const nu: unt.NumUnit = .{ .n = fp, .u = .si_one };
 
-        fmt.format(stdout, "{d:5} ", .{i}) catch {};
-        nu.write(stdout, .none, 0, 0);
-        utl.writeStr(stdout, " ");
-        nu.write(stdout, .none, 0, 1);
-        utl.writeStr(stdout, " ");
-        nu.write(stdout, .none, 0, 2);
-        utl.writeStr(stdout, " ");
-        nu.write(stdout, .none, 0, 3);
-        utl.writeStr(stdout, "  ");
+        fmt.format(writer, "{d:5} ", .{i}) catch {};
+        nu.write(writer, .none, 0, 0);
+        utl.writeStr(writer, " ");
+        nu.write(writer, .none, 0, 1);
+        utl.writeStr(writer, " ");
+        nu.write(writer, .none, 0, 2);
+        utl.writeStr(writer, " ");
+        nu.write(writer, .none, 0, 3);
+        utl.writeStr(writer, "  ");
 
         fmt.format(
-            stdout,
+            writer,
             "{any:.5}",
             .{@as(f64, @floatFromInt(i)) / (1 << 8)},
         ) catch {};
-        utl.writeStr(stdout, "\n");
+        utl.writeStr(writer, "\n");
     }
 }
 
 pub fn debugNumUnit() void {
-    const stdout = io.getStdOut();
-    const stdout_writer = stdout.writer();
+    const writer = utl.stdout.writer();
     const values: [8]u64 = .{ 9, 94, 948, 1023, 9480, 94800, 948000, 9480000 };
     const width_max = 7;
     const precision_max = 3;
 
-    utl.writeStr(stdout_writer, "\n");
+    utl.writeStr(writer, "\n");
     for (values) |val| {
         const nu = unt.SizeKb(val);
 
@@ -58,20 +57,20 @@ pub fn debugNumUnit() void {
                     .precision = p,
                 };
 
-                utl.writeStr(stdout_writer, "|");
-                nu.write(stdout_writer, o);
-                utl.writeStr(stdout_writer, "|");
+                utl.writeStr(writer, "|");
+                nu.write(writer, o);
+                utl.writeStr(writer, "|");
 
                 if (w < 2)
                     w = 2;
                 if (p == unt.PRECISION_AUTO_VALUE)
                     p = 0;
                 for (0..(width_max - w) + (precision_max - p)) |_| {
-                    utl.writeStr(stdout_writer, " ");
+                    utl.writeStr(writer, " ");
                 }
-                utl.writeStr(stdout_writer, "\t");
+                utl.writeStr(writer, "\t");
             }
-            utl.writeStr(stdout_writer, "\n");
+            utl.writeStr(writer, "\n");
         }
     }
 }
