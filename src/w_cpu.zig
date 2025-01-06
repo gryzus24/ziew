@@ -207,7 +207,7 @@ pub const WidgetData = struct {
 pub const CpuState = struct {
     left: Stat = .{},
     right: Stat = .{},
-    left_newest: bool = true,
+    left_newest: bool = false,
 
     usage_pct: Cpu.Delta = .{},
     usage_abs: Cpu.Delta = .{},
