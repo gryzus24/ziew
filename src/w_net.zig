@@ -19,7 +19,7 @@ const ColorHandler = struct {
     up: bool,
 
     pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
-        return color.firstColorEqualThreshold(@intFromBool(self.up), oc.colors);
+        return color.firstColorEQThreshold(@intFromBool(self.up), oc.colors);
     }
 };
 
@@ -395,20 +395,64 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
             const new = new_if.?;
             const old = old_if.?;
             nu = switch (opt.castTo(typ.NetOpt.ProcNetDevRequired)) {
-                // zig fmt: off
-                .rx_bytes => unt.SizeBytes(new.bytes(.rx) - old.bytes(.rx)),
-                .rx_pkts  => unt.UnitSI(new.packets(.rx) - old.packets(.rx)),
-                .rx_errs  => unt.UnitSI(new.errs(.rx) - old.errs(.rx)),
-                .rx_drop  => unt.UnitSI(new.drop(.rx) - old.drop(.rx)),
-                .rx_multicast => unt.UnitSI(new.rx_multicast() - old.rx_multicast()),
-                .tx_bytes => unt.SizeBytes(new.bytes(.tx) - old.bytes(.tx)),
-                .tx_pkts  => unt.UnitSI(new.packets(.tx) - old.packets(.tx)),
-                .tx_errs  => unt.UnitSI(new.errs(.tx) - old.errs(.tx)),
-                .tx_drop  => unt.UnitSI(new.drop(.tx) - old.drop(.tx)),
+                .rx_bytes => unt.SizeBytes(utl.calc(
+                    new.bytes(.rx),
+                    old.bytes(.rx),
+                    part.flags.calc,
+                    .total,
+                )),
+                .rx_pkts => unt.UnitSI(utl.calc(
+                    new.packets(.rx),
+                    old.packets(.rx),
+                    part.flags.calc,
+                    .total,
+                )),
+                .rx_errs => unt.UnitSI(utl.calc(
+                    new.errs(.rx),
+                    old.errs(.rx),
+                    part.flags.calc,
+                    .total,
+                )),
+                .rx_drop => unt.UnitSI(utl.calc(
+                    new.drop(.rx),
+                    old.drop(.rx),
+                    part.flags.calc,
+                    .total,
+                )),
+                .rx_multicast => unt.UnitSI(utl.calc(
+                    new.rx_multicast(),
+                    old.rx_multicast(),
+                    part.flags.calc,
+                    .total,
+                )),
+                .tx_bytes => unt.SizeBytes(utl.calc(
+                    new.bytes(.tx),
+                    old.bytes(.tx),
+                    part.flags.calc,
+                    .total,
+                )),
+                .tx_pkts => unt.UnitSI(utl.calc(
+                    new.packets(.tx),
+                    old.packets(.tx),
+                    part.flags.calc,
+                    .total,
+                )),
+                .tx_errs => unt.UnitSI(utl.calc(
+                    new.errs(.tx),
+                    old.errs(.tx),
+                    part.flags.calc,
+                    .total,
+                )),
+                .tx_drop => unt.UnitSI(utl.calc(
+                    new.drop(.tx),
+                    old.drop(.tx),
+                    part.flags.calc,
+                    .total,
+                )),
                 // zig fmt: on
             };
         }
-        nu.write(stream, part.wopts);
+        nu.write(stream, part.wopts, part.flags.quiet);
     }
     utl.writeStr(stream, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);

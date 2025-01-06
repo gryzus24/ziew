@@ -260,17 +260,31 @@ fn acceptFormatString(
             if (!inside_brackets) return error.MismatchedBrackets;
             inside_brackets = false;
 
-            const opt_full = str[opt_beg..i];
-            const colon = mem.indexOfScalar(u8, opt_full, ':') orelse opt_full.len;
-            const opt_name = opt_full[0..colon];
-            const opt_spec = opt_full[colon..];
+            const o_whole = str[opt_beg..i];
+            const colon = mem.indexOfScalar(u8, o_whole, ':') orelse o_whole.len;
+
+            const o_name_flag = o_whole[0..colon];
+            const o_spec = o_whole[colon..];
+
+            const atsign = mem.indexOfScalar(u8, o_name_flag, '@') orelse o_name_flag.len;
+            const o_name = o_name_flag[0..atsign];
+            const o_flag = o_name_flag[atsign..];
+
+            if (o_flag.len != 0) {
+                for (o_flag[1..]) |ch| switch (ch | 0x20) {
+                    't' => current.flags.calc = .total,
+                    'd' => current.flags.calc = .diff,
+                    'q' => current.flags.quiet = true,
+                    else => {},
+                };
+            }
 
             current.opt = optblk: for (typ.WID_OPT_NAMES[@intFromEnum(wid)], 0..) |name, j| {
-                if (!mem.eql(u8, name, opt_name)) continue;
+                if (!mem.eql(u8, name, o_name)) continue;
 
-                if (opt_spec.len != 0) {
+                if (o_spec.len != 0) {
                     var state: enum { alignment, width, precision } = .alignment;
-                    for (opt_spec[1..]) |ch| switch (state) {
+                    for (o_spec[1..]) |ch| switch (state) {
                         .alignment => {
                             switch (ch) {
                                 '<' => {
@@ -307,7 +321,7 @@ fn acceptFormatString(
                 }
                 break :optblk @intCast(j);
             } else {
-                err_note.* = opt_name;
+                err_note.* = o_name;
                 return error.UnknownOption;
             };
             str_beg = i + 1;

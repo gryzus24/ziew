@@ -225,7 +225,7 @@ pub const CpuState = struct {
     pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
         const new, const old = self.getNewOldPtrs();
 
-        return color.firstColorAboveThreshold(
+        return color.firstColorGEThreshold(
             switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(oc.opt))) {
                 .@"%all" => self.usage_pct.all.roundAndTruncate(),
                 .@"%user" => self.usage_pct.user.roundAndTruncate(),
@@ -313,17 +313,17 @@ pub fn widget(
             .all      => .{ .n = state.usage_abs.all,  .u = .percent },
             .user     => .{ .n = state.usage_abs.user, .u = .percent },
             .sys      => .{ .n = state.usage_abs.sys,  .u = .percent },
-            .intr     => unt.UnitSI(new.intr - old.intr),
-            .ctxt     => unt.UnitSI(new.ctxt - old.ctxt),
-            .forks    => unt.UnitSI(new.forks - old.forks),
+            .intr     => unt.UnitSI(utl.calc(new.intr, old.intr, part.flags.calc, .diff)),
+            .ctxt     => unt.UnitSI(utl.calc(new.ctxt, old.ctxt, part.flags.calc, .diff)),
+            .forks    => unt.UnitSI(utl.calc(new.forks, old.forks, part.flags.calc, .diff)),
             .running  => unt.UnitSI(new.running),
             .blocked  => unt.UnitSI(new.blocked),
-            .softirq  => unt.UnitSI(new.softirq - old.softirq),
+            .softirq  => unt.UnitSI(utl.calc(new.softirq, old.softirq, part.flags.calc, .diff)),
             .brlbars  => unreachable,
             .blkbars  => unreachable,
             // zig fmt: on
         };
-        nu.write(writer, part.wopts);
+        nu.write(writer, part.wopts, part.flags.quiet);
     }
     utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);

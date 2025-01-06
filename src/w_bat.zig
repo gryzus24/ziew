@@ -53,7 +53,7 @@ const Bat = struct {
     pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
         const batopt_cs = @as(typ.BatOpt.ColorSupported, @enumFromInt(oc.opt));
         if (batopt_cs == .state) {
-            return color.firstColorEqualThreshold(
+            return color.firstColorEQThreshold(
                 switch (self.state[0] & (0xff - 0x20)) {
                     'D' => 0, // Discharging
                     'C' => 1, // Charging
@@ -64,7 +64,7 @@ const Bat = struct {
                 oc.colors,
             );
         } else {
-            return color.firstColorAboveThreshold(
+            return color.firstColorGEThreshold(
                 switch (batopt_cs) {
                     .@"%fullnow" => unt.Percent(self.now, self.full),
                     .@"%fulldesign" => unt.Percent(self.now, self.full_design),
@@ -170,7 +170,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
             .@"%fulldesign" => unt.Percent(bat.now, bat.full_design),
             .state          => unreachable,
             // zig fmt: on
-        }).write(writer, part.wopts);
+        }).write(writer, part.wopts, part.flags.quiet);
     }
     utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);

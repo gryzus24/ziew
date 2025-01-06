@@ -94,7 +94,7 @@ pub const MemState = struct {
     }
 
     pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
-        return color.firstColorAboveThreshold(
+        return color.firstColorGEThreshold(
             unt.Percent(
                 switch (@as(typ.MemOpt.ColorSupported, @enumFromInt(oc.opt))) {
                     .@"%free" => self.free(),
@@ -174,7 +174,7 @@ pub fn widget(
             .writeback     => unt.SizeKb(state.writeback()),
             // zig fmt: on
         };
-        nu.write(writer, part.wopts);
+        nu.write(writer, part.wopts, part.flags.quiet);
     }
     utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);

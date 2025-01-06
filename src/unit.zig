@@ -1,5 +1,4 @@
 const std = @import("std");
-const typ = @import("type.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
 
@@ -153,6 +152,7 @@ pub const NumUnit = struct {
         self: @This(),
         with_write: anytype,
         opts: WriteOptions,
+        quiet: bool,
     ) void {
         const alignment = opts.alignment;
         var width = opts.width;
@@ -235,7 +235,12 @@ pub const NumUnit = struct {
         if (alignment == .right)
             i -= pad;
 
-        utl.writeStr(with_write, buf[i..]);
+        if (quiet and rounded.u == 0) {
+            const spaces: [32]u8 = .{' '} ** 32;
+            utl.writeStr(with_write, spaces[i..]);
+        } else {
+            utl.writeStr(with_write, buf[i..]);
+        }
     }
 };
 

@@ -13,7 +13,7 @@ const ColorHandler = struct {
     total_kb: u64,
 
     pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
-        return color.firstColorAboveThreshold(
+        return color.firstColorGEThreshold(
             switch (@as(typ.DiskOpt.ColorSupported, @enumFromInt(oc.opt))) {
                 .@"%used" => unt.Percent(self.used_kb, self.total_kb),
                 .@"%free" => unt.Percent(self.free_kb, self.total_kb),
@@ -109,7 +109,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
             .free          => unt.SizeKb(free_kb),
             .available     => unt.SizeKb(avail_kb),
             // zig fmt: on
-        }).write(writer, part.wopts);
+        }).write(writer, part.wopts, part.flags.quiet);
     }
     utl.writeStr(writer, wd.format.part_last);
     return utl.writeBlockEnd_GetWritten(stream);

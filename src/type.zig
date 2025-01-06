@@ -19,8 +19,13 @@ const meta = std.meta;
 pub const DeciSec = u64;
 
 pub const PartOpt = struct {
+    pub const Flag = packed struct {
+        calc: utl.Flag = .none,
+        quiet: bool = false,
+    };
     part: []const u8,
     opt: u8 = 0,
+    flags: Flag = .{},
     wopts: unt.NumUnit.WriteOptions = .{},
 };
 

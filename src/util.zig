@@ -224,3 +224,15 @@ pub fn nrDigits(n: u64) u5 {
         result += 4;
     }
 }
+
+pub const Flag = enum(u2) { none = 0, total = 1, diff = 2 };
+pub fn calc(new: u64, old: u64, flag: Flag, default: Flag) u64 {
+    var f = flag;
+    if (f == .none)
+        f = default;
+
+    return switch (f) {
+        .none, .total => new,
+        .diff => new - old,
+    };
+}

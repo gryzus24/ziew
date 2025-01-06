@@ -95,11 +95,13 @@ fn _printColor(prefix: []const u8, co: typ.Color) void {
 fn _printFormat(f: typ.Format) void {
     const print = std.debug.print;
     for (f.part_opts, 1..) |po, i| {
-        print("  ({}) OPT={} PRECISION={} ALIGNMENT={} PART='{s}'\n", .{
+        print("  ({}) OPT={} FLAGS={} ALIGNMENT={} WIDTH={} PRECISION={} PART='{s}'\n", .{
             i,
             po.opt,
-            po.precision,
-            po.alignment,
+            po.flags,
+            po.wopts.alignment,
+            po.wopts.width,
+            po.wopts.precision,
             po.part,
         });
     }
