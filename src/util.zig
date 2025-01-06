@@ -170,6 +170,20 @@ pub inline fn atou64ForwardUntil(
     return r;
 }
 
+pub inline fn atou64ForwardUntilOrEOF(
+    buf: []const u8,
+    i: *usize,
+    comptime char: u8,
+) u64 {
+    var j = i.*;
+
+    var r: u64 = 0;
+    while (j < buf.len and buf[j] != char) : (j += 1)
+        r = r * 10 + (buf[j] & 0x0f);
+
+    i.* = j;
+    return r;
+}
 pub inline fn atou64BackwardUntil(
     buf: []const u8,
     i: *usize,

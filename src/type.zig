@@ -228,9 +228,49 @@ pub const NetOpt = enum {
     inet,
     flags,
     state,
+    rx_bytes,
+    rx_pkts,
+    rx_errs,
+    rx_drop,
+    rx_multicast,
+    tx_bytes,
+    tx_pkts,
+    tx_errs,
+    tx_drop,
+
+    // note that arg is a special case and it is a detail of the implementation
+    // of the widget that it happens to be in the SocketRequired enum subset.
+    // Thus a better name would be "StringProducing" or something like that.
+    pub const SocketRequired = MakeEnumSubset(@This(), &.{ .arg, .inet, .flags, .state });
+    pub const ProcNetDevRequired = MakeEnumSubset(@This(), &.{
+        .rx_bytes,
+        .rx_pkts,
+        .rx_errs,
+        .rx_drop,
+        .rx_multicast,
+        .tx_bytes,
+        .tx_pkts,
+        .tx_errs,
+        .tx_drop,
+    });
 
     pub const ColorSupported = MakeEnumSubset(@This(), &.{.state});
+
+    pub fn castTo(self: @This(), comptime T: type) T {
+        return @as(T, @enumFromInt(@intFromEnum(self)));
+    }
+
+    pub fn requiresSocket(self: @This()) bool {
+        _ = meta.intToEnum(SocketRequired, @intFromEnum(self)) catch return false;
+        return true;
+    }
+
+    pub fn requiresProcNetDev(self: @This()) bool {
+        _ = meta.intToEnum(ProcNetDevRequired, @intFromEnum(self)) catch return false;
+        return true;
+    }
 };
+
 pub const BatOpt = enum {
     arg,
     @"%fullnow",

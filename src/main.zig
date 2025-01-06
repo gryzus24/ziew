@@ -200,17 +200,32 @@ pub fn main() !void {
         .tv_nsec = @intCast((sleep_interval_dsec % 10) * time.ns_per_s / 10),
     };
 
-    var cpu_state: ?w_cpu.CpuState = null;
-    var mem_state: ?w_mem.MemState = null;
+    var cpu_state: w_cpu.CpuState = undefined;
+    var mem_state: w_mem.MemState = undefined;
+    var net_state: ?w_net.NetState = null;
+
+    var mem_state_inited = false;
+    var cpu_state_inited = false;
+    var net_state_inited = false;
 
     for (widgets) |*w| switch (w.wid) {
         .CPU => {
-            if (cpu_state == null)
+            if (!cpu_state_inited) {
                 cpu_state = w_cpu.CpuState.init();
+                cpu_state_inited = true;
+            }
         },
         .MEM => {
-            if (mem_state == null)
+            if (!mem_state_inited) {
                 mem_state = w_mem.MemState.init();
+                mem_state_inited = true;
+            }
+        },
+        .NET => {
+            if (!net_state_inited) {
+                net_state = w_net.NetState.init(widgets);
+                net_state_inited = true;
+            }
         },
         else => {},
     };
@@ -238,6 +253,7 @@ pub fn main() !void {
 
         var cpu_updated = false;
         var mem_updated = false;
+        var net_updated = false;
 
         for (widgets, 0..) |*w, i| {
             time_to_refresh[i] -|= sleep_interval_dsec;
@@ -247,19 +263,25 @@ pub fn main() !void {
                 var fbs = io.fixedBufferStream(&widget_bufs[i]);
 
                 if (w.wid == .CPU and !cpu_updated) {
-                    w_cpu.update(&cpu_state.?);
+                    w_cpu.update(&cpu_state);
                     cpu_updated = true;
                 }
                 if (w.wid == .MEM and !mem_updated) {
-                    w_mem.update(&mem_state.?);
+                    w_mem.update(&mem_state);
                     mem_updated = true;
+                }
+                if (w.wid == .NET and !net_updated) {
+                    if (net_state) |*ok| {
+                        w_net.update(ok);
+                        net_updated = true;
+                    }
                 }
                 widget_bufs_views[i] = switch (w.wid) {
                     .TIME => w_time.widget(&fbs, w),
-                    .MEM => w_mem.widget(&fbs, &mem_state.?, w),
-                    .CPU => w_cpu.widget(&fbs, &cpu_state.?, w),
+                    .MEM => w_mem.widget(&fbs, &mem_state, w),
+                    .CPU => w_cpu.widget(&fbs, &cpu_state, w),
                     .DISK => w_dysk.widget(&fbs, w),
-                    .NET => w_net.widget(&fbs, w),
+                    .NET => w_net.widget(&fbs, &net_state, w),
                     .BAT => w_bat.widget(&fbs, w),
                     .READ => w_read.widget(&fbs, w),
                 };
