@@ -3,6 +3,33 @@ const typ = @import("type.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
 
+// == private =================================================================
+
+fn KB_UNIT(kb: u64, kb_f5608: F5608) NumUnit {
+    const KB8 = 8192;
+    const MB8 = 8192 * 1024;
+    const GB8 = 8192 * 1024 * 1024;
+
+    return switch (kb) {
+        0...KB8 - 1 => .{
+            .n = kb_f5608,
+            .u = .kilo,
+        },
+        KB8...MB8 - 1 => .{
+            .n = kb_f5608.div(1024),
+            .u = .mega,
+        },
+        MB8...GB8 - 1 => .{
+            .n = kb_f5608.div(1024 * 1024),
+            .u = .giga,
+        },
+        else => .{
+            .n = kb_f5608.div(1024 * 1024 * 1024),
+            .u = .tera,
+        },
+    };
+}
+
 // == public ==================================================================
 
 pub const PRECISION_AUTO_VALUE: comptime_int = @as(u8, @bitCast(@as(i8, -1)));
@@ -213,28 +240,12 @@ pub const NumUnit = struct {
 };
 
 pub fn SizeKb(value: u64) NumUnit {
-    const KB4 = 8192;
-    const MB4 = 8192 * 1024;
-    const GB4 = 8192 * 1024 * 1024;
+    return KB_UNIT(value, F5608.init(value));
+}
 
-    return switch (value) {
-        0...KB4 - 1 => .{
-            .n = F5608.init(value),
-            .u = .kilo,
-        },
-        KB4...MB4 - 1 => .{
-            .n = F5608.init(value).div(1024),
-            .u = .mega,
-        },
-        MB4...GB4 - 1 => .{
-            .n = F5608.init(value).div(1024 * 1024),
-            .u = .giga,
-        },
-        else => .{
-            .n = F5608.init(value).div(1024 * 1024 * 1024),
-            .u = .tera,
-        },
-    };
+pub fn SizeBytes(value: u64) NumUnit {
+    const kb = F5608.init(value).div(1024);
+    return KB_UNIT(kb.whole(), kb);
 }
 
 pub fn Percent(value: u64, total: u64) NumUnit {
