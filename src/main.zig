@@ -79,6 +79,10 @@ fn fatalConfigParse(e: anyerror, err: cfg.LineParseError) noreturn {
     log.log(prefix);
     log.log("config: ");
     log.log(@errorName(e));
+    if (err.note.len > 0) {
+        log.log(": ");
+        log.log(err.note);
+    }
     log.log("\n");
     log.log(utl.bssPrint("{:<7}{s}\n", .{ err.nr, err.line }));
     const beg = @min(err.ebeg, utl.bss.len);
@@ -87,7 +91,7 @@ fn fatalConfigParse(e: anyerror, err: cfg.LineParseError) noreturn {
         log.log(" " ** prefix.len);
         @memset(utl.bss[0..beg], ' ');
         log.log(utl.bss[0..beg]);
-        @memset(utl.bss[0..len], '^');
+        @memset(utl.bss[0..len], '~');
         log.log(utl.bss[0..len]);
         log.log("\n");
     }

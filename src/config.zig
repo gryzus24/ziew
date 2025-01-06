@@ -236,8 +236,11 @@ fn acceptFormatString(
     wa: *WidgetAllocator,
     str: []const u8,
     wid: typ.WidgetId.FormatRequired,
+    err_note: *[]const u8,
     out: *typ.Format,
 ) !void {
+    err_note.* = "";
+
     var current: *typ.PartOpt = undefined;
 
     var i: usize = 0;
@@ -257,12 +260,12 @@ fn acceptFormatString(
             if (!inside_brackets) return error.MismatchedBrackets;
             inside_brackets = false;
 
-            current.opt = optblk: for (typ.WID_OPT_NAMES[@intFromEnum(wid)], 0..) |name, j| {
-                const opt_full = str[opt_beg..i];
-                const colon = mem.indexOfScalar(u8, opt_full, ':') orelse opt_full.len;
-                const opt_name = opt_full[0..colon];
-                const opt_spec = opt_full[colon..];
+            const opt_full = str[opt_beg..i];
+            const colon = mem.indexOfScalar(u8, opt_full, ':') orelse opt_full.len;
+            const opt_name = opt_full[0..colon];
+            const opt_spec = opt_full[colon..];
 
+            current.opt = optblk: for (typ.WID_OPT_NAMES[@intFromEnum(wid)], 0..) |name, j| {
                 if (!mem.eql(u8, name, opt_name)) continue;
 
                 if (opt_spec.len != 0) {
@@ -304,6 +307,7 @@ fn acceptFormatString(
                 }
                 break :optblk @intCast(j);
             } else {
+                err_note.* = opt_name;
                 return error.UnknownOption;
             };
             str_beg = i + 1;
@@ -366,6 +370,7 @@ pub const LineParseError = struct {
     line: []const u8,
     ebeg: usize,
     elen: usize,
+    note: []const u8,
 };
 
 pub fn readFile(
@@ -414,11 +419,12 @@ pub fn parse(
     buf: []const u8,
     err: *LineParseError,
 ) ParseError![]const typ.Widget {
-    err.* = .{ .nr = 0, .line = &.{}, .ebeg = 0, .elen = 0 };
+    err.* = .{ .nr = 0, .line = &.{}, .ebeg = 0, .elen = 0, .note = "" };
 
     var wa: WidgetAllocator = .{ .reg = reg };
     var current: *typ.Widget = undefined;
     var current_field = ~@as(usize, 0);
+    var err_note: []const u8 = &.{};
 
     const lines = try lineFieldSplit(reg, buf);
     for (lines) |line| {
@@ -441,6 +447,7 @@ pub fn parse(
                 .line = r.line,
                 .ebeg = r.ebeg,
                 .elen = r.elen,
+                .note = err_note,
             };
         };
 
@@ -507,6 +514,7 @@ pub fn parse(
                     &wa,
                     try unquoteField(fields[fmt_field], "format="),
                     fmt_wid,
+                    &err_note,
                     ref,
                 );
             }
