@@ -223,7 +223,7 @@ pub fn main() !void {
         },
         .NET => {
             if (!net_state_inited) {
-                net_state = w_net.NetState.init(widgets);
+                net_state = w_net.NetState.init(&reg, widgets);
                 net_state_inited = true;
             }
         },

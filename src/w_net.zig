@@ -26,6 +26,8 @@ const ColorHandler = struct {
 const IFace = struct {
     const FIELDS_MAX = 16;
 
+    next: ?*IFace,
+
     name: [linux.IFNAMESIZE]u8 = .{'-'} ++ (.{0} ** 15),
     fields: [FIELDS_MAX]u64 = .{0} ** FIELDS_MAX,
 
@@ -75,9 +77,44 @@ const IFace = struct {
     }
 };
 
+const IFaceList = struct {
+    // I think it can be done with only two pointers. However, allocation
+    // from the free list would requie iterating over the entire list.
+    head: ?*IFace = null, // first list element
+    tail: ?*IFace = null, // last list element
+    free: ?*IFace = null, // chained free elements
+};
+
 const NetDev = struct {
-    nr_ifs: usize = 0,
-    ifs: [8]IFace = .{.{}} ** 8,
+    reg: *m.Region,
+    ifl: IFaceList = .{},
+
+    pub fn newIf(self: *@This()) !*IFace {
+        var ret: *IFace = undefined;
+        if (self.ifl.free) |free_ptr| {
+            self.ifl.free = free_ptr.next;
+            ret = free_ptr;
+        } else {
+            ret = try self.reg.frontAlloc(IFace);
+        }
+        ret.* = .{ .next = null };
+        if (self.ifl.tail) |tail_ptr| {
+            tail_ptr.next = ret;
+        } else {
+            self.ifl.head = ret;
+        }
+        self.ifl.tail = ret;
+        return ret;
+    }
+
+    pub fn freeAll(self: *@This()) void {
+        if (self.ifl.tail) |tail_ptr| {
+            tail_ptr.next = self.ifl.free;
+        }
+        self.ifl.free = self.ifl.head;
+        self.ifl.head = null;
+        self.ifl.tail = null;
+    }
 };
 
 // the std.os.linux.E enum adds over 15kB of bloat to the executable,
@@ -168,29 +205,23 @@ fn getFlags(
     };
 }
 
-fn parseProcNetDev(buf: []const u8, netdev: *NetDev) void {
+fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
     var lines = mem.tokenizeScalar(u8, buf, '\n');
     _ = lines.next() orelse unreachable;
     _ = lines.next() orelse unreachable;
-    var if_indx: usize = 0;
     while (lines.next()) |line| {
         var i: usize = 0;
         while (line[i] == ' ') : (i += 1) {}
         var j = i;
         while (line[j] != ':') : (j += 1) {}
-        netdev.ifs[if_indx].setName(line[i..j]);
+        var new_if = try netdev.newIf();
+        new_if.setName(line[i..j]);
         j += 1; // skip ':'
         for (0..IFace.FIELDS_MAX) |field_indx| {
             while (line[j] == ' ') : (j += 1) {}
-            netdev.ifs[if_indx].fields[field_indx] = utl.atou64ForwardUntilOrEOF(line, &j, ' ');
+            new_if.fields[field_indx] = utl.atou64ForwardUntilOrEOF(line, &j, ' ');
         }
-        if_indx += 1;
-        // potentially annoying limitation if working with Docker, CAN or anything
-        // that requires creating a lot of interfaces... will be lifted.
-        if (if_indx == 8)
-            utl.fatal(&.{"NET: too many interfaces"});
     }
-    netdev.nr_ifs = if_indx;
 }
 
 // == public ==================================================================
@@ -217,13 +248,13 @@ pub const WidgetData = struct {
 };
 
 pub const NetState = struct {
-    left: NetDev = .{},
-    right: NetDev = .{},
+    left: NetDev,
+    right: NetDev,
     left_newest: bool = false,
 
     proc_net_dev: fs.File,
 
-    pub fn init(widgets: []const typ.Widget) ?NetState {
+    pub fn init(reg: *m.Region, widgets: []const typ.Widget) ?NetState {
         const proc_net_dev_required = blk: {
             for (widgets) |*w| {
                 if (w.wid == .NET) {
@@ -241,6 +272,8 @@ pub const NetState = struct {
                 .proc_net_dev = fs.cwd().openFileZ("/proc/net/dev", .{}) catch |e| {
                     utl.fatal(&.{ "open: /proc/net/dev: ", @errorName(e) });
                 },
+                .left = .{ .reg = reg },
+                .right = .{ .reg = reg },
             };
         }
         return null;
@@ -268,8 +301,11 @@ pub fn update(state: *NetState) void {
         utl.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
     const new, _ = state.newStateFlip();
+    new.freeAll();
 
-    parseProcNetDev(buf[0..nread], new);
+    parseProcNetDev(buf[0..nread], new) catch |e| {
+        utl.fatal(&.{ "NET: parse /proc/net/dev: ", @errorName(e) });
+    };
 }
 
 pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []const u8 {
@@ -304,25 +340,26 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
     if (demands & (FLAGS | STATE) > 0 or wd.fg == .color or wd.bg == .color)
         flags = getFlags(Static.sock, &wd.ifr, &_flagsbuf, &up);
 
-    var new_if_wrapped: ?*IFace = null;
-    var old_if_wrapped: ?*IFace = null;
+    var new_if: ?*IFace = null;
+    var old_if: ?*IFace = null;
     if (state.*) |*ok| {
         const new, const old = ok.getNewOldPtrs();
-        new_if_wrapped = &new.ifs[0];
-        old_if_wrapped = &old.ifs[0];
 
-        const n = @min(new.nr_ifs, old.nr_ifs);
-        for (new.ifs[0..n]) |*iface| {
+        var it = new.ifl.head;
+        while (it) |iface| {
             if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.name)) {
-                new_if_wrapped = iface;
+                new_if = iface;
                 break;
             }
+            it = iface.next;
         }
-        for (old.ifs[0..n]) |*iface| {
+        it = old.ifl.head;
+        while (it) |iface| {
             if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.name)) {
-                old_if_wrapped = iface;
+                old_if = iface;
                 break;
             }
+            it = iface.next;
         }
     }
 
@@ -345,30 +382,29 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
             utl.writeStr(stream, str);
             continue;
         }
-        const new_if: *const IFace = new_if_wrapped orelse continue;
-        const old_if: *const IFace = old_if_wrapped orelse continue;
-
         var nu: unt.NumUnit = undefined;
 
         // new interfaces could have been added or removed in the meantime,
         // always report zero for them instead of some bogus difference.
-        if (!mem.eql(u8, &new_if.name, &old_if.name)) {
+        if (new_if == null or old_if == null) {
             nu = if (opt == .rx_bytes or opt == .tx_bytes)
                 unt.SizeKb(0)
             else
                 unt.UnitSI(0);
         } else {
+            const new = new_if.?;
+            const old = old_if.?;
             nu = switch (opt.castTo(typ.NetOpt.ProcNetDevRequired)) {
                 // zig fmt: off
-                .rx_bytes => unt.SizeBytes(new_if.bytes(.rx) - old_if.bytes(.rx)),
-                .rx_pkts  => unt.UnitSI(new_if.packets(.rx) - old_if.packets(.rx)),
-                .rx_errs  => unt.UnitSI(new_if.errs(.rx) - old_if.errs(.rx)),
-                .rx_drop  => unt.UnitSI(new_if.drop(.rx) - old_if.drop(.rx)),
-                .rx_multicast => unt.UnitSI(new_if.rx_multicast() - old_if.rx_multicast()),
-                .tx_bytes => unt.SizeBytes(new_if.bytes(.tx) - old_if.bytes(.tx)),
-                .tx_pkts  => unt.UnitSI(new_if.packets(.tx) - old_if.packets(.tx)),
-                .tx_errs  => unt.UnitSI(new_if.errs(.tx) - old_if.errs(.tx)),
-                .tx_drop  => unt.UnitSI(new_if.drop(.tx) - old_if.drop(.tx)),
+                .rx_bytes => unt.SizeBytes(new.bytes(.rx) - old.bytes(.rx)),
+                .rx_pkts  => unt.UnitSI(new.packets(.rx) - old.packets(.rx)),
+                .rx_errs  => unt.UnitSI(new.errs(.rx) - old.errs(.rx)),
+                .rx_drop  => unt.UnitSI(new.drop(.rx) - old.drop(.rx)),
+                .rx_multicast => unt.UnitSI(new.rx_multicast() - old.rx_multicast()),
+                .tx_bytes => unt.SizeBytes(new.bytes(.tx) - old.bytes(.tx)),
+                .tx_pkts  => unt.UnitSI(new.packets(.tx) - old.packets(.tx)),
+                .tx_errs  => unt.UnitSI(new.errs(.tx) - old.errs(.tx)),
+                .tx_drop  => unt.UnitSI(new.drop(.tx) - old.drop(.tx)),
                 // zig fmt: on
             };
         }
