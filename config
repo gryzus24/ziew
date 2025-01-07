@@ -6,7 +6,7 @@
 
 ##
 # Widget line format
-# WIDGET  REFRESH-INTERVAL (in 1/10ths of a second)  FORMAT-STRING
+# WIDGET  REFRESH-INTERVAL (in 1/10ths of a second)  arg=...  format=FORMAT-STRING
 
 ##
 # Color line format
@@ -23,38 +23,51 @@
 # are nicely divisible by the shortest interval.
 # In this case 200 and 300 are all multiples of 20 so it's fine.
 
-# You might want to adjust the interface name before the {-} symbol.
-NET 20 "wlp1s0{-}{ifname}: {inet} {flags}"
+# You might want to adjust the interface name.
+NET 20 arg=enp5s0 format="{arg} {inet}"
 # 0 - interface down, 1 - interface up.
 # Valid RGB value formats: a44, #a44, aa4444, #aa4444.
-FG     state 0:a44 1:4a4
+FG state 0:a44 1:4a4
 
-NET 20 "enp5s0{-}{ifname}: {inet} {flags}"
-FG     state 0:a44 1:4a4
+# Most numeric options support additional specifiers after the ':' symbol.
+# '<' and '>' align output to the left and to the right with automatic
+# precision adjustment while preserving the width.
+#
+# Values are presented as given by the kernel, but you can force the program
+# to present them as the difference between two widget refreshes by using
+# the '@d' flag after option's name.
+# There is also a quiet flag '@q' that suppresses output if the value equals 0.
+NET 20 arg=enp5s0 format="RxTx {rx_bytes:>}/{tx_bytes:>} {rx_pkts@dq:>2}/{tx_pkts@dq:<2}"
+FG bb9
 
 # Get space available on / every 20 seconds.
-DISK 200 "/{-}/ {available}"
+#DISK 200 arg=/ format="{arg} {available:>}"
 
-# .1: precision after a decimal point, >: aligned to the right.
-CPU 20 "CPU{%all.1>}"
-# Gradient of yellow (at 60% cpu usage) to red (at 90% and above).
-# Values must be in ascending order.
-FG     %all 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+# You can visualize how busy each CPU core is with the 'blkbars' option,
+# If you have a lot of cores and want to save some horizontal space you
+# can also use the 'brlbars' option.
+CPU 20 format="{blkbars} {all:>3} {sys:>3}"
+# Default to #999 from 0 up to 47%, default color from 48% to 59%
+# and gradient of yellow (at 60% cpu usage) to red (at 90% and above).
+# Threshold values must be given in ascending order.
+FG %all 0:999 48: 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 
-MEM 20 "MEM {used.1} : {free.1} +{cached}"
-FG     %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+MEM 20 format="MEM {%used:>} {free:>} [{cached:>}]"
+FG %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+
+MEM 20 format="{dirty@q:>.0}:{writeback@q:>.0}"
+FG 999
 
 # Get battery info from /sys/class/power_supply/BAT<n>.
 # Retrieving battery info is quite expensive - do it every 30 seconds.
-BAT 300 "BAT0{-}BAT {%fulldesign.2} {state}"
+BAT 300 arg=BAT0 format="BAT {%fulldesign:.2} {state}"
 # 0 - Discharging, 1 - Charging, 2 - Full, 3 - Not-charging, 4 - Unknown
-FG      state       1:4a4 2:4a4
-# 0 to 15%: red, 15% to 25%: faint yellow, 25% and up: default color.
-BG      %fulldesign 0:a00 15:220 25:
+FG state      1:4a4 2:4a4
+# 0 to 14%: red, 15% to 24%: faint yellow, 25% and up: default color.
+BG %fulldesign 0:a00 15:220 25:
 
 # See strftime(3) for details about the format.
-TIME 20 "%A %d.%m ~ %H:%M:%S "
-# Set the default foreground color.
-FG      9f9
+TIME 20 arg="%A %d.%m ~ %H:%M:%S "
+FG bb9
 
 # vim: ft=config

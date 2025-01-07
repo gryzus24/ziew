@@ -272,8 +272,7 @@ fn acceptFormatString(
 
             if (o_flag.len != 0) {
                 for (o_flag[1..]) |ch| switch (ch | 0x20) {
-                    't' => current.flags.calc = .total,
-                    'd' => current.flags.calc = .diff,
+                    'd' => current.flags.diff = true,
                     'q' => current.flags.quiet = true,
                     else => {},
                 };
@@ -412,17 +411,21 @@ pub fn readFile(
 
 pub fn defaultConfig(reg: *m.Region) []const typ.Widget {
     const default_config =
-        \\NET 20 arg="enp5s0" format="{arg}: {inet} {flags}"
+        \\NET 20 arg=enp5s0 format="{arg} {inet}"
         \\FG state 0:a44 1:4a4
-        \\DISK 200 arg="/" format="{arg} {available}"
-        \\CPU 20 format="CPU{%all:>1}"
-        \\FG %all 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-        \\MEM 20 format="MEM {used} : {free} +{cached:>4}"
+        \\NET 20 arg=enp5s0 format="RxTx {rx_bytes:>}/{tx_bytes:>} {rx_pkts@dq:>2}/{tx_pkts@dq:<2}"
+        \\FG bb9
+        \\CPU 20 format="{blkbars} {all:>3} {sys:>3}"
+        \\FG %all 0:999 48: 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+        \\MEM 20 format="MEM {%used:>} {free:>} [{cached:>}]"
         \\FG %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-        \\BAT 300 arg="BAT0" format="BAT {%fulldesign:.2} {state}"
+        \\MEM 20 format="{dirty@q:>.0}:{writeback@q:>.0}"
+        \\FG 999
+        \\BAT 300 arg=BAT0 format="BAT {%fulldesign:.2} {state}"
         \\FG state 1:4a4 2:4a4
         \\BG %fulldesign 0:a00 15:220 25:
         \\TIME 20 arg="%A %d.%m ~ %H:%M:%S "
+        \\FG bb9
     ;
     var err: LineParseError = undefined;
     return parse(reg, default_config, &err) catch unreachable;

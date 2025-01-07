@@ -20,7 +20,7 @@ pub const DeciSec = u64;
 
 pub const PartOpt = struct {
     pub const Flag = packed struct {
-        calc: utl.Flag = .none,
+        diff: bool = false,
         quiet: bool = false,
     };
     part: []const u8,

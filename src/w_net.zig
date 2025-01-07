@@ -394,61 +394,18 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
         } else {
             const new = new_if.?;
             const old = old_if.?;
+            const d = part.flags.diff;
             nu = switch (opt.castTo(typ.NetOpt.ProcNetDevRequired)) {
-                .rx_bytes => unt.SizeBytes(utl.calc(
-                    new.bytes(.rx),
-                    old.bytes(.rx),
-                    part.flags.calc,
-                    .total,
-                )),
-                .rx_pkts => unt.UnitSI(utl.calc(
-                    new.packets(.rx),
-                    old.packets(.rx),
-                    part.flags.calc,
-                    .total,
-                )),
-                .rx_errs => unt.UnitSI(utl.calc(
-                    new.errs(.rx),
-                    old.errs(.rx),
-                    part.flags.calc,
-                    .total,
-                )),
-                .rx_drop => unt.UnitSI(utl.calc(
-                    new.drop(.rx),
-                    old.drop(.rx),
-                    part.flags.calc,
-                    .total,
-                )),
-                .rx_multicast => unt.UnitSI(utl.calc(
-                    new.rx_multicast(),
-                    old.rx_multicast(),
-                    part.flags.calc,
-                    .total,
-                )),
-                .tx_bytes => unt.SizeBytes(utl.calc(
-                    new.bytes(.tx),
-                    old.bytes(.tx),
-                    part.flags.calc,
-                    .total,
-                )),
-                .tx_pkts => unt.UnitSI(utl.calc(
-                    new.packets(.tx),
-                    old.packets(.tx),
-                    part.flags.calc,
-                    .total,
-                )),
-                .tx_errs => unt.UnitSI(utl.calc(
-                    new.errs(.tx),
-                    old.errs(.tx),
-                    part.flags.calc,
-                    .total,
-                )),
-                .tx_drop => unt.UnitSI(utl.calc(
-                    new.drop(.tx),
-                    old.drop(.tx),
-                    part.flags.calc,
-                    .total,
-                )),
+                // zig fmt: off
+                .rx_bytes => unt.SizeBytes(utl.calc(new.bytes(.rx), old.bytes(.rx), d)),
+                .rx_pkts  => unt.UnitSI(utl.calc(new.packets(.rx), old.packets(.rx), d)),
+                .rx_errs  => unt.UnitSI(utl.calc(new.errs(.rx), old.errs(.rx), d)),
+                .rx_drop  => unt.UnitSI(utl.calc(new.drop(.rx), old.drop(.rx), d)),
+                .rx_multicast => unt.UnitSI(utl.calc(new.rx_multicast(), old.rx_multicast(), d)),
+                .tx_bytes => unt.SizeBytes(utl.calc(new.bytes(.tx), old.bytes(.tx), d)),
+                .tx_pkts  => unt.UnitSI(utl.calc(new.packets(.tx), old.packets(.tx), d)),
+                .tx_errs  => unt.UnitSI(utl.calc(new.errs(.tx), old.errs(.tx), d)),
+                .tx_drop  => unt.UnitSI(utl.calc(new.drop(.tx), old.drop(.tx), d)),
                 // zig fmt: on
             };
         }

@@ -305,6 +305,7 @@ pub fn widget(
             }
             continue;
         }
+        const d = part.flags.diff;
         const nu: unt.NumUnit = switch (cpuopt) {
             // zig fmt: off
             .@"%all"  => .{ .n = state.usage_pct.all,  .u = .percent },
@@ -313,12 +314,12 @@ pub fn widget(
             .all      => .{ .n = state.usage_abs.all,  .u = .percent },
             .user     => .{ .n = state.usage_abs.user, .u = .percent },
             .sys      => .{ .n = state.usage_abs.sys,  .u = .percent },
-            .intr     => unt.UnitSI(utl.calc(new.intr, old.intr, part.flags.calc, .diff)),
-            .ctxt     => unt.UnitSI(utl.calc(new.ctxt, old.ctxt, part.flags.calc, .diff)),
-            .forks    => unt.UnitSI(utl.calc(new.forks, old.forks, part.flags.calc, .diff)),
+            .intr     => unt.UnitSI(utl.calc(new.intr, old.intr, d)),
+            .ctxt     => unt.UnitSI(utl.calc(new.ctxt, old.ctxt, d)),
+            .forks    => unt.UnitSI(utl.calc(new.forks, old.forks, d)),
             .running  => unt.UnitSI(new.running),
             .blocked  => unt.UnitSI(new.blocked),
-            .softirq  => unt.UnitSI(utl.calc(new.softirq, old.softirq, part.flags.calc, .diff)),
+            .softirq  => unt.UnitSI(utl.calc(new.softirq, old.softirq, d)),
             .brlbars  => unreachable,
             .blkbars  => unreachable,
             // zig fmt: on
