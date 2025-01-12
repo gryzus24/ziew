@@ -38,7 +38,7 @@ FG state 0:a44 1:4a4
 # the '@d' flag after option's name.
 # There is also a quiet flag '@q' that suppresses output if the value equals 0.
 NET 20 arg=enp5s0 format="RxTx {rx_bytes:>}/{tx_bytes:>} {rx_pkts@dq:>2}/{tx_pkts@dq:<2}"
-FG bb9
+FG 686
 
 # Get space available on / every 20 seconds.
 #DISK 200 arg=/ format="{arg} {available:>}"

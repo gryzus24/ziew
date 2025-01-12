@@ -414,7 +414,7 @@ pub fn defaultConfig(reg: *m.Region) []const typ.Widget {
         \\NET 20 arg=enp5s0 format="{arg} {inet}"
         \\FG state 0:a44 1:4a4
         \\NET 20 arg=enp5s0 format="RxTx {rx_bytes:>}/{tx_bytes:>} {rx_pkts@dq:>2}/{tx_pkts@dq:<2}"
-        \\FG bb9
+        \\FG 686
         \\CPU 20 format="{blkbars} {all:>3} {sys:>3}"
         \\FG %all 0:999 48: 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
         \\MEM 20 format="MEM {%used:>} {free:>} [{cached:>}]"
