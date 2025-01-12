@@ -44,9 +44,14 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                squirrelly brackets and may contain specifiers that influence
                the formatting of numeric data.
 
-                OPTION:[ALIGNMENT][WIDTH][.PRECISION]
+                OPTION[@FLAGS...]:[ALIGNMENT][WIDTH][.PRECISION]
 
               * OPTION    - widget specific option name,
+              * FLAGS     - option specific flag changing what/how value is
+                            displayed.
+                              * d - show a difference since last refresh
+                                    instead of a total,
+                              * q - do not display values equal to zero,
               * ALIGNMENT - either < for left alignment or > for right
                             alignment - reserves space for the longest
                             representation of a number (no alignment if
@@ -58,7 +63,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                             width if unspecified).
 
     Example
-      CPU 25 format="CPU {%all:>3} {blkbars}"
+      CPU 25 format="CPU {%all:>3} {blkbars} {forks@dq:>}"
 
 ### Default color line
 
@@ -94,7 +99,7 @@ Widget | Data source
 | MEM  | /proc/meminfo
 | CPU  | /proc/stat
 | DISK | statfs(2)
-| NET  | netdevice(7), ioctl(2)
+| NET  | /proc/net/dev, netdevice(7)
 | BAT  | /sys/class/power_supply/*
 | READ | filesystem
 
@@ -169,6 +174,9 @@ Every option and color configuration for each *Widget* is documented below.
       * blkbars - same as above, but needs more space, as it uses actual block
                   characters with more granularity.
 
+    Option flag @d may affect
+      intr, ctxt, forks, softirq
+
     Colors
       [+] default
       [-] conditional (only forks, running, blocked and %-prefixed options
@@ -210,7 +218,7 @@ Every option and color configuration for each *Widget* is documented below.
 
 **NET**
 
-    Displays current network interface configuration.
+    Displays current network interface configuration and/or activity.
 
     Required
       arg="<INTERFACE>"
@@ -226,7 +234,21 @@ Every option and color configuration for each *Widget* is documented below.
                   * interface is in (P)romiscuous mode,
                   * (R)resources allocated,
                   * interface is (U)p/running.
-      * state - interface state, either "up" or "down".
+      * state - interface state, either "up" or "down",
+      * rx_*  - interface receive statistics:
+                  * rx_bytes     - data received
+                  * rx_pkts      - packets received
+                  * rx_errs      - receive errors
+                  * rx_drop      - receive packet drops
+                  * rx_multicast - multicast packets received
+      * tx_*  - interface transmission statistics:
+                  * tx_bytes     - data transmitted
+                  * tx_pkts      - packets transmitted
+                  * tx_errs      - transmission errors
+                  * tx_drop      - transmission packet drops
+
+    Option flag @d may affect
+      all rx_* and tx_* options
 
     Colors
       [+] default
@@ -236,7 +258,7 @@ Every option and color configuration for each *Widget* is documented below.
              1 - interface is up.
 
     Example config entry
-      NET arg="enp5s0" format="{arg}: {inet} {flags}"
+      NET arg="enp5s0" format="{arg}: {inet} {flags} Rx {rx_bytes@dq:>.0}"
       FG state 0:888 1:eee
 
 **BAT**
