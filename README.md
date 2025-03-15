@@ -227,10 +227,10 @@ Every option and color configuration for each *Widget* is documented below.
     FORMAT options
       * arg   - the provided <INTERFACE> name as specified in the argument,
       * inet  - local IPv4 address,
-      * flags - a choice of device flags:
-                  * receive (A)ll multicast packets,
+      * flags - netdevice(7) flag abbreviations, some notable ones:
+                  * receive (Al)l multicast packets,
                   * valid (B)roadcast address set,
-                  * supports (M)ulticast,
+                  * supports (Mu)lticast,
                   * interface is in (P)romiscuous mode,
                   * (R)resources allocated,
                   * interface is (U)p/running.
