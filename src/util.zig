@@ -5,12 +5,11 @@ const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
 const mem = std.mem;
+const zig = std.zig;
 
 // zig fmt: off
 pub const c = @cImport({
     @cInclude("errno.h");      // errno constants
-    @cInclude("net/if.h");     // IFF_* definitions
-    @cInclude("sys/ioctl.h");  // SIOCGIFADDR, SIOCGIFFLAGS definitions
     @cInclude("sys/statfs.h"); // statfs()
     @cInclude("time.h");       // strftime() etc.
 });
@@ -111,7 +110,7 @@ pub fn openLog() Log {
 }
 
 pub fn fatal(strings: []const []const u8) noreturn {
-    @setCold(true);
+    @branchHint(.cold);
     const log = openLog();
     log.log("fatal: ");
     for (strings) |s| log.log(s);
@@ -121,14 +120,14 @@ pub fn fatal(strings: []const []const u8) noreturn {
 
 // inline to avoid comptime duplication
 pub inline fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
-    @setCold(true);
+    @branchHint(.cold);
     const log = openLog();
     log.log(bssPrint("fatal: " ++ format ++ "\n", args));
     linux.exit(1);
 }
 
 pub fn warn(strings: []const []const u8) void {
-    @setCold(true);
+    @branchHint(.cold);
     const log = openLog();
     defer log.close();
     log.log("warning: ");
@@ -141,7 +140,7 @@ pub fn warn(strings: []const []const u8) void {
 pub fn repr(str: ?[]const u8) void {
     const writer = stderr.writer();
     if (str) |s| {
-        std.zig.fmtEscapes(s).format("", .{}, writer) catch {};
+        zig.fmtEscapes(s).format("", .{}, writer) catch {};
         writeStr(writer, "\n");
     } else {
         writeStr(writer, "<null>\n");

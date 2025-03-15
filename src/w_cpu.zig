@@ -33,9 +33,9 @@ const Cpu = struct {
     }
 
     const Delta = struct {
-        all: unt.F5608 = unt.F5608.init(0),
-        user: unt.F5608 = unt.F5608.init(0),
-        sys: unt.F5608 = unt.F5608.init(0),
+        all: unt.F5608 = .init(0),
+        user: unt.F5608 = .init(0),
+        sys: unt.F5608 = .init(0),
     };
 
     pub fn delta(self: *const Cpu, oldself: *const Cpu, mul: u64) Delta {
@@ -43,6 +43,8 @@ const Cpu = struct {
         const s_delta = self.sys() - oldself.sys();
         const i_delta = self.idle() - oldself.idle();
         const total_delta = u_delta + s_delta + i_delta;
+        if (total_delta == 0)
+            return .{ .all = .init(0), .user = .init(0), .sys = .init(0) };
 
         const u_delta_pct = u_delta * 100 * mul;
         const s_delta_pct = s_delta * 100 * mul;
@@ -63,7 +65,7 @@ const Stat = struct {
     blocked: u32 = 0,
     softirq: u64 = 0,
     nr_cpu_entries: u32 = 0,
-    cpu_entries: [1 + CPUS_MAX]Cpu = .{.{}} ** (1 + CPUS_MAX),
+    cpu_entries: [1 + CPUS_MAX]Cpu = .{Cpu{}} ** (1 + CPUS_MAX),
 };
 
 // == private =================================================================

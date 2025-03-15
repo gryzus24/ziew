@@ -222,14 +222,17 @@ pub const NumUnit = struct {
         var n = rounded.whole();
         while (n >= 100) : (n /= 100) {
             i -= 2;
-            buf[i..][0..2].* = fmt.digits2(n % 100);
+            const decunits: u8 = @intCast(n % 100);
+            buf[i..][0..2].* = fmt.digits2(decunits);
         }
         if (n < 10) {
             i -= 1;
             buf[i] = '0' | @as(u8, @intCast(n));
         } else {
+            // n < 100
             i -= 2;
-            buf[i..][0..2].* = fmt.digits2(n);
+            const decunits: u8 = @intCast(n);
+            buf[i..][0..2].* = fmt.digits2(decunits);
         }
 
         if (alignment == .right)

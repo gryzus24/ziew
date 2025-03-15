@@ -62,7 +62,7 @@ test "/proc/meminfo parser" {
         \\KReclaimable:     352524 kB
         \\Slab:             453728 kB
     ;
-    var s: MemState = MemState.init();
+    var s: MemState = .init();
     parseProcMeminfo(buf, &s);
     try t.expect(s.total() == 16324532);
     try t.expect(s.free() == 6628464);

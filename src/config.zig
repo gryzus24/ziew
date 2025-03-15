@@ -145,10 +145,10 @@ fn lineFieldSplit(reg: *m.Region, buf: []const u8) ![]Line {
     var ca: ConfigAllocator = .{ .reg = reg };
     var lineno: usize = 0;
 
-    var lines = std.mem.splitScalar(u8, buf, '\n');
+    var lines = mem.splitScalar(u8, buf, '\n');
     while (lines.next()) |_line| {
         lineno += 1;
-        const line = std.mem.trim(u8, _line, " \t");
+        const line = mem.trim(u8, _line, " \t");
 
         if (line.len == 0) continue;
         if (line[0] == '#') continue;
@@ -501,11 +501,11 @@ pub fn parse(
             if (arg_required and arg_field > 0) {
                 const arg = try unquoteField(fields[arg_field], "arg=");
                 switch (wid.castTo(typ.WidgetId.ArgRequired)) {
-                    .TIME => current.wid.TIME = try w_time.WidgetData.init(reg, arg),
-                    .DISK => current.wid.DISK = try w_dysk.WidgetData.init(reg, arg),
-                    .NET => current.wid.NET = try w_net.WidgetData.init(reg, arg),
-                    .BAT => current.wid.BAT = try w_bat.WidgetData.init(reg, arg),
-                    .READ => current.wid.READ = try w_read.WidgetData.init(reg, arg),
+                    .TIME => current.wid.TIME = try .init(reg, arg),
+                    .DISK => current.wid.DISK = try .init(reg, arg),
+                    .NET => current.wid.NET = try .init(reg, arg),
+                    .BAT => current.wid.BAT = try .init(reg, arg),
+                    .READ => current.wid.READ = try .init(reg, arg),
                 }
             }
             current_field = fmt_field;
@@ -629,7 +629,7 @@ pub fn parse(
 test parse {
     const t = std.testing;
     var buf: [2 * 4096]u8 align(16) = undefined;
-    var reg = m.Region.init(&buf);
+    var reg: m.Region = .init(&buf);
     var err: LineParseError = undefined;
 
     var s: []const u8 = "A";

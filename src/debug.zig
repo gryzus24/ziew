@@ -3,6 +3,7 @@ const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 const utl = @import("util.zig");
+const debug = std.debug;
 const fmt = std.fmt;
 const io = std.io;
 const linux = std.os.linux;
@@ -42,9 +43,9 @@ pub fn debugNumUnit() void {
     for (values) |val| {
         const nu = unt.SizeKb(val);
 
-        std.debug.print("V {}\n", .{val});
+        debug.print("V {}\n", .{val});
         for (0..width_max + 1) |width| {
-            std.debug.print("{} ", .{width});
+            debug.print("{} ", .{width});
             for (0..precision_max + 2) |precision| {
                 var w: u8 = @intCast(width);
                 var p: u8 = @intCast(precision);
@@ -76,7 +77,7 @@ pub fn debugNumUnit() void {
 }
 
 fn _printColor(prefix: []const u8, co: typ.Color) void {
-    const print = std.debug.print;
+    const print = debug.print;
     switch (co) {
         .nocolor => print("  {s}=.nocolor\n", .{prefix}),
         .default => |t| print("  {s}=.default HEX='{s}'\n", .{ prefix, t.get() orelse "null" }),
@@ -93,7 +94,7 @@ fn _printColor(prefix: []const u8, co: typ.Color) void {
 }
 
 fn _printFormat(f: typ.Format) void {
-    const print = std.debug.print;
+    const print = debug.print;
     for (f.part_opts, 1..) |po, i| {
         print("  ({}) OPT={} FLAGS={} ALIGNMENT={} WIDTH={} PRECISION={} PART='{s}'\n", .{
             i,
@@ -109,7 +110,7 @@ fn _printFormat(f: typ.Format) void {
 }
 
 pub fn debugWidgets(widgets: []const typ.Widget) void {
-    const print = std.debug.print;
+    const print = debug.print;
     for (widgets) |*w| {
         print("WIDGET={s} INTERVAL={}\n", .{ @tagName(w.wid), w.interval });
         switch (w.wid) {
@@ -158,8 +159,8 @@ pub fn debugWidgets(widgets: []const typ.Widget) void {
 
 pub fn debugMemoryUsed(reg: *m.Region) void {
     const front, const back = reg.spaceUsed();
-    std.debug.print("REGION MEMORY USED\n", .{});
-    std.debug.print("  FRONT = {} BACK = {} TOTAL = {}\n", .{ front, back, front + back });
+    debug.print("REGION MEMORY USED\n", .{});
+    debug.print("  FRONT = {} BACK = {} TOTAL = {}\n", .{ front, back, front + back });
 }
 
 pub noinline fn perfEventStart() linux.fd_t { // struct { linux.fd_t, linux.perf_event_attr } {
@@ -192,5 +193,5 @@ pub noinline fn perfEventStop(fd: linux.fd_t) void {
     var u64b: [8]u8 = .{0} ** 8;
     _ = linux.read(fd, &u64b, 8);
 
-    std.debug.print("perfEventStop() = {}\n", .{@as(u64, @bitCast(u64b))});
+    debug.print("perfEventStop() = {}\n", .{@as(u64, @bitCast(u64b))});
 }

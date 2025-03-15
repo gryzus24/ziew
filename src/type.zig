@@ -9,7 +9,9 @@ const w_mem = @import("w_mem.zig");
 const w_net = @import("w_net.zig");
 const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
+const builtin = std.builtin;
 const enums = std.enums;
+const math = std.math;
 const mem = std.mem;
 const meta = std.meta;
 
@@ -118,7 +120,7 @@ pub const WidgetId = union(Tag) {
     BAT: *w_bat.WidgetData,
     READ: *w_read.WidgetData,
 
-    const NR_WIDGETS = @typeInfo(Tag).Enum.fields.len;
+    const NR_WIDGETS = @typeInfo(Tag).@"enum".fields.len;
 
     const Tag = enum { TIME, MEM, CPU, DISK, NET, BAT, READ };
 
@@ -296,7 +298,7 @@ pub const ReadOpt = enum {
 };
 
 pub fn strStartToTaggedWidgetId(str: []const u8) ?WidgetId {
-    inline for (@typeInfo(WidgetId.Tag).Enum.fields) |field| {
+    inline for (@typeInfo(WidgetId.Tag).@"enum".fields) |field| {
         if (mem.startsWith(u8, str, field.name))
             return @unionInit(WidgetId, field.name, undefined);
     }
@@ -332,9 +334,9 @@ pub const WID_OPT_NAMES: [WidgetId.NR_WIDGETS][]const [:0]const u8 = blk: {
 pub const WID_OPT_COLOR_SUPPORTED: [WidgetId.NR_WIDGETS][]const bool = blk: {
     var w: [WidgetId.NR_WIDGETS][]const bool = undefined;
     for (WID_OPT_TYPE, 0..) |T, i| {
-        const len = @typeInfo(T).Enum.fields.len;
+        const len = @typeInfo(T).@"enum".fields.len;
         var supporting_color: [len]bool = .{false} ** len;
-        for (std.enums.values(T.ColorSupported)) |v| {
+        for (enums.values(T.ColorSupported)) |v| {
             supporting_color[@intFromEnum(v)] = true;
         }
         const final = supporting_color;
@@ -352,7 +354,7 @@ pub const WIDGET_INTERVAL_MAX = 1 << 31;
 // == private =================================================================
 
 fn MakeEnumSubset(comptime E: type, comptime new_values: []const E) type {
-    const E_enum = @typeInfo(E).Enum;
+    const E_enum = @typeInfo(E).@"enum";
 
     if (new_values.len == 0)
         @compileError("Attempted to create an `enum {}`");
@@ -361,15 +363,15 @@ fn MakeEnumSubset(comptime E: type, comptime new_values: []const E) type {
         @compileError("Provided at least one duplicate enum field");
 
     var new_val_max = 0;
-    var result: [new_values.len]std.builtin.Type.EnumField = undefined;
+    var result: [new_values.len]builtin.Type.EnumField = undefined;
     for (new_values, 0..) |new_value, i| {
         const v = @intFromEnum(new_value);
         result[i] = .{ .name = @tagName(new_value), .value = v };
         new_val_max = @max(new_val_max, v);
     }
     return @Type(.{
-        .Enum = .{
-            .tag_type = std.math.IntFittingRange(0, new_val_max),
+        .@"enum" = .{
+            .tag_type = math.IntFittingRange(0, new_val_max),
             .fields = &result,
             .decls = &.{},
             .is_exhaustive = E_enum.is_exhaustive,

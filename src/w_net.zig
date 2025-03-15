@@ -10,10 +10,37 @@ const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
 const mem = std.mem;
+const posix = std.posix;
 
 // == private =================================================================
 
 const INET_BUF_SIZE = (4 * "255".len) + 3;
+
+// i-th bit IF flag abbreviation.
+const IFF_NAME: [16][]const u8 = .{
+    "U",  "B",  "D",  "L", "Pt", "Nt", "R",  "Na",
+    "Pr", "Al", "Ma", "S", "Mu", "Po", "Au", "D",
+};
+const IFF_BUF_MAX = blk: {
+    var w = 0;
+    for (IFF_NAME) |e| {
+        w += e.len;
+    }
+    break :blk w + 1;
+};
+
+// Iteration in alphabetical order of IFF_NAME over IF flag bits.
+const IFF_ALPHA_ORDER: [16]u16 = .{
+    9, 14, 1, 2, 15, 3, 10, 12, 7, 5, 13, 8, 4, 6, 11, 0,
+};
+comptime {
+    var w = 0;
+    for (IFF_ALPHA_ORDER) |e| {
+        w += e;
+    }
+    if (w != IFF_ALPHA_ORDER.len * (IFF_ALPHA_ORDER.len - 1) / 2)
+        @compileError("Bad IFF_ALPHA_ORDER sum");
+}
 
 const ColorHandler = struct {
     up: bool,
@@ -117,15 +144,8 @@ const NetDev = struct {
     }
 };
 
-// the std.os.linux.E enum adds over 15kB of bloat to the executable,
-// we used to utilize libc constants to fight against this, but it is
-// ultimately futile - embrace the bloat.
-inline fn errnoInt(r: usize) isize {
-    return @as(isize, @bitCast(r));
-}
-
 fn openIoctlSocket() linux.fd_t {
-    const ret = errnoInt(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
+    const ret: isize = @bitCast(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
     if (ret <= 0) utl.fatalFmt("NET: socket errno: {}", .{ret});
     return @as(linux.fd_t, @intCast(ret));
 }
@@ -135,9 +155,12 @@ fn getInet(
     ifr: *const linux.ifreq,
     inetbuf: *[INET_BUF_SIZE]u8,
 ) []const u8 {
-    const e = errnoInt(linux.ioctl(sock, c.SIOCGIFADDR, @intFromPtr(ifr)));
+    // the std.os.linux.E enum adds over 15kB of bloat to the executable,
+    // we used to utilize libc constants to fight against this, but it is
+    // ultimately futile - embrace the bloat.
+    const e = posix.errno(linux.ioctl(sock, linux.SIOCGIFADDR, @intFromPtr(ifr)));
     return switch (e) {
-        0 => blk: {
+        .SUCCESS => blk: {
             const addr: linux.sockaddr.in = @bitCast(ifr.ifru.addr);
             var inetfbs = io.fixedBufferStream(inetbuf);
             const writer = inetfbs.writer();
@@ -151,8 +174,8 @@ fn getInet(
             utl.writeInt(writer, @intCast((addr.addr >> 24) & 0xff));
             break :blk inetfbs.getWritten();
         },
-        -c.EADDRNOTAVAIL => "<no address>",
-        -c.ENODEV => "<no device>",
+        .ADDRNOTAVAIL => "<no address>",
+        .NODEV => "<no device>",
         else => utl.fatalFmt("NET: inet errno: {}", .{e}),
     };
 }
@@ -160,46 +183,32 @@ fn getInet(
 fn getFlags(
     sock: linux.fd_t,
     ifr: *const linux.ifreq,
-    flagsbuf: *[6]u8,
+    iffbuf: *[IFF_BUF_MAX]u8,
     up: *bool,
 ) []const u8 {
     // interestingly, the SIOCGIF*P*FLAGS ioctl is not implemented for INET?
     // check switch prong of: v6.6-rc3/source/net/ipv4/af_inet.c#L974
-    const e = errnoInt(linux.ioctl(sock, c.SIOCGIFFLAGS, @intFromPtr(ifr)));
+    const e = posix.errno(linux.ioctl(sock, linux.SIOCGIFFLAGS, @intFromPtr(ifr)));
     return switch (e) {
-        0 => blk: {
-            var n: usize = 0;
-
-            if (ifr.ifru.flags & c.IFF_ALLMULTI > 0) {
-                flagsbuf[n] = 'A';
-                n += 1;
-            }
-            if (ifr.ifru.flags & c.IFF_BROADCAST > 0) {
-                flagsbuf[n] = 'B';
-                n += 1;
-            }
-            if (ifr.ifru.flags & c.IFF_MULTICAST > 0) {
-                flagsbuf[n] = 'M';
-                n += 1;
-            }
-            if (ifr.ifru.flags & c.IFF_PROMISC > 0) {
-                flagsbuf[n] = 'P';
-                n += 1;
-            }
-            if (ifr.ifru.flags & c.IFF_RUNNING > 0) {
+        .SUCCESS => blk: {
+            if (ifr.ifru.flags.RUNNING)
                 up.* = true;
-                flagsbuf[n] = 'R';
-                n += 1;
+
+            const flags = @as(u16, @bitCast(ifr.ifru.flags));
+
+            var n: usize = 0;
+            inline for (IFF_ALPHA_ORDER) |i| {
+                if (flags & (1 << i) > 0) {
+                    const s = IFF_NAME[i];
+                    @memcpy(iffbuf[n..][0..s.len], s);
+                    n += s.len;
+                }
             }
-            if (ifr.ifru.flags & c.IFF_UP > 0) {
-                flagsbuf[n] = 'U';
-                n += 1;
-            }
-            break :blk flagsbuf[0..n];
+            break :blk iffbuf[0..n];
         },
-        -c.ENODEV => blk: {
-            flagsbuf[0] = '-';
-            break :blk flagsbuf[0..1];
+        .NODEV => blk: {
+            iffbuf[0] = '-';
+            break :blk iffbuf[0..1];
         },
         else => utl.fatalFmt("NET: flags errno: {}", .{e}),
     };
@@ -318,7 +327,7 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
     const wd = w.wid.NET;
 
     var _inetbuf: [INET_BUF_SIZE]u8 = .{0} ** INET_BUF_SIZE;
-    var _flagsbuf: [6]u8 = .{0} ** 6;
+    var _iffbuf: [IFF_BUF_MAX]u8 = .{0} ** IFF_BUF_MAX;
 
     var inet: []const u8 = undefined;
     var flags: []const u8 = undefined;
@@ -329,7 +338,7 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
     const STATE = comptime (1 << @intFromEnum(typ.NetOpt.state));
     var demands: u32 = 0;
 
-    if (@typeInfo(typ.NetOpt).Enum.fields.len >= @bitSizeOf(@TypeOf(demands)))
+    if (@typeInfo(typ.NetOpt).@"enum".fields.len >= @bitSizeOf(@TypeOf(demands)))
         @compileError("bump demands bitfield size");
 
     for (wd.format.part_opts) |*part|
@@ -338,7 +347,7 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
     if (demands & INET > 0)
         inet = getInet(Static.sock, &wd.ifr, &_inetbuf);
     if (demands & (FLAGS | STATE) > 0 or wd.fg == .color or wd.bg == .color)
-        flags = getFlags(Static.sock, &wd.ifr, &_flagsbuf, &up);
+        flags = getFlags(Static.sock, &wd.ifr, &_iffbuf, &up);
 
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;

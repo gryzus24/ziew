@@ -13,12 +13,14 @@ const w_time = @import("w_time.zig");
 const c = utl.c;
 const fmt = std.fmt;
 const fs = std.fs;
+const heap = std.heap;
 const io = std.io;
 const linux = std.os.linux;
 const math = std.math;
 const mem = std.mem;
-const time = std.time;
+const os = std.os;
 const posix = std.posix;
+const time = std.time;
 
 const Args = struct {
     config_path: ?[*:0]const u8,
@@ -35,7 +37,7 @@ fn showVersionAndExit(file: fs.File) noreturn {
 }
 
 fn readArgs() Args {
-    const argv = std.os.argv;
+    const argv = os.argv;
 
     var config_path: ?[*:0]const u8 = null;
     var get_config_path = false;
@@ -73,7 +75,7 @@ fn readArgs() Args {
 }
 
 fn fatalConfigParse(e: anyerror, err: cfg.LineParseError) noreturn {
-    @setCold(true);
+    @branchHint(.cold);
     const log = utl.openLog();
     const prefix = "fatal: ";
     log.log(prefix);
@@ -152,14 +154,14 @@ fn defaultConfigPath(reg: *m.Region) error{NoSpaceLeft}!?[*:0]const u8 {
 }
 
 var g_refresh_all = false;
-var g_bss_memory: [8 * mem.page_size]u8 align(16) = undefined;
+var g_bss_memory: [8 * heap.pageSize()]u8 align(16) = undefined;
 
 fn sa_handler(signum: c_int) callconv(.C) void {
     if (signum == linux.SIG.USR1) g_refresh_all = true;
 }
 
 pub fn main() !void {
-    var reg = m.Region.init(&g_bss_memory);
+    var reg: m.Region = .init(&g_bss_memory);
 
     const args = readArgs();
     const config_path = args.config_path orelse (defaultConfigPath(&reg) catch |e| switch (e) {
@@ -196,8 +198,8 @@ pub fn main() !void {
         break :blk min;
     };
     const sleep_interval_ts: linux.timespec = .{
-        .tv_sec = @intCast(sleep_interval_dsec / 10),
-        .tv_nsec = @intCast((sleep_interval_dsec % 10) * time.ns_per_s / 10),
+        .sec = @intCast(sleep_interval_dsec / 10),
+        .nsec = @intCast((sleep_interval_dsec % 10) * time.ns_per_s / 10),
     };
 
     var cpu_state: w_cpu.CpuState = undefined;
@@ -211,19 +213,19 @@ pub fn main() !void {
     for (widgets) |*w| switch (w.wid) {
         .CPU => {
             if (!cpu_state_inited) {
-                cpu_state = w_cpu.CpuState.init();
+                cpu_state = .init();
                 cpu_state_inited = true;
             }
         },
         .MEM => {
             if (!mem_state_inited) {
-                mem_state = w_mem.MemState.init();
+                mem_state = .init();
                 mem_state_inited = true;
             }
         },
         .NET => {
             if (!net_state_inited) {
-                net_state = w_net.NetState.init(&reg, widgets);
+                net_state = .init(&reg, widgets);
                 net_state_inited = true;
             }
         },
@@ -298,9 +300,9 @@ pub fn main() !void {
         _ = linux.write(1, write_buf.ptr, pos);
 
         var req = sleep_interval_ts;
-        while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {
-            -c.EINTR => if (g_refresh_all) break,
-            -c.EINVAL => unreachable,
+        while (true) switch (posix.errno(linux.nanosleep(&req, &req))) {
+            .INTR => if (g_refresh_all) break,
+            .INVAL => unreachable,
             else => break,
         };
     }

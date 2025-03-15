@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{
-        .default_target = try std.zig.CrossTarget.parse(
+        .default_target = try std.Target.Query.parse(
             .{ .arch_os_abi = "x86_64-linux-musl" },
         ),
     });
