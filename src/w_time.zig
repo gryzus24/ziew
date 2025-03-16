@@ -37,6 +37,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     utl.writeBlockStart(stream, wd.fg.get(), wd.bg.get());
     const nwritten = c.strftime(&outbuf, outbuf.len, wd.format, &tm);
     if (nwritten == 0) {
+        @branchHint(.unlikely);
         utl.writeStr(stream, "<empty>");
     } else {
         utl.writeStr(stream, outbuf[0..nwritten]);

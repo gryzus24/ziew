@@ -66,6 +66,7 @@ pub fn writeBlockEnd_GetWritten(fbs: anytype) []const u8 {
         error.NoSpaceLeft => @as(usize, 0),
     };
     if (nwritten < endstr.len) {
+        @branchHint(.unlikely);
         const seekamt: comptime_int = "...".len + endstr.len;
         fbs.seekBy(-seekamt) catch unreachable;
         _ = fbs.write("...") catch unreachable;

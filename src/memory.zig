@@ -63,7 +63,10 @@ pub const Region = struct {
         if (TRACE_ALLOCATIONS)
             printAlloc(self, "FRONT", T, nmemb, pad);
 
-        if (nmemb > avail / @sizeOf(T)) return error.NoSpaceLeft;
+        if (nmemb > avail / @sizeOf(T)) {
+            @branchHint(.unlikely);
+            return error.NoSpaceLeft;
+        }
         const alloc_size = @sizeOf(T) * nmemb;
 
         self.front = aligned_off + alloc_size;
@@ -86,7 +89,10 @@ pub const Region = struct {
         if (TRACE_ALLOCATIONS)
             printAlloc(self, "BACK ", T, nmemb, pad);
 
-        if (nmemb > avail / @sizeOf(T)) return error.NoSpaceLeft;
+        if (nmemb > avail / @sizeOf(T)) {
+            @branchHint(.unlikely);
+            return error.NoSpaceLeft;
+        }
         const alloc_size = @sizeOf(T) * nmemb;
 
         self.back = aligned_off - alloc_size;
