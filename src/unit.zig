@@ -31,7 +31,7 @@ fn KB_UNIT(kb: u64, kb_f5608: F5608) NumUnit {
 
 // == public ==================================================================
 
-pub const PRECISION_AUTO_VALUE: comptime_int = @as(u8, @bitCast(@as(i8, -1)));
+pub const PRECISION_AUTO_VALUE: comptime_int = ~@as(u8, 0);
 pub const PRECISION_DIGITS_MAX: comptime_int = F5608.FRAC_ROUNDING_STEPS.len;
 
 pub const F5608 = struct {

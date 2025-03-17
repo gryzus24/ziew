@@ -51,7 +51,7 @@ const Bat = struct {
     }
 
     pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
-        const batopt_cs = @as(typ.BatOpt.ColorSupported, @enumFromInt(oc.opt));
+        const batopt_cs: typ.BatOpt.ColorSupported = @enumFromInt(oc.opt);
         if (batopt_cs == .state) {
             return color.firstColorEQThreshold(
                 switch (self.state[0] & (0xff - 0x20)) {
@@ -154,7 +154,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.part);
 
-        const batopt = @as(typ.BatOpt, @enumFromInt(part.opt));
+        const batopt: typ.BatOpt = @enumFromInt(part.opt);
         if (batopt == .arg) {
             utl.writeStr(writer, wd.ps_name);
             continue;

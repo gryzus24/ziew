@@ -62,8 +62,8 @@ pub fn writeBlockStart(
 
 pub fn writeBlockEnd_GetWritten(fbs: anytype) []const u8 {
     const endstr = "\"},";
-    const nwritten = fbs.write(endstr) catch |e| switch (e) {
-        error.NoSpaceLeft => @as(usize, 0),
+    const nwritten: usize = fbs.write(endstr) catch |e| switch (e) {
+        error.NoSpaceLeft => 0,
     };
     if (nwritten < endstr.len) {
         @branchHint(.unlikely);

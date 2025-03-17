@@ -145,7 +145,7 @@ pub const WidgetId = union(Tag) {
     );
 
     pub fn castTo(self: @This(), comptime T: type) T {
-        return @as(T, @enumFromInt(@intFromEnum(self)));
+        return @enumFromInt(@intFromEnum(self));
     }
 
     pub fn requiresArgParam(self: @This()) bool {
@@ -264,7 +264,7 @@ pub const NetOpt = enum {
     pub const ColorSupported = MakeEnumSubset(@This(), &.{.state});
 
     pub fn castTo(self: @This(), comptime T: type) T {
-        return @as(T, @enumFromInt(@intFromEnum(self)));
+        return @enumFromInt(@intFromEnum(self));
     }
 
     pub fn requiresSocket(self: @This()) bool {

@@ -10,7 +10,6 @@ const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
 const mem = std.mem;
-const posix = std.posix;
 
 // == private =================================================================
 
@@ -146,8 +145,8 @@ const NetDev = struct {
 
 fn openIoctlSocket() linux.fd_t {
     const ret: isize = @bitCast(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
-    if (ret <= 0) utl.fatalFmt("NET: socket errno: {}", .{ret});
-    return @as(linux.fd_t, @intCast(ret));
+    if (ret < 0) utl.fatalFmt("NET: socket errno: {}", .{-ret});
+    return @intCast(ret);
 }
 
 fn getInet(
@@ -155,12 +154,11 @@ fn getInet(
     ifr: *const linux.ifreq,
     inetbuf: *[INET_BUF_SIZE]u8,
 ) []const u8 {
-    // the std.os.linux.E enum adds over 15kB of bloat to the executable,
-    // we used to utilize libc constants to fight against this, but it is
-    // ultimately futile - embrace the bloat.
-    const e = posix.errno(linux.ioctl(sock, linux.SIOCGIFADDR, @intFromPtr(ifr)));
-    return switch (e) {
-        .SUCCESS => blk: {
+    // the std.os.linux.E enum adds over 10kB of bloat to the executable,
+    // use libc constants instead - we don't need pretty errno names.
+    const ret: isize = @bitCast(linux.ioctl(sock, linux.SIOCGIFADDR, @intFromPtr(ifr)));
+    return switch (ret) {
+        0 => blk: {
             const addr: linux.sockaddr.in = @bitCast(ifr.ifru.addr);
             var inetfbs = io.fixedBufferStream(inetbuf);
             const writer = inetfbs.writer();
@@ -174,9 +172,9 @@ fn getInet(
             utl.writeInt(writer, @intCast((addr.addr >> 24) & 0xff));
             break :blk inetfbs.getWritten();
         },
-        .ADDRNOTAVAIL => "<no address>",
-        .NODEV => "<no device>",
-        else => utl.fatalFmt("NET: inet errno: {}", .{e}),
+        -c.EADDRNOTAVAIL => "<no address>",
+        -c.ENODEV => "<no device>",
+        else => utl.fatalFmt("NET: inet errno: {}", .{-ret}),
     };
 }
 
@@ -188,13 +186,13 @@ fn getFlags(
 ) []const u8 {
     // interestingly, the SIOCGIF*P*FLAGS ioctl is not implemented for INET?
     // check switch prong of: v6.6-rc3/source/net/ipv4/af_inet.c#L974
-    const e = posix.errno(linux.ioctl(sock, linux.SIOCGIFFLAGS, @intFromPtr(ifr)));
-    return switch (e) {
-        .SUCCESS => blk: {
+    const ret: isize = @bitCast(linux.ioctl(sock, linux.SIOCGIFFLAGS, @intFromPtr(ifr)));
+    return switch (ret) {
+        0 => blk: {
             if (ifr.ifru.flags.RUNNING)
                 up.* = true;
 
-            const flags = @as(u16, @bitCast(ifr.ifru.flags));
+            const flags: u16 = @bitCast(ifr.ifru.flags);
 
             var n: usize = 0;
             inline for (IFF_ALPHA_ORDER) |i| {
@@ -206,11 +204,11 @@ fn getFlags(
             }
             break :blk iffbuf[0..n];
         },
-        .NODEV => blk: {
+        -c.ENODEV => blk: {
             iffbuf[0] = '-';
             break :blk iffbuf[0..1];
         },
-        else => utl.fatalFmt("NET: flags errno: {}", .{e}),
+        else => utl.fatalFmt("NET: flags errno: {}", .{-ret}),
     };
 }
 
@@ -269,7 +267,7 @@ pub const NetState = struct {
                 if (w.wid == .NET) {
                     const wd = w.wid.NET;
                     for (wd.format.part_opts) |part| {
-                        const opt = @as(typ.NetOpt, @enumFromInt(part.opt));
+                        const opt: typ.NetOpt = @enumFromInt(part.opt);
                         if (opt.requiresProcNetDev()) break :blk true;
                     }
                 }
@@ -378,7 +376,7 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
     for (wd.format.part_opts) |*part| {
         utl.writeStr(stream, part.part);
 
-        const opt = @as(typ.NetOpt, @enumFromInt(part.opt));
+        const opt: typ.NetOpt = @enumFromInt(part.opt);
         if (opt.requiresSocket()) {
             const str = switch (opt.castTo(typ.NetOpt.SocketRequired)) {
                 // zig fmt: off

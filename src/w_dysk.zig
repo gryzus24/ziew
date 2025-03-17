@@ -93,7 +93,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.part);
 
-        const diskopt = @as(typ.DiskOpt, @enumFromInt(part.opt));
+        const diskopt: typ.DiskOpt = @enumFromInt(part.opt);
         if (diskopt == .arg) {
             utl.writeStr(writer, wd.mountpoint);
             continue;

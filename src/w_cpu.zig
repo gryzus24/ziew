@@ -197,8 +197,9 @@ fn blkBarIntensity(new: *const Cpu, old: *const Cpu) u32 {
     const pct = new.delta(old, 1).all;
 
     if (pct.u == 0) return 0;
-    const r = (pct.u - 1) / (comptime unt.F5608.init(100).div(8).u);
-    return @as(u32, @intCast(r)) + 1;
+    const part = comptime unt.F5608.init(100).div(8).u;
+    const ret = 1 + (pct.u - 1) / part;
+    return @intCast(ret);
 }
 
 // == public ==================================================================
@@ -285,7 +286,7 @@ pub fn widget(
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.part);
 
-        const cpuopt = @as(typ.CpuOpt, @enumFromInt(part.opt));
+        const cpuopt: typ.CpuOpt = @enumFromInt(part.opt);
         if (cpuopt == .brlbars) {
             var left: u32 = 0;
             var right: u32 = 0;

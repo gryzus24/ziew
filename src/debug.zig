@@ -172,12 +172,11 @@ pub noinline fn perfEventStart() linux.fd_t { // struct { linux.fd_t, linux.perf
     pe.flags.exclude_kernel = true;
     pe.flags.exclude_hv = true;
 
-    const ret = linux.perf_event_open(&pe, 0, 1, -1, 0);
-    const rc = @as(isize, @bitCast(ret));
-    if (rc < 0)
-        utl.fatalFmt("perf_event_open: errno: {}\n", .{rc});
+    const ret: isize = @bitCast(linux.perf_event_open(&pe, 0, 1, -1, 0));
+    if (ret < 0)
+        utl.fatalFmt("perf_event_open: errno: {}\n", .{-ret});
 
-    const fd = @as(linux.fd_t, @intCast(ret));
+    const fd: linux.fd_t = @intCast(ret);
 
     _ = linux.ioctl(fd, linux.PERF.EVENT_IOC.RESET, 0);
     _ = linux.ioctl(fd, linux.PERF.EVENT_IOC.ENABLE, 0);
