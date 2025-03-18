@@ -204,12 +204,6 @@ fn blkBarIntensity(new: *const Cpu, old: *const Cpu) u32 {
 
 // == public ==================================================================
 
-pub const WidgetData = struct {
-    format: typ.Format = .{},
-    fg: typ.Color = .nocolor,
-    bg: typ.Color = .nocolor,
-};
-
 pub const CpuState = struct {
     left: Stat = .{},
     right: Stat = .{},
@@ -228,7 +222,7 @@ pub const CpuState = struct {
         };
     }
 
-    pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
+    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
         const new, const old = self.getNewOldPtrs();
 
         return color.firstColorGEThreshold(
@@ -284,7 +278,7 @@ pub fn widget(
 
     utl.writeBlockStart(writer, wd.fg.getColor(state), wd.bg.getColor(state));
     for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.part);
+        utl.writeStr(writer, part.str);
 
         const cpuopt: typ.CpuOpt = @enumFromInt(part.opt);
         if (cpuopt == .brlbars) {

@@ -44,7 +44,7 @@ comptime {
 const ColorHandler = struct {
     up: bool,
 
-    pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
+    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
         return color.firstColorEQThreshold(@intFromBool(self.up), oc.colors);
     }
 };
@@ -233,27 +233,6 @@ fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
 
 // == public ==================================================================
 
-pub const WidgetData = struct {
-    ifr: linux.ifreq,
-    format: typ.Format = .{},
-    fg: typ.Color = .nocolor,
-    bg: typ.Color = .nocolor,
-
-    pub fn init(reg: *m.Region, arg: []const u8) !*WidgetData {
-        var ifr: linux.ifreq = undefined;
-        if (arg.len >= ifr.ifrn.name.len)
-            utl.fatal(&.{ "NET: interface name too long: ", arg });
-
-        const retptr = try reg.frontAlloc(WidgetData);
-
-        @memset(ifr.ifrn.name[0..], 0);
-        @memcpy(ifr.ifrn.name[0..arg.len], arg);
-        retptr.* = .{ .ifr = ifr };
-
-        return retptr;
-    }
-};
-
 pub const NetState = struct {
     left: NetDev,
     right: NetDev,
@@ -374,7 +353,7 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
 
     utl.writeBlockStart(stream, wd.fg.getColor(ch), wd.bg.getColor(ch));
     for (wd.format.part_opts) |*part| {
-        utl.writeStr(stream, part.part);
+        utl.writeStr(stream, part.str);
 
         const opt: typ.NetOpt = @enumFromInt(part.opt);
         if (opt.requiresSocket()) {

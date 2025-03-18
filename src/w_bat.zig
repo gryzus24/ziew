@@ -50,7 +50,7 @@ const Bat = struct {
         self.set.now = true;
     }
 
-    pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
+    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
         const batopt_cs: typ.BatOpt.ColorSupported = @enumFromInt(oc.opt);
         if (batopt_cs == .state) {
             return color.firstColorEQThreshold(
@@ -77,29 +77,6 @@ const Bat = struct {
 };
 
 // == public ==================================================================
-
-pub const WidgetData = struct {
-    ps_name: []const u8,
-    path: [*:0]const u8,
-    format: typ.Format = .{},
-    fg: typ.Color = .nocolor,
-    bg: typ.Color = .nocolor,
-
-    pub fn init(reg: *m.Region, arg: []const u8) !*WidgetData {
-        if (arg.len >= 32) utl.fatal(&.{"BAT: battery name too long"});
-
-        const retptr = try reg.frontAlloc(WidgetData);
-
-        var n: usize = 0;
-        const base = reg.frontSave(u8);
-        n += (try reg.frontWriteStr("/sys/class/power_supply/")).len;
-        n += (try reg.frontWriteStr(arg)).len;
-        n += (try reg.frontWriteStr("/uevent\x00")).len;
-
-        retptr.* = .{ .ps_name = arg, .path = reg.slice(u8, base, n)[0 .. n - 1 :0] };
-        return retptr;
-    }
-};
 
 pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     const wd = w.wid.BAT;
@@ -152,7 +129,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
 
     utl.writeBlockStart(writer, wd.fg.getColor(bat), wd.bg.getColor(bat));
     for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.part);
+        utl.writeStr(writer, part.str);
 
         const batopt: typ.BatOpt = @enumFromInt(part.opt);
         if (batopt == .arg) {

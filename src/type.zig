@@ -1,4 +1,6 @@
 const cfg = @import("config.zig");
+const color = @import("color.zig");
+const m = @import("memory.zig");
 const std = @import("std");
 const unt = @import("unit.zig");
 const utl = @import("util.zig");
@@ -11,6 +13,8 @@ const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
 const builtin = std.builtin;
 const enums = std.enums;
+const fs = std.fs;
+const linux = std.os.linux;
 const math = std.math;
 const mem = std.mem;
 const meta = std.meta;
@@ -20,153 +24,201 @@ const meta = std.meta;
 // 1/10th of a second
 pub const DeciSec = u64;
 
-pub const PartOpt = struct {
-    pub const Flag = packed struct {
-        diff: bool = false,
-        quiet: bool = false,
-    };
-    part: []const u8,
-    opt: u8 = 0,
-    flags: Flag = .{},
-    wopts: unt.NumUnit.WriteOptions = .{},
-};
-
 pub const Format = struct {
-    part_opts: []PartOpt = &.{},
+    part_opts: []Part = &.{},
     part_last: []const u8 = &.{},
-};
 
-pub const Hex = struct {
-    _hex: [7]u8 = .{0} ** 7,
+    pub const Part = struct {
+        str: []const u8,
+        opt: u8 = 0,
+        flags: Flags = .{},
+        wopts: unt.NumUnit.WriteOptions = .{},
 
-    pub fn set(self: *@This(), str: []const u8) bool {
-        if (str.len == 0 or mem.eql(u8, str, "default")) {
-            @memset(&self._hex, 0);
-            return true;
-        }
-
-        const hashash = @intFromBool(str[0] == '#');
-        const ismini = (str.len - hashash) == 3;
-        const isnormal = (str.len - hashash) == 6;
-
-        if (!isnormal and !ismini) return false;
-
-        for (str[hashash..]) |ch| switch (ch) {
-            '0'...'9', 'a'...'f', 'A'...'F' => {},
-            else => return false,
+        pub const Flags = packed struct {
+            diff: bool = false,
+            quiet: bool = false,
         };
-
-        self._hex[0] = '#';
-        if (ismini) {
-            var i: usize = 1;
-            for (str[hashash..]) |ch| {
-                self._hex[i] = ch;
-                i += 1;
-                self._hex[i] = ch;
-                i += 1;
-            }
-        } else {
-            @memcpy(self._hex[1..], str[hashash..]);
-        }
-        return true;
-    }
-
-    pub fn get(self: *const @This()) ?*const [7]u8 {
-        return if (self._hex[0] == 0) null else &self._hex;
-    }
-};
-
-pub const ThreshHex = struct {
-    thresh: u8,
-    hex: Hex,
-};
-
-pub const OptColors = struct {
-    opt: u8,
-    colors: []ThreshHex,
-};
-
-pub const Color = union(enum) {
-    nocolor,
-    default: Hex,
-    color: OptColors,
-
-    pub fn getColor(
-        self: *const @This(),
-        with_checkOptColors: anytype,
-    ) ?*const [7]u8 {
-        return switch (self.*) {
-            .nocolor => null,
-            .default => |*hex| hex.get(),
-            .color => |oc| with_checkOptColors.checkOptColors(oc),
-        };
-    }
-
-    pub fn getDefault(self: *const @This()) ?*const [7]u8 {
-        return switch (self.*) {
-            .nocolor => null,
-            .default => |*hex| hex.get(),
-            .color => null,
-        };
-    }
-};
-
-pub const WidgetId = union(Tag) {
-    TIME: *w_time.WidgetData,
-    MEM: *w_mem.WidgetData,
-    CPU: *w_cpu.WidgetData,
-    DISK: *w_dysk.WidgetData,
-    NET: *w_net.WidgetData,
-    BAT: *w_bat.WidgetData,
-    READ: *w_read.WidgetData,
-
-    const NR_WIDGETS = @typeInfo(Tag).@"enum".fields.len;
-
-    const Tag = enum { TIME, MEM, CPU, DISK, NET, BAT, READ };
-
-    pub const ArgRequired = MakeEnumSubset(
-        Tag,
-        &.{ .TIME, .DISK, .NET, .BAT, .READ },
-    );
-
-    pub const FormatRequired = MakeEnumSubset(
-        Tag,
-        &.{ .MEM, .CPU, .DISK, .NET, .BAT, .READ },
-    );
-
-    pub const ColorSupported = MakeEnumSubset(
-        Tag,
-        &.{ .MEM, .CPU, .DISK, .NET, .BAT },
-    );
-
-    pub const ColorOnlyDefault = MakeEnumSubset(
-        Tag,
-        &.{ .TIME, .READ },
-    );
-
-    pub fn castTo(self: @This(), comptime T: type) T {
-        return @enumFromInt(@intFromEnum(self));
-    }
-
-    pub fn requiresArgParam(self: @This()) bool {
-        _ = meta.intToEnum(ArgRequired, @intFromEnum(self)) catch return false;
-        return true;
-    }
-
-    pub fn requiresFormatParam(self: @This()) bool {
-        _ = meta.intToEnum(FormatRequired, @intFromEnum(self)) catch return false;
-        return true;
-    }
-
-    pub fn supportsColor(self: @This()) bool {
-        _ = meta.intToEnum(ColorSupported, @intFromEnum(self)) catch return false;
-        return true;
-    }
+    };
 };
 
 pub const Widget = struct {
-    wid: WidgetId,
+    wid: Id,
     interval: DeciSec = WIDGET_INTERVAL_DEFAULT,
+
+    pub const Id = union(Tag) {
+        TIME: *TimeData,
+        MEM: *MemData,
+        CPU: *CpuData,
+        DISK: *DiskData,
+        NET: *NetData,
+        BAT: *BatData,
+        READ: *ReadData,
+
+        const Tag = enum { TIME, MEM, CPU, DISK, NET, BAT, READ };
+
+        const NR_WIDGETS = @typeInfo(Tag).@"enum".fields.len;
+
+        pub const TimeData = struct {
+            format: [:0]const u8,
+            fg: color.Hex = .{},
+            bg: color.Hex = .{},
+
+            pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
+                if (arg.len >= STRFTIME_FORMAT_BUF_SIZE_MAX)
+                    utl.fatal(&.{"TIME: strftime format too long"});
+
+                const ret = try reg.frontAlloc(@This());
+
+                ret.* = .{ .format = try reg.frontWriteStrZ(arg) };
+                return ret;
+            }
+        };
+
+        pub const MemData = struct {
+            format: Format = .{},
+            fg: color.Color = .nocolor,
+            bg: color.Color = .nocolor,
+
+            pub fn init(reg: *m.Region) !*@This() {
+                const ret = try reg.frontAlloc(@This());
+                ret.* = .{};
+                return ret;
+            }
+        };
+
+        pub const CpuData = struct {
+            format: Format = .{},
+            fg: color.Color = .nocolor,
+            bg: color.Color = .nocolor,
+
+            pub fn init(reg: *m.Region) !*@This() {
+                const ret = try reg.frontAlloc(@This());
+                ret.* = .{};
+                return ret;
+            }
+        };
+
+        pub const DiskData = struct {
+            mountpoint: [:0]const u8,
+            format: Format = .{},
+            fg: color.Color = .nocolor,
+            bg: color.Color = .nocolor,
+
+            pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
+                if (arg.len >= WIDGET_BUF_MAX)
+                    utl.fatal(&.{"DISK: mountpoint path too long"});
+
+                const retptr = try reg.frontAlloc(@This());
+
+                retptr.* = .{ .mountpoint = try reg.frontWriteStrZ(arg) };
+                return retptr;
+            }
+        };
+
+        pub const NetData = struct {
+            ifr: linux.ifreq,
+            format: Format = .{},
+            fg: color.Color = .nocolor,
+            bg: color.Color = .nocolor,
+
+            pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
+                var ifr: linux.ifreq = undefined;
+                if (arg.len >= ifr.ifrn.name.len)
+                    utl.fatal(&.{ "NET: interface name too long: ", arg });
+
+                const retptr = try reg.frontAlloc(@This());
+
+                @memset(ifr.ifrn.name[0..], 0);
+                @memcpy(ifr.ifrn.name[0..arg.len], arg);
+                retptr.* = .{ .ifr = ifr };
+
+                return retptr;
+            }
+        };
+
+        pub const BatData = struct {
+            ps_name: []const u8,
+            path: [*:0]const u8,
+            format: Format = .{},
+            fg: color.Color = .nocolor,
+            bg: color.Color = .nocolor,
+
+            pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
+                if (arg.len >= 32) utl.fatal(&.{"BAT: battery name too long"});
+
+                const retptr = try reg.frontAlloc(@This());
+
+                var n: usize = 0;
+                const base = reg.frontSave(u8);
+                n += (try reg.frontWriteStr("/sys/class/power_supply/")).len;
+                n += (try reg.frontWriteStr(arg)).len;
+                n += (try reg.frontWriteStr("/uevent\x00")).len;
+
+                retptr.* = .{ .ps_name = arg, .path = reg.slice(u8, base, n)[0 .. n - 1 :0] };
+                return retptr;
+            }
+        };
+
+        pub const ReadData = struct {
+            path: [:0]const u8,
+            basename: []const u8,
+            format: Format = .{},
+            fg: color.Hex = .{},
+            bg: color.Hex = .{},
+
+            pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
+                if (arg.len >= WIDGET_BUF_MAX)
+                    utl.fatal(&.{"READ: path too long"});
+
+                const retptr = try reg.frontAlloc(@This());
+
+                retptr.* = .{
+                    .path = try reg.frontWriteStrZ(arg),
+                    .basename = fs.path.basename(arg),
+                };
+                return retptr;
+            }
+        };
+
+        pub const ArgRequired = MakeEnumSubset(
+            Tag,
+            &.{ .TIME, .DISK, .NET, .BAT, .READ },
+        );
+
+        pub const FormatRequired = MakeEnumSubset(
+            Tag,
+            &.{ .MEM, .CPU, .DISK, .NET, .BAT, .READ },
+        );
+
+        pub const ColorSupported = MakeEnumSubset(
+            Tag,
+            &.{ .MEM, .CPU, .DISK, .NET, .BAT },
+        );
+
+        pub const ColorOnlyDefault = MakeEnumSubset(
+            Tag,
+            &.{ .TIME, .READ },
+        );
+
+        pub fn castTo(self: @This(), comptime T: type) T {
+            return @enumFromInt(@intFromEnum(self));
+        }
+
+        pub fn requiresArgParam(self: @This()) bool {
+            _ = meta.intToEnum(ArgRequired, @intFromEnum(self)) catch return false;
+            return true;
+        }
+
+        pub fn requiresFormatParam(self: @This()) bool {
+            _ = meta.intToEnum(FormatRequired, @intFromEnum(self)) catch return false;
+            return true;
+        }
+
+        pub fn supportsColor(self: @This()) bool {
+            _ = meta.intToEnum(ColorSupported, @intFromEnum(self)) catch return false;
+            return true;
+        }
+    };
 };
 
 pub const TimeOpt = enum {
@@ -297,10 +349,10 @@ pub const ReadOpt = enum {
     pub const ColorSupported = enum {};
 };
 
-pub fn strStartToTaggedWidgetId(str: []const u8) ?WidgetId {
-    inline for (@typeInfo(WidgetId.Tag).@"enum".fields) |field| {
+pub fn strStartToTaggedWidgetId(str: []const u8) ?Widget.Id {
+    inline for (@typeInfo(Widget.Id.Tag).@"enum".fields) |field| {
         if (mem.startsWith(u8, str, field.name))
-            return @unionInit(WidgetId, field.name, undefined);
+            return @unionInit(Widget.Id, field.name, undefined);
     }
     return null;
 }
@@ -310,7 +362,7 @@ const WID_OPT_TYPE = &.{
 };
 
 comptime {
-    if (WidgetId.NR_WIDGETS != WID_OPT_TYPE.len)
+    if (Widget.Id.NR_WIDGETS != WID_OPT_TYPE.len)
         @compileError("Adjust WID_OPT_TYPE");
 }
 
@@ -320,9 +372,9 @@ comptime {
 pub const WIDGET_BUF_MAX = 256;
 
 /// Names of options supported by widgets' formats keyed by
-/// @intFromEnum(WidgetId.Tag).
-pub const WID_OPT_NAMES: [WidgetId.NR_WIDGETS][]const [:0]const u8 = blk: {
-    var w: [WidgetId.NR_WIDGETS][]const [:0]const u8 = undefined;
+/// @intFromEnum(Widget.Id.Tag).
+pub const WID_OPT_NAMES: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = blk: {
+    var w: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = undefined;
     for (WID_OPT_TYPE, 0..) |T, i| {
         w[i] = meta.fieldNames(T);
     }
@@ -330,9 +382,9 @@ pub const WID_OPT_NAMES: [WidgetId.NR_WIDGETS][]const [:0]const u8 = blk: {
 };
 
 /// Particular widgets' format option state of color support keyed by
-/// @intFromEnum(WidgetId.Tag).
-pub const WID_OPT_COLOR_SUPPORTED: [WidgetId.NR_WIDGETS][]const bool = blk: {
-    var w: [WidgetId.NR_WIDGETS][]const bool = undefined;
+/// @intFromEnum(Widget.Id.Tag).
+pub const WID_OPT_COLOR_SUPPORTED: [Widget.Id.NR_WIDGETS][]const bool = blk: {
+    var w: [Widget.Id.NR_WIDGETS][]const bool = undefined;
     for (WID_OPT_TYPE, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
         var supporting_color: [len]bool = .{false} ** len;
@@ -350,6 +402,12 @@ pub const WIDGET_INTERVAL_DEFAULT = 50;
 
 /// Maximum widget refresh interval (refresh once and forget).
 pub const WIDGET_INTERVAL_MAX = 1 << 31;
+
+/// Maximum strftime(3) format size.
+pub const STRFTIME_FORMAT_BUF_SIZE_MAX = WIDGET_BUF_MAX / 4;
+
+/// Maximum strftime(3) output size.
+pub const STRFTIME_OUT_BUF_SIZE_MAX = STRFTIME_FORMAT_BUF_SIZE_MAX * 2;
 
 // == private =================================================================
 

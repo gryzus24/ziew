@@ -12,7 +12,7 @@ const ColorHandler = struct {
     avail_kb: u64,
     total_kb: u64,
 
-    pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
+    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
         return color.firstColorGEThreshold(
             switch (@as(typ.DiskOpt.ColorSupported, @enumFromInt(oc.opt))) {
                 .@"%used" => unt.Percent(self.used_kb, self.total_kb),
@@ -25,23 +25,6 @@ const ColorHandler = struct {
 };
 
 // == public ==================================================================
-
-pub const WidgetData = struct {
-    mountpoint: [:0]const u8,
-    format: typ.Format = .{},
-    fg: typ.Color = .nocolor,
-    bg: typ.Color = .nocolor,
-
-    pub fn init(reg: *m.Region, arg: []const u8) !*WidgetData {
-        if (arg.len >= typ.WIDGET_BUF_MAX)
-            utl.fatal(&.{"DISK: mountpoint path too long"});
-
-        const retptr = try reg.frontAlloc(WidgetData);
-
-        retptr.* = .{ .mountpoint = try reg.frontWriteStrZ(arg) };
-        return retptr;
-    }
-};
 
 pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     const wd = w.wid.DISK;
@@ -91,7 +74,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
 
     utl.writeBlockStart(writer, wd.fg.getColor(ch), wd.bg.getColor(ch));
     for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.part);
+        utl.writeStr(writer, part.str);
 
         const diskopt: typ.DiskOpt = @enumFromInt(part.opt);
         if (diskopt == .arg) {

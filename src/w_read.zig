@@ -29,7 +29,7 @@ fn writeBlockError(
     return utl.writeBlockEnd_GetWritten(fbs);
 }
 
-fn acceptHex(str: []const u8, pos: *usize) ?typ.Hex {
+fn acceptHex(str: []const u8, pos: *usize) ?color.Hex {
     var i: usize = 0;
     defer pos.* += i;
 
@@ -40,7 +40,7 @@ fn acceptHex(str: []const u8, pos: *usize) ?typ.Hex {
     i += 1;
     i = mem.indexOfAnyPos(u8, str, i, " \t") orelse str.len;
 
-    var hex: typ.Hex = .{};
+    var hex: color.Hex = .{};
     _ = hex.set(str[beg..i]);
     return hex;
 }
@@ -52,27 +52,6 @@ fn readFileUntil(file: fs.File, endmarkers: []const u8, buf: *[typ.WIDGET_BUF_MA
 }
 
 // == public ==================================================================
-
-pub const WidgetData = struct {
-    path: [:0]const u8,
-    basename: []const u8,
-    format: typ.Format = .{},
-    fg: typ.Hex = .{},
-    bg: typ.Hex = .{},
-
-    pub fn init(reg: *m.Region, arg: []const u8) !*WidgetData {
-        if (arg.len >= typ.WIDGET_BUF_MAX)
-            utl.fatal(&.{"READ: path too long"});
-
-        const retptr = try reg.frontAlloc(WidgetData);
-
-        retptr.* = .{
-            .path = try reg.frontWriteStrZ(arg),
-            .basename = fs.path.basename(arg),
-        };
-        return retptr;
-    }
-};
 
 pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     const wd = w.wid.READ;
@@ -88,8 +67,8 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     };
 
     var pos: usize = 0;
-    var fghex: typ.Hex = wd.fg;
-    var bghex: typ.Hex = wd.bg;
+    var fghex: color.Hex = wd.fg;
+    var bghex: color.Hex = wd.bg;
 
     for (wd.format.part_opts) |*part| {
         if (@as(typ.ReadOpt, @enumFromInt(part.opt)) == .content) {
@@ -102,7 +81,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
 
     utl.writeBlockStart(stream, fghex.get(), bghex.get());
     for (wd.format.part_opts) |*part| {
-        utl.writeStr(stream, part.part);
+        utl.writeStr(stream, part.str);
         utl.writeStr(
             stream,
             switch (@as(typ.ReadOpt, @enumFromInt(part.opt))) {

@@ -300,9 +300,10 @@ pub fn main() !void {
         _ = linux.write(1, write_buf.ptr, pos);
 
         var req = sleep_interval_ts;
-        while (true) switch (posix.errno(linux.nanosleep(&req, &req))) {
-            .INTR => if (g_refresh_all) break,
-            .INVAL => unreachable,
+        while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {
+            -c.EFAULT => unreachable,
+            -c.EINTR => if (g_refresh_all) break,
+            -c.EINVAL => unreachable,
             else => break,
         };
     }

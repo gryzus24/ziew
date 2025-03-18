@@ -25,27 +25,27 @@ const posix = std.posix;
 const WidgetAllocator = struct {
     reg: *m.Region,
     widgets: []typ.Widget = &.{},
-    format_parts: []typ.PartOpt = &.{},
-    thresh_hexes: []typ.ThreshHex = &.{},
+    format_parts: []typ.Format.Part = &.{},
+    thresh_hexes: []color.ThreshHex = &.{},
 
-    pub fn newWidget(self: *@This(), wid: typ.WidgetId) !*typ.Widget {
+    pub fn newWidget(self: *@This(), wid: typ.Widget.Id) !*typ.Widget {
         const ret = try self.reg.backPushVec(&self.widgets);
         ret.* = .{ .wid = wid };
         return ret;
     }
 
-    pub fn newPartOpt(self: *@This(), str: []const u8) !*typ.PartOpt {
+    pub fn newFormatPart(self: *@This(), str: []const u8) !*typ.Format.Part {
         const ret = try self.reg.frontPushVec(&self.format_parts);
-        ret.* = .{ .part = str };
+        ret.* = .{ .str = str };
         return ret;
     }
 
-    pub fn newThreshHex(self: *@This(), thresh: u8, hex: []const u8) !*typ.ThreshHex {
+    pub fn newThreshHex(self: *@This(), thresh: u8, hex: []const u8) !*color.ThreshHex {
         const ret = try self.reg.frontPushVec(&self.thresh_hexes);
         ret.* = .{
             .thresh = thresh,
             .hex = blk: {
-                var t: typ.Hex = .{};
+                var t: color.Hex = .{};
                 if (!t.set(hex)) return error.BadHex;
                 break :blk t;
             },
@@ -59,32 +59,32 @@ const WidgetAllocator = struct {
         return ret;
     }
 
-    pub fn toOwnedFormatParts(self: *@This()) []typ.PartOpt {
+    pub fn toOwnedFormatParts(self: *@This()) []typ.Format.Part {
         const ret = self.format_parts;
         self.format_parts = &.{};
         return ret;
     }
 
-    pub fn toOwnedThreshHexes(self: *@This()) []typ.ThreshHex {
+    pub fn toOwnedThreshHexes(self: *@This()) []color.ThreshHex {
         const ret = self.thresh_hexes;
         self.thresh_hexes = &.{};
         return ret;
     }
 };
 
-const Field = struct {
-    str: []const u8,
-};
-
 const Line = struct {
     nr: usize,
     fields: []Field = &.{},
+
+    const Field = struct {
+        str: []const u8,
+    };
 };
 
 const ConfigAllocator = struct {
     reg: *m.Region,
     lines: []Line = &.{},
-    fields: []Field = &.{},
+    fields: []Line.Field = &.{},
 
     pub fn newLine(self: *@This(), nr: usize) !*Line {
         const ret = try self.reg.backPushVec(&self.lines);
@@ -92,7 +92,7 @@ const ConfigAllocator = struct {
         return ret;
     }
 
-    pub fn newField(self: *@This(), str: []const u8) !*Field {
+    pub fn newField(self: *@This(), str: []const u8) !*Line.Field {
         const ret = try self.reg.frontPushVec(&self.fields);
         ret.* = .{ .str = str };
         return ret;
@@ -104,7 +104,7 @@ const ConfigAllocator = struct {
         return ret;
     }
 
-    pub fn toOwnedFields(self: *@This()) []Field {
+    pub fn toOwnedFields(self: *@This()) []Line.Field {
         const ret = self.fields;
         self.fields = &.{};
         return ret;
@@ -182,7 +182,7 @@ fn lineFieldSplit(reg: *m.Region, buf: []const u8) ![]Line {
     return ca.toOwnedLines();
 }
 
-fn fieldWidget(field: Field) ?typ.WidgetId {
+fn fieldWidget(field: Line.Field) ?typ.Widget.Id {
     return if (typ.strStartToTaggedWidgetId(field.str)) |wid|
         wid
     else
@@ -190,7 +190,7 @@ fn fieldWidget(field: Field) ?typ.WidgetId {
 }
 
 const ColorType = enum { fg, bg };
-fn fieldColor(field: Field) ?ColorType {
+fn fieldColor(field: Line.Field) ?ColorType {
     if (mem.startsWith(u8, field.str, "FG")) {
         return .fg;
     } else if (mem.startsWith(u8, field.str, "BG")) {
@@ -204,7 +204,7 @@ const ColorOptResult = union(enum) {
     opt: u8,
     err: enum { unknown, unsupported },
 };
-fn fieldColorOpt(wid: typ.WidgetId.ColorSupported, field: Field) ColorOptResult {
+fn fieldColorOpt(wid: typ.Widget.Id.ColorSupported, field: Line.Field) ColorOptResult {
     for (
         typ.WID_OPT_COLOR_SUPPORTED[@intFromEnum(wid)],
         typ.WID_OPT_NAMES[@intFromEnum(wid)],
@@ -235,13 +235,13 @@ fn acceptInterval(str: []const u8) !usize {
 fn acceptFormatString(
     wa: *WidgetAllocator,
     str: []const u8,
-    wid: typ.WidgetId.FormatRequired,
+    wid: typ.Widget.Id.FormatRequired,
     err_note: *[]const u8,
     out: *typ.Format,
 ) !void {
     err_note.* = "";
 
-    var current: *typ.PartOpt = undefined;
+    var current: *typ.Format.Part = undefined;
 
     var i: usize = 0;
     var inside_brackets = false;
@@ -253,7 +253,7 @@ fn acceptFormatString(
             if (inside_brackets) return error.MismatchedBrackets;
             inside_brackets = true;
 
-            current = try wa.newPartOpt(str[str_beg..i]);
+            current = try wa.newFormatPart(str[str_beg..i]);
             opt_beg = i + 1;
         },
         '}' => {
@@ -333,11 +333,11 @@ fn acceptFormatString(
     out.*.part_last = str[str_beg..];
 }
 
-fn accessField(fields: []Field, i: usize) ?Field {
+fn accessField(fields: []Line.Field, i: usize) ?Line.Field {
     return if (i < fields.len) fields[i] else null;
 }
 
-fn unquoteField(field: Field, prefix: []const u8) ![]const u8 {
+fn unquoteField(field: Line.Field, prefix: []const u8) ![]const u8 {
     if (mem.startsWith(u8, field.str, prefix)) {
         const t = mem.trim(u8, field.str[prefix.len..], " \t");
         return mem.trim(u8, t, "\"");
@@ -346,7 +346,7 @@ fn unquoteField(field: Field, prefix: []const u8) ![]const u8 {
     }
 }
 
-fn stitchFields(reg: *m.Region, fields: []Field, err_field: usize) !StitchedLine {
+fn stitchFields(reg: *m.Region, fields: []Line.Field, err_field: usize) !StitchedLine {
     const base = reg.frontSave(u8);
     var n: usize = 0;
 
@@ -500,7 +500,7 @@ pub fn parse(
             current_field = arg_field;
             if (arg_required and arg_field > 0) {
                 const arg = try unquoteField(fields[arg_field], "arg=");
-                switch (wid.castTo(typ.WidgetId.ArgRequired)) {
+                switch (wid.castTo(typ.Widget.Id.ArgRequired)) {
                     .TIME => current.wid.TIME = try .init(reg, arg),
                     .DISK => current.wid.DISK = try .init(reg, arg),
                     .NET => current.wid.NET = try .init(reg, arg),
@@ -510,16 +510,14 @@ pub fn parse(
             }
             current_field = fmt_field;
             if (fmt_required and fmt_field > 0) {
-                const fmt_wid = wid.castTo(typ.WidgetId.FormatRequired);
+                const fmt_wid = wid.castTo(typ.Widget.Id.FormatRequired);
                 const ref = switch (fmt_wid) {
                     .MEM => blk: {
-                        current.wid.MEM = try reg.frontAlloc(w_mem.WidgetData);
-                        current.wid.MEM.* = .{};
+                        current.wid.MEM = try typ.Widget.Id.MemData.init(reg);
                         break :blk &current.wid.MEM.format;
                     },
                     .CPU => blk: {
-                        current.wid.CPU = try reg.frontAlloc(w_cpu.WidgetData);
-                        current.wid.CPU.* = .{};
+                        current.wid.CPU = try typ.Widget.Id.CpuData.init(reg);
                         break :blk &current.wid.CPU.format;
                     },
                     .DISK => &current.wid.DISK.format,
@@ -548,12 +546,12 @@ pub fn parse(
             const second_field = accessField(fields, current_field) orelse {
                 return error.MissingOptionOrColor;
             };
-            var co: typ.Color = undefined;
+            var co: color.Color = undefined;
             var opt: u8 = undefined;
             const wants_default_color = blk: {
                 if (current.wid.supportsColor()) {
                     switch (fieldColorOpt(
-                        current.wid.castTo(typ.WidgetId.ColorSupported),
+                        current.wid.castTo(typ.Widget.Id.ColorSupported),
                         second_field,
                     )) {
                         .opt => |o| {
@@ -578,7 +576,7 @@ pub fn parse(
                 }
                 co = .{
                     .default = blk: {
-                        var hex: typ.Hex = .{};
+                        var hex: color.Hex = .{};
                         if (!hex.set(second_field.str)) return error.BadHex;
                         break :blk hex;
                     },
@@ -606,7 +604,7 @@ pub fn parse(
                 };
             }
             if (current.wid.supportsColor()) {
-                switch (current.wid.castTo(typ.WidgetId.ColorSupported)) {
+                switch (current.wid.castTo(typ.Widget.Id.ColorSupported)) {
                     .MEM => SET_FG_BG(current.wid.MEM, color_type, co),
                     .CPU => SET_FG_BG(current.wid.CPU, color_type, co),
                     .DISK => SET_FG_BG(current.wid.DISK, color_type, co),
@@ -614,7 +612,7 @@ pub fn parse(
                     .BAT => SET_FG_BG(current.wid.BAT, color_type, co),
                 }
             } else {
-                switch (current.wid.castTo(typ.WidgetId.ColorOnlyDefault)) {
+                switch (current.wid.castTo(typ.Widget.Id.ColorOnlyDefault)) {
                     .TIME => SET_FG_BG(current.wid.TIME, color_type, co.default),
                     .READ => SET_FG_BG(current.wid.READ, color_type, co.default),
                 }

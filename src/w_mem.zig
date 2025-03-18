@@ -75,12 +75,6 @@ test "/proc/meminfo parser" {
 
 // == public ==================================================================
 
-pub const WidgetData = struct {
-    format: typ.Format = .{},
-    fg: typ.Color = .nocolor,
-    bg: typ.Color = .nocolor,
-};
-
 pub const MemState = struct {
     fields: [7]u64 = .{0} ** 7,
     proc_meminfo: fs.File,
@@ -93,7 +87,7 @@ pub const MemState = struct {
         };
     }
 
-    pub fn checkOptColors(self: @This(), oc: typ.OptColors) ?*const [7]u8 {
+    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
         return color.firstColorGEThreshold(
             unt.Percent(
                 switch (@as(typ.MemOpt.ColorSupported, @enumFromInt(oc.opt))) {
@@ -156,7 +150,7 @@ pub fn widget(
 
     utl.writeBlockStart(writer, wd.fg.getColor(state), wd.bg.getColor(state));
     for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.part);
+        utl.writeStr(writer, part.str);
         const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {
             // zig fmt: off
             .@"%free"      => unt.Percent(state.free(), state.total()),
