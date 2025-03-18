@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) !void {
         ),
     });
     const optimize = b.standardOptimizeOption(.{});
-    const strip = b.option(bool, "strip", "Strip debug symbols");
+    const strip = b.option(bool, "strip", "Strip debug symbols") orelse false;
 
     const exe = b.addExecutable(.{
         .name = "ziew",
@@ -19,5 +19,11 @@ pub fn build(b: *std.Build) !void {
         .single_threaded = true,
         .strip = strip,
     });
-    b.installArtifact(exe);
+
+    const no_bin = b.option(bool, "no-bin", "skip emitting binary") orelse false;
+    if (no_bin) {
+        b.getInstallStep().dependOn(&exe.step);
+    } else {
+        b.installArtifact(exe);
+    }
 }
