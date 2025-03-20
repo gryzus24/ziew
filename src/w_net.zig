@@ -50,16 +50,14 @@ const ColorHandler = struct {
 };
 
 const IFace = struct {
-    const FIELDS_MAX = 16;
-
-    next: ?*IFace,
+    const NR_FIELDS = 16;
 
     name: [linux.IFNAMESIZE]u8 = .{'-'} ++ (.{0} ** 15),
-    fields: [FIELDS_MAX]u64 = .{0} ** FIELDS_MAX,
+    fields: [NR_FIELDS]u64 = .{0} ** NR_FIELDS,
 
     const FieldType = enum(u64) {
         rx = 0,
-        tx = FIELDS_MAX / 2,
+        tx = NR_FIELDS / 2,
     };
 
     pub fn setName(self: *@This(), name: []const u8) void {
@@ -103,43 +101,28 @@ const IFace = struct {
     }
 };
 
-const IFaceList = struct {
-    // I think it can be done with only two pointers. However, allocation
-    // from the free list would requie iterating over the entire list.
-    head: ?*IFace = null, // first list element
-    tail: ?*IFace = null, // last list element
-    free: ?*IFace = null, // chained free elements
-};
-
 const NetDev = struct {
     reg: *m.Region,
-    ifl: IFaceList = .{},
+    list: IFaceList = .{},
+    free: IFaceList = .{},
+
+    const IFaceList = std.SinglyLinkedList(IFace);
 
     pub fn newIf(self: *@This()) !*IFace {
-        var ret: *IFace = undefined;
-        if (self.ifl.free) |free_ptr| {
-            self.ifl.free = free_ptr.next;
-            ret = free_ptr;
+        var new: *IFaceList.Node = undefined;
+        if (self.free.popFirst()) |free| {
+            new = free;
         } else {
-            ret = try self.reg.frontAlloc(IFace);
+            new = try self.reg.frontAlloc(IFaceList.Node);
         }
-        ret.* = .{ .next = null };
-        if (self.ifl.tail) |tail_ptr| {
-            tail_ptr.next = ret;
-        } else {
-            self.ifl.head = ret;
-        }
-        self.ifl.tail = ret;
-        return ret;
+        self.list.prepend(new);
+        return &new.data;
     }
 
     pub fn freeAll(self: *@This()) void {
-        if (self.ifl.tail) |tail_ptr| {
-            tail_ptr.next = self.ifl.free;
+        while (self.list.popFirst()) |iface| {
+            self.free.prepend(iface);
         }
-        self.ifl.free = self.ifl.head;
-        self.ifl.head = null;
-        self.ifl.tail = null;
     }
 };
 
@@ -224,7 +207,7 @@ fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
         var new_if = try netdev.newIf();
         new_if.setName(line[i..j]);
         j += 1; // skip ':'
-        for (0..IFace.FIELDS_MAX) |field_indx| {
+        for (0..IFace.NR_FIELDS) |field_indx| {
             while (line[j] == ' ') : (j += 1) {}
             new_if.fields[field_indx] = utl.atou64ForwardUntilOrEOF(line, &j, ' ');
         }
@@ -331,21 +314,19 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
     if (state.*) |*ok| {
         const new, const old = ok.getNewOldPtrs();
 
-        var it = new.ifl.head;
-        while (it) |iface| {
-            if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.name)) {
-                new_if = iface;
+        var it = new.list.first;
+        while (it) |iface| : (it = iface.next) {
+            if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.data.name)) {
+                new_if = &iface.data;
                 break;
             }
-            it = iface.next;
         }
-        it = old.ifl.head;
-        while (it) |iface| {
-            if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.name)) {
-                old_if = iface;
+        it = old.list.first;
+        while (it) |iface| : (it = iface.next) {
+            if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.data.name)) {
+                old_if = &iface.data;
                 break;
             }
-            it = iface.next;
         }
     }
 
