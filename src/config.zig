@@ -626,7 +626,7 @@ pub fn parse(
 
 test parse {
     const t = std.testing;
-    var buf: [2 * 4096]u8 align(16) = undefined;
+    var buf: [2 * 4096]u8 align(64) = undefined;
     var reg: m.Region = .init(&buf);
     var err: LineParseError = undefined;
 

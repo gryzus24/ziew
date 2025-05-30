@@ -40,7 +40,7 @@ pub const SOME_MMAP_ADDR: [*]align(mem.page_size) u8 = @ptrFromInt(0x60000000000
 ///       of callers' back allocations.
 pub const Region = struct {
     /// Pointer to the beginning of the address space.
-    head: []align(16) u8,
+    head: []align(64) u8,
 
     /// Current front index - initially `0`.
     front: usize,
@@ -51,7 +51,7 @@ pub const Region = struct {
     pub const SavePoint = usize;
     pub const AllocError = error{NoSpaceLeft};
 
-    pub fn init(bytes: []align(16) u8) Region {
+    pub fn init(bytes: []align(64) u8) Region {
         return .{ .head = bytes, .front = 0, .back = bytes.len };
     }
 

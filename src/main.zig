@@ -154,7 +154,7 @@ fn defaultConfigPath(reg: *m.Region) error{NoSpaceLeft}!?[*:0]const u8 {
 }
 
 var g_refresh_all = false;
-var g_bss_memory: [8 * heap.pageSize()]u8 align(16) = undefined;
+var g_bss_memory: [8 * heap.pageSize()]u8 align(64) = undefined;
 
 fn sa_handler(signum: c_int) callconv(.C) void {
     if (signum == linux.SIG.USR1) g_refresh_all = true;
