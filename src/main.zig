@@ -32,7 +32,7 @@ fn showHelpAndExit(file: fs.File) noreturn {
 }
 
 fn showVersionAndExit(file: fs.File) noreturn {
-    utl.writeStr(file, "ziew 0.0.7\n");
+    utl.writeStr(file, "ziew 0.0.8\n");
     linux.exit(0);
 }
 
