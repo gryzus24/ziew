@@ -27,7 +27,7 @@ case "$1" in
         zig build \
             --summary none \
             --cache-dir "$CACHE_DIR" \
-            -p . $OPT $@
+            -p . $OPT "$@"
         ;;
     test)
         shift
