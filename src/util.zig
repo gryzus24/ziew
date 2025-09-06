@@ -5,6 +5,7 @@ const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
 const mem = std.mem;
+const posix = std.posix;
 const zig = std.zig;
 
 // zig fmt: off
@@ -15,99 +16,113 @@ pub const c = @cImport({
 });
 // zig fmt: on
 
-pub const stdout = io.getStdOut();
-pub const stderr = io.getStdErr();
-
-pub inline fn writeStr(with_write: anytype, str: []const u8) void {
-    _ = with_write.write(str) catch {};
+pub inline fn fdWrite(fd: linux.fd_t, s: []const u8) void {
+    _ = linux.write(fd, s.ptr, s.len);
 }
 
-pub inline fn writeInt(writer: anytype, value: u64) void {
-    fmt.formatInt(value, 10, .lower, .{}, writer) catch {};
+pub inline fn fdWriteV(fd: linux.fd_t, vs: anytype) void {
+    const len = @typeInfo(@TypeOf(vs)).@"struct".fields.len;
+    var iovs: [len]posix.iovec_const = undefined;
+    inline for (vs, 0..) |s, i| iovs[i] = .{ .base = s.ptr, .len = s.len };
+    _ = linux.writev(fd, &iovs, iovs.len);
 }
 
-pub fn writeBlockStart(
-    with_write: anytype,
+pub inline fn writeStr(writer: *io.Writer, s: []const u8) void {
+    _ = writer.write(s) catch {};
+}
+
+pub inline fn writeInt(writer: *io.Writer, value: u64) void {
+    writer.printIntAny(value, 10, .lower, .{}) catch {};
+}
+
+pub fn writeBlockBeg(
+    writer: *io.Writer,
     fg_color: ?*const [7]u8,
     bg_color: ?*const [7]u8,
 ) void {
     if (fg_color) |fg_hex| {
-        writeStr(with_write,
+        writeStr(writer,
             \\{"color":"
         );
-        writeStr(with_write, fg_hex);
+        writeStr(writer, fg_hex);
         if (bg_color) |bg_hex| {
-            writeStr(with_write,
+            writeStr(writer,
                 \\","background":"
             );
-            writeStr(with_write, bg_hex);
+            writeStr(writer, bg_hex);
         }
-        writeStr(with_write,
+        writeStr(writer,
             \\","full_text":"
         );
     } else if (bg_color) |bg_hex| {
-        writeStr(with_write,
+        writeStr(writer,
             \\{"background":"
         );
-        writeStr(with_write, bg_hex);
-        writeStr(with_write,
+        writeStr(writer, bg_hex);
+        writeStr(writer,
             \\","full_text":"
         );
     } else {
-        writeStr(with_write,
+        writeStr(writer,
             \\{"full_text":"
         );
     }
 }
 
-pub fn writeBlockEnd_GetWritten(fbs: anytype) []const u8 {
+pub fn writeBlockEnd(writer: *io.Writer) []const u8 {
     const endstr = "\"},";
-    const nwritten: usize = fbs.write(endstr) catch |e| switch (e) {
-        error.NoSpaceLeft => 0,
+    const nr_written = writer.write(endstr) catch |e| switch (e) {
+        error.WriteFailed => 0,
     };
-    if (nwritten < endstr.len) {
+    if (nr_written < endstr.len) {
         @branchHint(.unlikely);
-        const seekamt: comptime_int = "...".len + endstr.len;
-        fbs.seekBy(-seekamt) catch unreachable;
-        _ = fbs.write("...") catch unreachable;
-        _ = fbs.write(endstr) catch unreachable;
+        const undoamt: comptime_int = "...".len + endstr.len;
+        writer.undo(undoamt);
+        _ = writer.write("...") catch unreachable;
+        _ = writer.write(endstr) catch unreachable;
     }
-    return fbs.getWritten();
+    return writer.buffered();
 }
 
 // == LOGGING =================================================================
 
-const Log = struct {
-    file: ?fs.File,
+pub var bss: [512]u8 = undefined;
 
-    pub fn log(self: @This(), msg: []const u8) void {
-        writeStr(stderr, msg);
-        if (self.file) |f| writeStr(f, msg);
+const Log = struct {
+    fd: linux.fd_t = -1,
+
+    pub fn log(self: @This(), s: []const u8) void {
+        fdWrite(2, s);
+        if (self.fd != -1) fdWrite(self.fd, s);
     }
 
     pub fn close(self: @This()) void {
-        if (self.file) |f| f.close();
+        if (self.fd != -1) _ = linux.close(self.fd);
     }
 };
 
-pub var bss: [512]u8 = undefined;
-
 pub fn bssPrint(comptime format: []const u8, args: anytype) []const u8 {
-    return fmt.bufPrint(&bss, format, args) catch return &.{};
+    var w: io.Writer = .fixed(&bss);
+    w.print(format, args) catch return &.{};
+    return w.buffered();
 }
 
 pub fn openLog() Log {
-    const file = fs.cwd().createFileZ("/tmp/ziew.log", .{ .truncate = false });
+    const path = "/tmp/ziew.log";
+    const file = fs.cwd().createFileZ(path, .{ .truncate = false }) catch |e| switch (e) {
+        error.AccessDenied => blk: {
+            fdWrite(2, "open: " ++ path ++ ": probably sticky, only author can modify\n");
+            break :blk null;
+        },
+        else => @panic(bssPrint("openLog: {s}", .{@errorName(e)})),
+    };
+
     if (file) |f| {
         f.seekFromEnd(0) catch {};
-    } else |e| switch (e) {
-        error.AccessDenied => writeStr(
-            stderr,
-            "open: /tmp/ziew.log: probably sticky, only author can modify\n",
-        ),
-        else => @panic(bssPrint("openLog: {s}", .{@errorName(e)})),
+        return .{ .fd = f.handle };
     }
-    return .{ .file = file catch null };
+
+    return .{};
 }
 
 pub fn fatal(strings: []const []const u8) noreturn {
@@ -139,9 +154,9 @@ pub fn warn(strings: []const []const u8) void {
 // == MISC ====================================================================
 
 pub fn repr(str: ?[]const u8) void {
-    const writer = stderr.writer();
+    const writer: fs.File.Writer = .init(fs.File.stderr(), &.{});
     if (str) |s| {
-        zig.fmtEscapes(s).format("", .{}, writer) catch {};
+        zig.stringEscape(s, writer) catch {};
         writeStr(writer, "\n");
     } else {
         writeStr(writer, "<null>\n");
@@ -191,11 +206,11 @@ pub inline fn atou64BackwardUntil(
 ) u64 {
     var j = i.*;
 
-    var unitpos_mul: u64 = 1;
+    var mul: u64 = 1;
     var r: u64 = 0;
     while (buf[j] != char) : (j -= 1) {
-        r += (buf[j] & 0x0f) * unitpos_mul;
-        unitpos_mul *= 10;
+        r += (buf[j] & 0x0f) * mul;
+        mul *= 10;
     }
     i.* = j;
     return r;

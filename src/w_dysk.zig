@@ -5,6 +5,7 @@ const typ = @import("type.zig");
 const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const c = utl.c;
+const io = std.io;
 
 const ColorHandler = struct {
     used_kb: u64,
@@ -26,16 +27,16 @@ const ColorHandler = struct {
 
 // == public ==================================================================
 
-pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
+pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
     const wd = w.wid.DISK;
 
     // TODO: use statvfs instead of this
     var sfs: c.struct_statfs = undefined;
     if (c.statfs(wd.mountpoint, &sfs) != 0) {
-        utl.writeBlockStart(stream, wd.fg.getDefault(), wd.bg.getDefault());
-        utl.writeStr(stream, wd.mountpoint);
-        utl.writeStr(stream, ": <not mounted>");
-        return utl.writeBlockEnd_GetWritten(stream);
+        utl.writeBlockBeg(writer, wd.fg.getDefault(), wd.bg.getDefault());
+        utl.writeStr(writer, wd.mountpoint);
+        utl.writeStr(writer, ": <not mounted>");
+        return utl.writeBlockEnd(writer);
     }
 
     // convert block size to 1K for calculations
@@ -64,7 +65,6 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
     const avail_kb = sfs.f_bavail;
     const used_kb = sfs.f_blocks - sfs.f_bavail;
 
-    const writer = stream.writer();
     const ch: ColorHandler = .{
         .used_kb = used_kb,
         .free_kb = free_kb,
@@ -72,7 +72,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
         .total_kb = total_kb,
     };
 
-    utl.writeBlockStart(writer, wd.fg.getColor(ch), wd.bg.getColor(ch));
+    utl.writeBlockBeg(writer, wd.fg.getColor(ch), wd.bg.getColor(ch));
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.str);
 
@@ -95,5 +95,5 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
         }).write(writer, part.wopts, part.flags.quiet);
     }
     utl.writeStr(writer, wd.format.part_last);
-    return utl.writeBlockEnd_GetWritten(stream);
+    return utl.writeBlockEnd(writer);
 }

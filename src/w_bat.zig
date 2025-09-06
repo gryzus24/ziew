@@ -6,6 +6,7 @@ const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
 const fs = std.fs;
+const io = std.io;
 const math = std.math;
 const mem = std.mem;
 
@@ -78,29 +79,29 @@ const Bat = struct {
 
 // == public ==================================================================
 
-pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
+pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
     const wd = w.wid.BAT;
 
     const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| switch (e) {
         error.FileNotFound => {
-            utl.writeBlockStart(stream, wd.fg.getDefault(), wd.bg.getDefault());
-            utl.writeStr(stream, wd.ps_name);
-            utl.writeStr(stream, ": <not found>");
-            return utl.writeBlockEnd_GetWritten(stream);
+            utl.writeBlockBeg(writer, wd.fg.getDefault(), wd.bg.getDefault());
+            utl.writeStr(writer, wd.ps_name);
+            utl.writeStr(writer, ": <not found>");
+            return utl.writeBlockEnd(writer);
         },
         else => utl.fatal(&.{ "BAT: check: ", @errorName(e) }),
     };
     defer file.close();
 
     var buf: [1024]u8 = undefined;
-    const nread = file.read(&buf) catch |e| {
+    const nr_read = file.read(&buf) catch |e| {
         utl.fatal(&.{ "BAT: read: ", @errorName(e) });
     };
-    if (nread == 0) utl.fatal(&.{"BAT: empty uevent"});
+    if (nr_read == 0) utl.fatal(&.{"BAT: empty uevent"});
 
     var bat: Bat = .{};
 
-    var lines = mem.tokenizeScalar(u8, buf[0..nread], '\n');
+    var lines = mem.tokenizeScalar(u8, buf[0..nr_read], '\n');
     while (lines.next()) |line| {
         const eqi = mem.indexOfScalar(u8, line, '=') orelse {
             utl.fatal(&.{"BAT: crazy uevent"});
@@ -125,9 +126,7 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
         if (bat.set.hasSetAll()) break;
     }
 
-    const writer = stream.writer();
-
-    utl.writeBlockStart(writer, wd.fg.getColor(bat), wd.bg.getColor(bat));
+    utl.writeBlockBeg(writer, wd.fg.getColor(bat), wd.bg.getColor(bat));
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.str);
 
@@ -150,5 +149,5 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
         }).write(writer, part.wopts, part.flags.quiet);
     }
     utl.writeStr(writer, wd.format.part_last);
-    return utl.writeBlockEnd_GetWritten(stream);
+    return utl.writeBlockEnd(writer);
 }

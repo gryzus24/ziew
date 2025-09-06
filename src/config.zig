@@ -396,15 +396,15 @@ pub fn readFile(
     };
     defer file.close();
 
-    const fmeta = file.metadata() catch |e| utl.fatal(
-        &.{ "config: could not get file metadata: ", @errorName(e) },
+    const stat = file.stat() catch |e| utl.fatal(
+        &.{ "config: could not get file size: ", @errorName(e) },
     );
-    const buf = try reg.frontAllocMany(u8, fmeta.size());
+    const buf = try reg.frontAllocMany(u8, stat.size);
 
-    const nread = file.read(buf) catch |e| utl.fatal(
+    const nr_read = file.read(buf) catch |e| utl.fatal(
         &.{ "config: read: ", @errorName(e) },
     );
-    if (nread != buf.len) utl.fatal(&.{"config: racy read"});
+    if (nr_read != buf.len) utl.fatal(&.{"config: racy read"});
 
     return buf;
 }

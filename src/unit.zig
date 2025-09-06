@@ -1,6 +1,7 @@
 const std = @import("std");
 const utl = @import("util.zig");
 const fmt = std.fmt;
+const io = std.io;
 
 // == private =================================================================
 
@@ -150,7 +151,7 @@ pub const NumUnit = struct {
 
     pub fn write(
         self: @This(),
-        with_write: anytype,
+        writer: *io.Writer,
         opts: WriteOptions,
         quiet: bool,
     ) void {
@@ -240,9 +241,9 @@ pub const NumUnit = struct {
 
         if (quiet and rounded.u == 0) {
             const spaces: [32]u8 = .{' '} ** 32;
-            utl.writeStr(with_write, spaces[i..]);
+            utl.writeStr(writer, spaces[i..]);
         } else {
-            utl.writeStr(with_write, buf[i..]);
+            utl.writeStr(writer, buf[i..]);
         }
     }
 };

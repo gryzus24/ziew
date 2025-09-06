@@ -254,29 +254,28 @@ pub const CpuState = struct {
 pub fn update(state: *CpuState) void {
     var buf: [4096 << 1]u8 = undefined;
 
-    const nread = state.proc_stat.pread(&buf, 0) catch |e| {
+    const nr_read = state.proc_stat.pread(&buf, 0) catch |e| {
         utl.fatal(&.{ "CPU: pread: ", @errorName(e) });
     };
-    if (nread == buf.len)
+    if (nr_read == buf.len)
         utl.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
     var new, const old = state.newStateFlip();
 
-    parseProcStat(buf[0..nread], new);
+    parseProcStat(buf[0..nr_read], new);
     state.usage_pct = new.cpu_entries[0].delta(&old.cpu_entries[0], 1);
     state.usage_abs = new.cpu_entries[0].delta(&old.cpu_entries[0], new.nr_cpu_entries);
 }
 
 pub fn widget(
-    stream: anytype,
+    writer: anytype,
     state: *const CpuState,
     w: *const typ.Widget,
 ) []const u8 {
     const wd = w.wid.CPU;
-    const writer = stream.writer();
     const new, const old = state.getNewOldPtrs();
 
-    utl.writeBlockStart(writer, wd.fg.getColor(state), wd.bg.getColor(state));
+    utl.writeBlockBeg(writer, wd.fg.getColor(state), wd.bg.getColor(state));
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.str);
 
@@ -327,5 +326,5 @@ pub fn widget(
         nu.write(writer, part.wopts, part.flags.quiet);
     }
     utl.writeStr(writer, wd.format.part_last);
-    return utl.writeBlockEnd_GetWritten(stream);
+    return utl.writeBlockEnd(writer);
 }

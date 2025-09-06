@@ -5,6 +5,7 @@ const typ = @import("type.zig");
 const utl = @import("util.zig");
 const ascii = std.ascii;
 const fs = std.fs;
+const io = std.io;
 const mem = std.mem;
 
 // == private =================================================================
@@ -22,11 +23,11 @@ fn writeBlockError(
     prefix: []const u8,
     msg: []const u8,
 ) []const u8 {
-    utl.writeBlockStart(fbs, fg, bg);
+    utl.writeBlockBeg(fbs, fg, bg);
     utl.writeStr(fbs, prefix);
     utl.writeStr(fbs, ": ");
     utl.writeStr(fbs, msg);
-    return utl.writeBlockEnd_GetWritten(fbs);
+    return utl.writeBlockEnd(fbs);
 }
 
 fn acceptHex(str: []const u8, pos: *usize) ?color.Hex {
@@ -53,11 +54,11 @@ fn readFileUntil(file: fs.File, endmarkers: []const u8, buf: *[typ.WIDGET_BUF_MA
 
 // == public ==================================================================
 
-pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
+pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
     const wd = w.wid.READ;
 
     const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| {
-        return writeBlockError(stream, wd.fg.get(), wd.bg.get(), wd.basename, @errorName(e));
+        return writeBlockError(writer, wd.fg.get(), wd.bg.get(), wd.basename, @errorName(e));
     };
     defer file.close();
 
@@ -79,11 +80,11 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
         }
     }
 
-    utl.writeBlockStart(stream, fghex.get(), bghex.get());
+    utl.writeBlockBeg(writer, fghex.get(), bghex.get());
     for (wd.format.part_opts) |*part| {
-        utl.writeStr(stream, part.str);
+        utl.writeStr(writer, part.str);
         utl.writeStr(
-            stream,
+            writer,
             switch (@as(typ.ReadOpt, @enumFromInt(part.opt))) {
                 // zig fmt: off
                 .arg      => wd.path,
@@ -94,6 +95,6 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
             },
         );
     }
-    utl.writeStr(stream, wd.format.part_last);
-    return utl.writeBlockEnd_GetWritten(stream);
+    utl.writeStr(writer, wd.format.part_last);
+    return utl.writeBlockEnd(writer);
 }

@@ -5,6 +5,7 @@ const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
 const fs = std.fs;
+const io = std.io;
 const mem = std.mem;
 
 // == private =================================================================
@@ -131,24 +132,23 @@ pub const MemState = struct {
 
 pub fn update(state: *MemState) void {
     var buf: [4096]u8 = undefined;
-    const nread = state.proc_meminfo.pread(&buf, 0) catch |e| {
+    const nr_read = state.proc_meminfo.pread(&buf, 0) catch |e| {
         utl.fatal(&.{ "MEM: pread: ", @errorName(e) });
     };
-    if (nread == buf.len)
+    if (nr_read == buf.len)
         utl.fatal(&.{"MEM: /proc/meminfo doesn't fit in 1 page"});
 
     parseProcMeminfo(&buf, state);
 }
 
 pub fn widget(
-    stream: anytype,
+    writer: *io.Writer,
     state: *const MemState,
     w: *const typ.Widget,
 ) []const u8 {
     const wd = w.wid.MEM;
-    const writer = stream.writer();
 
-    utl.writeBlockStart(writer, wd.fg.getColor(state), wd.bg.getColor(state));
+    utl.writeBlockBeg(writer, wd.fg.getColor(state), wd.bg.getColor(state));
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.str);
         const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {
@@ -171,5 +171,5 @@ pub fn widget(
         nu.write(writer, part.wopts, part.flags.quiet);
     }
     utl.writeStr(writer, wd.format.part_last);
-    return utl.writeBlockEnd_GetWritten(stream);
+    return utl.writeBlockEnd(writer);
 }

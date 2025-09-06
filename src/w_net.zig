@@ -54,6 +54,7 @@ const IFace = struct {
 
     name: [linux.IFNAMESIZE]u8 = .{'-'} ++ (.{0} ** 15),
     fields: [NR_FIELDS]u64 = .{0} ** NR_FIELDS,
+    node: std.SinglyLinkedList.Node,
 
     const FieldType = enum(u64) {
         rx = 0,
@@ -106,22 +107,22 @@ const NetDev = struct {
     list: IFaceList = .{},
     free: IFaceList = .{},
 
-    const IFaceList = std.SinglyLinkedList(IFace);
+    const IFaceList = std.SinglyLinkedList;
 
     pub fn newIf(self: *@This()) !*IFace {
-        var new: *IFaceList.Node = undefined;
+        var new: *IFace = undefined;
         if (self.free.popFirst()) |free| {
-            new = free;
+            new = @fieldParentPtr("node", free);
         } else {
-            new = try self.reg.frontAlloc(IFaceList.Node);
+            new = try self.reg.frontAlloc(IFace);
         }
-        self.list.prepend(new);
-        return &new.data;
+        self.list.prepend(&new.node);
+        return new;
     }
 
     pub fn freeAll(self: *@This()) void {
-        while (self.list.popFirst()) |iface| {
-            self.free.prepend(iface);
+        while (self.list.popFirst()) |node| {
+            self.free.prepend(node);
         }
     }
 };
@@ -143,17 +144,16 @@ fn getInet(
     return switch (ret) {
         0 => blk: {
             const addr: linux.sockaddr.in = @bitCast(ifr.ifru.addr);
-            var inetfbs = io.fixedBufferStream(inetbuf);
-            const writer = inetfbs.writer();
+            var inetfw: io.Writer = .fixed(inetbuf);
 
-            utl.writeInt(writer, @intCast((addr.addr >> 0) & 0xff));
-            utl.writeStr(writer, ".");
-            utl.writeInt(writer, @intCast((addr.addr >> 8) & 0xff));
-            utl.writeStr(writer, ".");
-            utl.writeInt(writer, @intCast((addr.addr >> 16) & 0xff));
-            utl.writeStr(writer, ".");
-            utl.writeInt(writer, @intCast((addr.addr >> 24) & 0xff));
-            break :blk inetfbs.getWritten();
+            utl.writeInt(&inetfw, @intCast((addr.addr >> 0) & 0xff));
+            utl.writeStr(&inetfw, ".");
+            utl.writeInt(&inetfw, @intCast((addr.addr >> 8) & 0xff));
+            utl.writeStr(&inetfw, ".");
+            utl.writeInt(&inetfw, @intCast((addr.addr >> 16) & 0xff));
+            utl.writeStr(&inetfw, ".");
+            utl.writeInt(&inetfw, @intCast((addr.addr >> 24) & 0xff));
+            break :blk inetfw.buffered();
         },
         -c.EADDRNOTAVAIL => "<no address>",
         -c.ENODEV => "<no device>",
@@ -263,16 +263,16 @@ pub const NetState = struct {
 
 pub fn update(state: *NetState) void {
     var buf: [4096]u8 = undefined;
-    const nread = state.proc_net_dev.pread(&buf, 0) catch |e| {
+    const nr_read = state.proc_net_dev.pread(&buf, 0) catch |e| {
         utl.fatal(&.{ "NET: pread: ", @errorName(e) });
     };
-    if (nread == buf.len)
+    if (nr_read == buf.len)
         utl.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
     const new, _ = state.newStateFlip();
     new.freeAll();
 
-    parseProcNetDev(buf[0..nread], new) catch |e| {
+    parseProcNetDev(buf[0..nr_read], new) catch |e| {
         utl.fatal(&.{ "NET: parse /proc/net/dev: ", @errorName(e) });
     };
 }
@@ -315,16 +315,18 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
         const new, const old = ok.getNewOldPtrs();
 
         var it = new.list.first;
-        while (it) |iface| : (it = iface.next) {
-            if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.data.name)) {
-                new_if = &iface.data;
+        while (it) |node| : (it = node.next) {
+            const iface: *IFace = @fieldParentPtr("node", node);
+            if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.name)) {
+                new_if = iface;
                 break;
             }
         }
         it = old.list.first;
-        while (it) |iface| : (it = iface.next) {
-            if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.data.name)) {
-                old_if = &iface.data;
+        while (it) |node| : (it = node.next) {
+            const iface: *IFace = @fieldParentPtr("node", node);
+            if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.name)) {
+                old_if = iface;
                 break;
             }
         }
@@ -332,7 +334,7 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
 
     const ch: ColorHandler = .{ .up = up };
 
-    utl.writeBlockStart(stream, wd.fg.getColor(ch), wd.bg.getColor(ch));
+    utl.writeBlockBeg(stream, wd.fg.getColor(ch), wd.bg.getColor(ch));
     for (wd.format.part_opts) |*part| {
         utl.writeStr(stream, part.str);
 
@@ -379,5 +381,5 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
         nu.write(stream, part.wopts, part.flags.quiet);
     }
     utl.writeStr(stream, wd.format.part_last);
-    return utl.writeBlockEnd_GetWritten(stream);
+    return utl.writeBlockEnd(stream);
 }

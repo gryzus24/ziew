@@ -4,10 +4,11 @@ const m = @import("memory.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
 const c = utl.c;
+const io = std.io;
 
 // == public ==================================================================
 
-pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
+pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
     const wd = w.wid.TIME;
 
     var outbuf: [typ.STRFTIME_OUT_BUF_SIZE_MAX]u8 = undefined;
@@ -15,13 +16,13 @@ pub fn widget(stream: anytype, w: *const typ.Widget) []const u8 {
 
     _ = c.localtime_r(&c.time(null), &tm);
 
-    utl.writeBlockStart(stream, wd.fg.get(), wd.bg.get());
-    const nwritten = c.strftime(&outbuf, outbuf.len, wd.format, &tm);
-    if (nwritten == 0) {
+    utl.writeBlockBeg(writer, wd.fg.get(), wd.bg.get());
+    const nr_written = c.strftime(&outbuf, outbuf.len, wd.format, &tm);
+    if (nr_written == 0) {
         @branchHint(.unlikely);
-        utl.writeStr(stream, "<empty>");
+        utl.writeStr(writer, "<empty>");
     } else {
-        utl.writeStr(stream, outbuf[0..nwritten]);
+        utl.writeStr(writer, outbuf[0..nr_written]);
     }
-    return utl.writeBlockEnd_GetWritten(stream);
+    return utl.writeBlockEnd(writer);
 }

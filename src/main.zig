@@ -26,13 +26,13 @@ const Args = struct {
     config_path: ?[*:0]const u8,
 };
 
-fn showHelpAndExit(file: fs.File) noreturn {
-    utl.writeStr(file, "usage: ziew [c <config file>] [h] [v]\n");
+fn showHelpAndExit() noreturn {
+    utl.fdWrite(2, "usage: ziew [c <config file>] [h] [v]\n");
     linux.exit(0);
 }
 
-fn showVersionAndExit(file: fs.File) noreturn {
-    utl.writeStr(file, "ziew 0.0.8\n");
+fn showVersionAndExit() noreturn {
+    utl.fdWrite(2, "ziew 0.0.8\n");
     linux.exit(0);
 }
 
@@ -51,11 +51,11 @@ fn readArgs() Args {
                     get_config_path = true;
                     argi += 1;
                 },
-                'h' => showHelpAndExit(utl.stderr),
-                'v' => showVersionAndExit(utl.stderr),
+                'h' => showHelpAndExit(),
+                'v' => showVersionAndExit(),
                 else => {
-                    utl.writeStr(utl.stderr, "unknown option\n");
-                    showHelpAndExit(utl.stderr);
+                    utl.fdWrite(2, "unknown option\n");
+                    showHelpAndExit();
                 },
             }
         }
@@ -65,10 +65,8 @@ fn readArgs() Args {
                 get_config_path = false;
             }
         } else {
-            utl.writeStr(utl.stderr, "required argument: ");
-            utl.writeStr(utl.stderr, arg[0..len]);
-            utl.writeStr(utl.stderr, " <arg>\n");
-            showHelpAndExit(utl.stderr);
+            utl.fdWriteV(2, .{ "required argument: ", arg[0..len], " <arg>\n" });
+            showHelpAndExit();
         }
     }
     return .{ .config_path = config_path };
@@ -156,7 +154,7 @@ fn defaultConfigPath(reg: *m.Region) error{NoSpaceLeft}!?[*:0]const u8 {
 var g_refresh_all = false;
 var g_bss_memory: [8 * heap.pageSize()]u8 align(64) = undefined;
 
-fn sa_handler(signum: c_int) callconv(.C) void {
+fn sa_handler(signum: c_int) callconv(.c) void {
     if (signum == linux.SIG.USR1) g_refresh_all = true;
 }
 
@@ -171,7 +169,7 @@ pub fn main() !void {
 
     if (linux.sigaction(linux.SIG.USR1, &.{
         .handler = .{ .handler = &sa_handler },
-        .mask = linux.empty_sigset,
+        .mask = linux.sigemptyset(),
         .flags = linux.SA.RESTART,
     }, null) != 0) {
         utl.fatal(&.{"sigaction failed"});
@@ -234,6 +232,8 @@ pub fn main() !void {
 
     // zig fmt: off
     var time_to_refresh   = try reg.frontAllocMany(typ.DeciSec, widgets.len);
+    @memset(time_to_refresh, 0);
+
     var widget_bufs       = try reg.frontAllocMany([typ.WIDGET_BUF_MAX]u8, widgets.len);
     var widget_bufs_views = try reg.frontAllocMany([]const u8, widgets.len);
     var write_buf         = try reg.frontAllocMany(u8, 2 + widgets.len * typ.WIDGET_BUF_MAX);
@@ -262,7 +262,7 @@ pub fn main() !void {
             if (time_to_refresh[i] == 0) {
                 time_to_refresh[i] = w.interval;
 
-                var fbs = io.fixedBufferStream(&widget_bufs[i]);
+                var fw: io.Writer = .fixed(&widget_bufs[i]);
 
                 if (w.wid == .CPU and !cpu_updated) {
                     w_cpu.update(&cpu_state);
@@ -279,13 +279,13 @@ pub fn main() !void {
                     }
                 }
                 widget_bufs_views[i] = switch (w.wid) {
-                    .TIME => w_time.widget(&fbs, w),
-                    .MEM => w_mem.widget(&fbs, &mem_state, w),
-                    .CPU => w_cpu.widget(&fbs, &cpu_state, w),
-                    .DISK => w_dysk.widget(&fbs, w),
-                    .NET => w_net.widget(&fbs, &net_state, w),
-                    .BAT => w_bat.widget(&fbs, w),
-                    .READ => w_read.widget(&fbs, w),
+                    .TIME => w_time.widget(&fw, w),
+                    .MEM => w_mem.widget(&fw, &mem_state, w),
+                    .CPU => w_cpu.widget(&fw, &cpu_state, w),
+                    .DISK => w_dysk.widget(&fw, w),
+                    .NET => w_net.widget(&fw, &net_state, w),
+                    .BAT => w_bat.widget(&fw, w),
+                    .READ => w_read.widget(&fw, w),
                 };
             }
         }

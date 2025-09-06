@@ -1,5 +1,6 @@
 const std = @import("std");
 const utl = @import("util.zig");
+const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
 const mem = std.mem;
@@ -10,8 +11,8 @@ const posix = std.posix;
 fn printAlloc(reg: *Region, s: []const u8, comptime T: type, nmemb: usize, pad: usize) void {
     const front, const back = reg.spaceUsed();
     const total_size = @sizeOf(T) * nmemb + pad;
-    const writer = utl.stderr.writer();
-    _ = writer.print(
+    var writer: fs.File.Writer = .init(fs.File.stderr(), &.{});
+    _ = writer.interface.print(
         "F={:<4} B={:<4} T={:<5} | ({s}) PAD={} N={:<4} SZ={:<4} TSZ={:<4} {}\n",
         .{ front, back, front + back, s, pad, nmemb, @sizeOf(T), total_size, T },
     ) catch {};
