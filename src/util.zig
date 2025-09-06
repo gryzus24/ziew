@@ -35,38 +35,70 @@ pub inline fn writeInt(writer: *io.Writer, value: u64) void {
     writer.printIntAny(value, 10, .lower, .{}) catch {};
 }
 
+const A =
+    \\{"full_text":"
+;
+var NC_A = blk: {
+    var w: [A.len]u8 = undefined;
+    @memcpy(&w, A);
+    break :blk w;
+};
+
+const B =
+    \\{"color":"#XXXXXX","full_text":"
+;
+var FG_B = blk: {
+    var w: [B.len]u8 = undefined;
+    @memcpy(&w, B);
+    break :blk w;
+};
+
+const C =
+    \\{"background":"#XXXXXX","full_text":"
+;
+var BG_C = blk: {
+    var w: [C.len]u8 = undefined;
+    @memcpy(&w, C);
+    break :blk w;
+};
+
+const D =
+    \\{"color":"#XXXXXX","background":"#XXXXXX","full_text":"
+;
+var FGBG_D = blk: {
+    var w: [D.len]u8 = undefined;
+    @memcpy(&w, D);
+    break :blk w;
+};
+
+var BLOCK_HEADERS: [4][]u8 = .{ &NC_A, &FG_B, &BG_C, &FGBG_D };
+
 pub fn writeBlockBeg(
     writer: *io.Writer,
     fg_color: ?*const [7]u8,
     bg_color: ?*const [7]u8,
 ) void {
-    if (fg_color) |fg_hex| {
-        writeStr(writer,
-            \\{"color":"
-        );
-        writeStr(writer, fg_hex);
-        if (bg_color) |bg_hex| {
-            writeStr(writer,
-                \\","background":"
-            );
-            writeStr(writer, bg_hex);
-        }
-        writeStr(writer,
-            \\","full_text":"
-        );
-    } else if (bg_color) |bg_hex| {
-        writeStr(writer,
-            \\{"background":"
-        );
-        writeStr(writer, bg_hex);
-        writeStr(writer,
-            \\","full_text":"
-        );
-    } else {
-        writeStr(writer,
-            \\{"full_text":"
-        );
+    // zig fmt: off
+    const i: u2 = (
+        @as(u2, @intFromBool(fg_color != null)) +
+        @as(u2, @intFromBool(bg_color != null)) * 2);
+    // zig fmt: on
+
+    var header = BLOCK_HEADERS[i];
+    switch (i) {
+        0 => {},
+        1 => {
+            @memcpy(header[11..17], fg_color.?[1..]);
+        },
+        2 => {
+            @memcpy(header[16..22], bg_color.?[1..]);
+        },
+        3 => {
+            @memcpy(header[11..17], fg_color.?[1..]);
+            @memcpy(header[34..40], bg_color.?[1..]);
+        },
     }
+    writeStr(writer, header);
 }
 
 pub fn writeBlockEnd(writer: *io.Writer) []const u8 {
