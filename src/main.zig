@@ -23,7 +23,7 @@ const posix = std.posix;
 const time = std.time;
 
 const Args = struct {
-    config_path: ?[*:0]const u8,
+    config_path: ?[*:0]const u8 = null,
 };
 
 fn showHelpAndExit() noreturn {
@@ -39,17 +39,17 @@ fn showVersionAndExit() noreturn {
 fn readArgs() Args {
     const argv = os.argv;
 
-    var config_path: ?[*:0]const u8 = null;
+    var args: Args = .{};
     var get_config_path = false;
-    var argi: usize = 1;
-    while (argi < argv.len) : (argi += 1) {
-        const arg = argv[argi];
+
+    for (1..argv.len) |i| {
+        const arg = argv[i];
         const len = mem.len(arg);
         if (len == 1 or (len == 2 and arg[0] == '-')) {
             switch (arg[len - 1]) {
                 'c' => {
                     get_config_path = true;
-                    argi += 1;
+                    continue;
                 },
                 'h' => showHelpAndExit(),
                 'v' => showVersionAndExit(),
@@ -59,17 +59,16 @@ fn readArgs() Args {
                 },
             }
         }
-        if (argi < argv.len) {
-            if (get_config_path) {
-                config_path = argv[argi];
-                get_config_path = false;
-            }
-        } else {
-            utl.fdWriteV(2, .{ "required argument: ", arg[0..len], " <arg>\n" });
-            showHelpAndExit();
+        if (get_config_path) {
+            args.config_path = argv[i];
+            get_config_path = false;
         }
     }
-    return .{ .config_path = config_path };
+    if (get_config_path) {
+        utl.fdWrite(2, "required argument: c <path>\n");
+        showHelpAndExit();
+    }
+    return args;
 }
 
 fn fatalConfigParse(e: anyerror, err: cfg.LineParseError) noreturn {
@@ -158,6 +157,37 @@ fn sa_handler(signum: c_int) callconv(.c) void {
     if (signum == linux.SIG.USR1) g_refresh_all = true;
 }
 
+fn setupSignals() void {
+    const action: linux.Sigaction = .{
+        .handler = .{ .handler = &sa_handler },
+        .mask = linux.sigemptyset(),
+        .flags = linux.SA.RESTART,
+    };
+
+    if (linux.sigaction(linux.SIG.USR1, &action, null) != 0) {
+        utl.fatal(&.{"sigaction failed"});
+    }
+}
+
+fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
+    var min: typ.DeciSec = typ.WIDGET_INTERVAL_MAX;
+    var gcd: typ.DeciSec = 0;
+    for (widgets) |*w| {
+        // Intervals of `WIDGET_INTERVAL_MAX` are
+        // treated as "refresh once and forget".
+        if (w.interval != typ.WIDGET_INTERVAL_MAX) {
+            min = @min(min, w.interval);
+            gcd = math.gcd(if (gcd == 0) w.interval else gcd, w.interval);
+        }
+    }
+    if (gcd < min) {
+        utl.warn(&.{"gcd of intervals < minimum interval, widget refreshes will be inexact"});
+    }
+    // NOTE: gcd is the obvious choice here, but it might prove
+    //       disastrous if the interval is misconfigured...
+    return min;
+}
+
 pub fn main() !void {
     var reg: m.Region = .init(&g_bss_memory);
 
@@ -167,37 +197,12 @@ pub fn main() !void {
     });
     const widgets = readConfig(&reg, config_path);
 
-    if (linux.sigaction(linux.SIG.USR1, &.{
-        .handler = .{ .handler = &sa_handler },
-        .mask = linux.sigemptyset(),
-        .flags = linux.SA.RESTART,
-    }, null) != 0) {
-        utl.fatal(&.{"sigaction failed"});
-    }
+    setupSignals();
 
-    const sleep_interval_dsec = blk: {
-        var min: typ.DeciSec = typ.WIDGET_INTERVAL_MAX;
-        var gcd: typ.DeciSec = 0;
-        for (widgets) |*w| {
-            // Intervals of `WIDGET_INTERVAL_MAX` are
-            // treated as "refresh once and forget".
-            if (w.interval != typ.WIDGET_INTERVAL_MAX) {
-                min = @min(min, w.interval);
-                gcd = math.gcd(if (gcd == 0) w.interval else gcd, w.interval);
-            }
-        }
-        if (gcd < min) {
-            utl.warn(
-                &.{"gcd of intervals < minimum interval, widget refreshes will be inexact"},
-            );
-        }
-        // NOTE: gcd is the obvious choice here, but it might prove
-        //       disastrous if the interval is misconfigured...
-        break :blk min;
-    };
-    const sleep_interval_ts: linux.timespec = .{
-        .sec = @intCast(sleep_interval_dsec / 10),
-        .nsec = @intCast((sleep_interval_dsec % 10) * time.ns_per_s / 10),
+    const sleep_dsec = sleepInterval(widgets);
+    const sleep_ts: linux.timespec = .{
+        .sec = @intCast(sleep_dsec / 10),
+        .nsec = @intCast((sleep_dsec % 10) * time.ns_per_s / 10),
     };
 
     var cpu_state: w_cpu.CpuState = undefined;
@@ -242,11 +247,7 @@ pub fn main() !void {
     write_buf[0] = ',';
     write_buf[1] = '[';
 
-    const header =
-        \\{"version":1}
-        \\[[]
-    ;
-    _ = linux.write(1, header, header.len);
+    utl.fdWrite(1, "{\"version\":1}\n[[]");
     while (true) {
         if (g_refresh_all) {
             @memset(time_to_refresh, 0);
@@ -258,7 +259,7 @@ pub fn main() !void {
         var net_updated = false;
 
         for (widgets, 0..) |*w, i| {
-            time_to_refresh[i] -|= sleep_interval_dsec;
+            time_to_refresh[i] -|= sleep_dsec;
             if (time_to_refresh[i] == 0) {
                 time_to_refresh[i] = w.interval;
 
@@ -297,9 +298,9 @@ pub fn main() !void {
         }
         write_buf[pos - 1] = ']'; // get rid of the trailing comma
 
-        _ = linux.write(1, write_buf.ptr, pos);
+        utl.fdWrite(1, write_buf[0..pos]);
 
-        var req = sleep_interval_ts;
+        var req = sleep_ts;
         while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {
             -c.EFAULT => unreachable,
             -c.EINTR => if (g_refresh_all) break,
