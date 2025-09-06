@@ -11,8 +11,11 @@ const posix = std.posix;
 fn printAlloc(reg: *Region, s: []const u8, comptime T: type, nmemb: usize, pad: usize) void {
     const front, const back = reg.spaceUsed();
     const total_size = @sizeOf(T) * nmemb + pad;
-    var writer: fs.File.Writer = .init(fs.File.stderr(), &.{});
-    _ = writer.interface.print(
+
+    var writer = fs.File.stderr().writer(&.{});
+    const stderr = &writer.interface;
+
+    stderr.print(
         "F={:<4} B={:<4} T={:<5} | ({s}) PAD={} N={:<4} SZ={:<4} TSZ={:<4} {}\n",
         .{ front, back, front + back, s, pad, nmemb, @sizeOf(T), total_size, T },
     ) catch {};
@@ -21,8 +24,6 @@ fn printAlloc(reg: *Region, s: []const u8, comptime T: type, nmemb: usize, pad: 
 // == public ==================================================================
 
 pub const TRACE_ALLOCATIONS = false;
-
-pub const SOME_MMAP_ADDR: [*]align(mem.page_size) u8 = @ptrFromInt(0x600000000000);
 
 /// Region of address space that grows in both directions; from lower to higher
 /// address - front - and from higher to lower (stack-like) - back.
@@ -72,10 +73,7 @@ pub const Region = struct {
 
         self.front = aligned_off + alloc_size;
 
-        return @alignCast(mem.bytesAsSlice(
-            T,
-            self.head[aligned_off..][0..alloc_size],
-        ));
+        return @alignCast(mem.bytesAsSlice(T, self.head[aligned_off..][0..alloc_size]));
     }
 
     pub fn frontAlloc(self: *@This(), comptime T: type) AllocError!*T {
@@ -98,10 +96,7 @@ pub const Region = struct {
 
         self.back = aligned_off - alloc_size;
 
-        return @alignCast(mem.bytesAsSlice(
-            T,
-            self.head[self.back..][0..alloc_size],
-        ));
+        return @alignCast(mem.bytesAsSlice(T, self.head[self.back..][0..alloc_size]));
     }
 
     pub fn backAlloc(self: *@This(), comptime T: type) AllocError!*T {

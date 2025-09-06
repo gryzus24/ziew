@@ -110,19 +110,15 @@ pub fn bssPrint(comptime format: []const u8, args: anytype) []const u8 {
 pub fn openLog() Log {
     const path = "/tmp/ziew.log";
     const file = fs.cwd().createFileZ(path, .{ .truncate = false }) catch |e| switch (e) {
-        error.AccessDenied => blk: {
+        error.AccessDenied => {
             fdWrite(2, "open: " ++ path ++ ": probably sticky, only author can modify\n");
-            break :blk null;
+            return .{};
         },
         else => @panic(bssPrint("openLog: {s}", .{@errorName(e)})),
     };
 
-    if (file) |f| {
-        f.seekFromEnd(0) catch {};
-        return .{ .fd = f.handle };
-    }
-
-    return .{};
+    file.seekFromEnd(0) catch {};
+    return .{ .fd = file.handle };
 }
 
 pub fn fatal(strings: []const []const u8) noreturn {
@@ -154,12 +150,14 @@ pub fn warn(strings: []const []const u8) void {
 // == MISC ====================================================================
 
 pub fn repr(str: ?[]const u8) void {
-    const writer: fs.File.Writer = .init(fs.File.stderr(), &.{});
+    var writer = fs.File.stderr().writer(&.{});
+    const stderr = &writer.interface;
+
     if (str) |s| {
-        zig.stringEscape(s, writer) catch {};
-        writeStr(writer, "\n");
+        zig.stringEscape(s, stderr) catch {};
+        writeStr(stderr, "\n");
     } else {
-        writeStr(writer, "<null>\n");
+        writeStr(stderr, "<null>\n");
     }
 }
 

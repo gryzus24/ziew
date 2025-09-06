@@ -85,7 +85,7 @@ pub const F5608 = struct {
     comptime {
         for (FRAC_ROUNDING_STEPS) |e| {
             if (e <= 1)
-                @compileError("FRAC_SHIFT too low to satisfy rounding precision");
+                @compileError("ROUNDING_STEP too low to make an adjustment");
         }
     }
 };
