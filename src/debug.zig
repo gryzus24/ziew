@@ -1,53 +1,59 @@
 const std = @import("std");
+const color = @import("color.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const debug = std.debug;
 const fmt = std.fmt;
+const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
 
-pub fn debugFixedPoint() void {
-    const writer = utl.stderr.writer();
+pub fn debugFixedPoint() !void {
+    var buf: [1024]u8 = undefined;
+    var writer = fs.File.stderr().writer(&buf);
+    const stderr = &writer.interface;
+
     for (0..(1 << 12) + 2) |i| {
         const fp = unt.F5608.init(i).div(1 << 8);
-        const nu: unt.NumUnit = .{ .n = fp, .u = .si_one };
+        const nu: unt.NumUnit = .{ .n = fp, .u = .kilo };
 
-        fmt.format(writer, "{d:5} ", .{i}) catch {};
-        nu.write(writer, .none, 0, 0);
-        utl.writeStr(writer, " ");
-        nu.write(writer, .none, 0, 1);
-        utl.writeStr(writer, " ");
-        nu.write(writer, .none, 0, 2);
-        utl.writeStr(writer, " ");
-        nu.write(writer, .none, 0, 3);
-        utl.writeStr(writer, "  ");
+        try stderr.print("{d:5} ", .{i});
+        nu.write(stderr, .{ .precision = 0 }, false);
+        utl.writeStr(stderr, " ");
+        nu.write(stderr, .{ .precision = 1 }, false);
+        utl.writeStr(stderr, " ");
+        nu.write(stderr, .{ .precision = 2 }, false);
+        utl.writeStr(stderr, " ");
+        nu.write(stderr, .{ .precision = 3 }, false);
+        utl.writeStr(stderr, "  ");
 
-        fmt.format(
-            writer,
-            "{any:.5}",
-            .{@as(f64, @floatFromInt(i)) / (1 << 8)},
-        ) catch {};
-        utl.writeStr(writer, "\n");
+        try stderr.print("{any:.5}", .{@as(f64, @floatFromInt(i)) / (1 << 8)});
+        utl.writeStr(stderr, "\n");
+        try stderr.flush();
     }
 }
 
-pub fn debugNumUnit() void {
-    const writer = utl.stdout.writer();
+pub fn debugNumUnit() !void {
+    var buf: [1024]u8 = undefined;
+    var writer = fs.File.stderr().writer(&buf);
+    const stderr = &writer.interface;
+
     const values: [8]u64 = .{ 9, 94, 948, 1023, 9480, 94800, 948000, 9480000 };
-    const width_max = 7;
+    const values_width: [8]u8 = .{ 1, 2, 3, 4, 1, 2, 3, 1 };
+    const width_max = 8;
     const precision_max = 3;
 
-    utl.writeStr(writer, "\n");
-    for (values) |val| {
+    utl.writeStr(stderr, "\n");
+    for (values, values_width) |val, valw| {
         const nu = unt.SizeKb(val);
 
-        debug.print("V {}\n", .{val});
+        try stderr.print("V {}\n", .{val});
         for (0..width_max + 1) |width| {
-            debug.print("{} ", .{width});
+            try stderr.print("{} ", .{width});
             for (0..precision_max + 2) |precision| {
-                var w: u8 = @intCast(width);
+                const w: u8 = @intCast(width);
                 var p: u8 = @intCast(precision);
                 if (p == precision_max + 1)
                     p = unt.PRECISION_AUTO_VALUE;
@@ -58,35 +64,32 @@ pub fn debugNumUnit() void {
                     .precision = p,
                 };
 
-                utl.writeStr(writer, "|");
-                nu.write(writer, o);
-                utl.writeStr(writer, "|");
+                utl.writeStr(stderr, "|");
+                nu.write(stderr, o, false);
+                utl.writeStr(stderr, "|");
 
-                if (w < 2)
-                    w = 2;
-                if (p == unt.PRECISION_AUTO_VALUE)
-                    p = 0;
-                for (0..(width_max - w) + (precision_max - p)) |_| {
-                    utl.writeStr(writer, " ");
+                for (0..(width_max - @max(w, valw))) |_| {
+                    utl.writeStr(stderr, " ");
                 }
-                utl.writeStr(writer, "\t");
+                utl.writeStr(stderr, "\t");
             }
-            utl.writeStr(writer, "\n");
+            utl.writeStr(stderr, "\n");
         }
+        try stderr.flush();
     }
 }
 
-fn _printColor(prefix: []const u8, co: typ.Color) void {
+fn _printColor(prefix: []const u8, co: color.Color) void {
     const print = debug.print;
     switch (co) {
         .nocolor => print("  {s}=.nocolor\n", .{prefix}),
         .default => |t| print("  {s}=.default HEX='{s}'\n", .{ prefix, t.get() orelse "null" }),
         .color => |t| {
             print("  {s}=.color OPT={}\n", .{ prefix, t.opt });
-            for (t.colors, 1..) |color, i| {
+            for (t.colors, 1..) |v, i| {
                 print(
                     "    ({}) THRESH={} HEX='{s}'\n",
-                    .{ i, color.thresh, color.hex.get() orelse "null" },
+                    .{ i, v.thresh, v.hex.get() orelse "null" },
                 );
             }
         },
@@ -103,13 +106,13 @@ fn _printFormat(f: typ.Format) void {
             po.wopts.alignment,
             po.wopts.width,
             po.wopts.precision,
-            po.part,
+            po.str,
         });
     }
     print("      PART_LAST='{s}'\n", .{f.part_last});
 }
 
-pub fn debugWidgets(widgets: []const typ.Widget) void {
+pub fn debugWidgets(widgets: []const typ.Widget) !void {
     const print = debug.print;
     for (widgets) |*w| {
         print("WIDGET={s} INTERVAL={}\n", .{ @tagName(w.wid), w.interval });
@@ -157,10 +160,11 @@ pub fn debugWidgets(widgets: []const typ.Widget) void {
     }
 }
 
-pub fn debugMemoryUsed(reg: *m.Region) void {
+pub fn debugMemoryUsed(reg: *m.Region) !void {
+    const print = debug.print;
     const front, const back = reg.spaceUsed();
-    debug.print("REGION MEMORY USED\n", .{});
-    debug.print("  FRONT = {} BACK = {} TOTAL = {}\n", .{ front, back, front + back });
+    print("REGION MEMORY USED\n", .{});
+    print("  FRONT = {} BACK = {} TOTAL = {}\n", .{ front, back, front + back });
 }
 
 pub noinline fn perfEventStart() linux.fd_t { // struct { linux.fd_t, linux.perf_event_attr } {
