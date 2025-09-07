@@ -13,7 +13,7 @@ const mem = std.mem;
 
 // == private =================================================================
 
-const INET_BUF_SIZE = (4 * "255".len) + 3;
+const INET_BUF_SIZE = (4 * "255".len) + (3 * ".".len) + 1;
 
 // i-th bit IF flag abbreviation.
 const IFF_NAME: [16][]const u8 = .{
@@ -144,16 +144,36 @@ fn getInet(
     return switch (ret) {
         0 => blk: {
             const addr: linux.sockaddr.in = @bitCast(ifr.ifru.addr);
-            var inetfw: io.Writer = .fixed(inetbuf);
 
-            utl.writeInt(&inetfw, @intCast((addr.addr >> 0) & 0xff));
-            utl.writeStr(&inetfw, ".");
-            utl.writeInt(&inetfw, @intCast((addr.addr >> 8) & 0xff));
-            utl.writeStr(&inetfw, ".");
-            utl.writeInt(&inetfw, @intCast((addr.addr >> 16) & 0xff));
-            utl.writeStr(&inetfw, ".");
-            utl.writeInt(&inetfw, @intCast((addr.addr >> 24) & 0xff));
-            break :blk inetfw.buffered();
+            const tuplets: [4]u32 = .{
+                (addr.addr >> 0) & 0xff,
+                (addr.addr >> 8) & 0xff,
+                (addr.addr >> 16) & 0xff,
+                (addr.addr >> 24) & 0xff,
+            };
+
+            var i: usize = 0;
+            for (tuplets) |t| {
+                if (t > 99) {
+                    inetbuf[i + 0] = '0' | @as(u8, @intCast(t / 100 % 10));
+                    inetbuf[i + 1] = '0' | @as(u8, @intCast(t / 10 % 10));
+                    inetbuf[i + 2] = '0' | @as(u8, @intCast(t % 10));
+                    inetbuf[i + 3] = '.';
+                    i += 4;
+                } else if (t > 9) {
+                    inetbuf[i + 0] = '0' | @as(u8, @intCast(t / 10 % 10));
+                    inetbuf[i + 1] = '0' | @as(u8, @intCast(t % 10));
+                    inetbuf[i + 2] = '.';
+                    i += 3;
+                } else {
+                    inetbuf[i + 0] = '0' | @as(u8, @intCast(t % 10));
+                    inetbuf[i + 1] = '.';
+                    i += 2;
+                }
+            }
+            inetbuf[i - 1] = 0;
+
+            break :blk inetbuf;
         },
         -c.EADDRNOTAVAIL => "<no address>",
         -c.ENODEV => "<no device>",
