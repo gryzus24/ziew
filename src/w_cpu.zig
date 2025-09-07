@@ -5,6 +5,7 @@ const unt = @import("unit.zig");
 const utl = @import("util.zig");
 const fmt = std.fmt;
 const fs = std.fs;
+const io = std.io;
 const math = std.math;
 const mem = std.mem;
 
@@ -268,7 +269,7 @@ pub fn update(state: *CpuState) void {
 }
 
 pub fn widget(
-    writer: anytype,
+    writer: *io.Writer,
     state: *const CpuState,
     w: *const typ.Widget,
 ) []const u8 {

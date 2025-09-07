@@ -17,17 +17,17 @@ comptime {
 }
 
 fn writeBlockError(
-    fbs: anytype,
+    writer: *io.Writer,
     fg: ?*const [7]u8,
     bg: ?*const [7]u8,
     prefix: []const u8,
     msg: []const u8,
 ) []const u8 {
-    utl.writeBlockBeg(fbs, fg, bg);
-    utl.writeStr(fbs, prefix);
-    utl.writeStr(fbs, ": ");
-    utl.writeStr(fbs, msg);
-    return utl.writeBlockEnd(fbs);
+    utl.writeBlockBeg(writer, fg, bg);
+    utl.writeStr(writer, prefix);
+    utl.writeStr(writer, ": ");
+    utl.writeStr(writer, msg);
+    return utl.writeBlockEnd(writer);
 }
 
 fn acceptHex(str: []const u8, pos: *usize) ?color.Hex {
