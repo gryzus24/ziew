@@ -297,7 +297,7 @@ pub fn update(state: *NetState) void {
     };
 }
 
-pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []const u8 {
+pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget) []const u8 {
     const Static = struct {
         var sock: linux.fd_t = 0;
     };
@@ -354,9 +354,9 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
 
     const ch: ColorHandler = .{ .up = up };
 
-    utl.writeBlockBeg(stream, wd.fg.getColor(ch), wd.bg.getColor(ch));
+    utl.writeBlockBeg(writer, wd.fg.getColor(ch), wd.bg.getColor(ch));
     for (wd.format.part_opts) |*part| {
-        utl.writeStr(stream, part.str);
+        utl.writeStr(writer, part.str);
 
         const opt: typ.NetOpt = @enumFromInt(part.opt);
         if (opt.requiresSocket()) {
@@ -368,7 +368,7 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
                 .state => if (up) "up" else "down",
                 // zig fmt: on
             };
-            utl.writeStr(stream, str);
+            utl.writeStr(writer, str);
             continue;
         }
         var nu: unt.NumUnit = undefined;
@@ -398,8 +398,8 @@ pub fn widget(stream: anytype, state: *const ?NetState, w: *const typ.Widget) []
                 // zig fmt: on
             };
         }
-        nu.write(stream, part.wopts, part.flags.quiet);
+        nu.write(writer, part.wopts, part.flags.quiet);
     }
-    utl.writeStr(stream, wd.format.part_last);
-    return utl.writeBlockEnd(stream);
+    utl.writeStr(writer, wd.format.part_last);
+    return utl.writeBlockEnd(writer);
 }

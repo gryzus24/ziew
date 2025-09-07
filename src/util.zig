@@ -31,10 +31,6 @@ pub inline fn writeStr(writer: *io.Writer, s: []const u8) void {
     _ = writer.write(s) catch {};
 }
 
-pub inline fn writeInt(writer: *io.Writer, value: u64) void {
-    writer.printIntAny(value, 10, .lower, .{}) catch {};
-}
-
 const A =
     \\{"full_text":"
 ;
