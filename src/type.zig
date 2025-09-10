@@ -60,8 +60,8 @@ pub const Widget = struct {
 
         pub const TimeData = struct {
             format: [:0]const u8,
-            fg: color.Hex = .{},
-            bg: color.Hex = .{},
+            fg: color.Color.Data = .default,
+            bg: color.Color.Data = .default,
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= STRFTIME_FORMAT_BUF_SIZE_MAX)
@@ -76,8 +76,8 @@ pub const Widget = struct {
 
         pub const MemData = struct {
             format: Format = .{},
-            fg: color.Color = .nocolor,
-            bg: color.Color = .nocolor,
+            fg: color.Color = .{ .default = .default },
+            bg: color.Color = .{ .default = .default },
 
             pub fn init(reg: *m.Region) !*@This() {
                 const ret = try reg.frontAlloc(@This());
@@ -88,8 +88,8 @@ pub const Widget = struct {
 
         pub const CpuData = struct {
             format: Format = .{},
-            fg: color.Color = .nocolor,
-            bg: color.Color = .nocolor,
+            fg: color.Color = .{ .default = .default },
+            bg: color.Color = .{ .default = .default },
 
             pub fn init(reg: *m.Region) !*@This() {
                 const ret = try reg.frontAlloc(@This());
@@ -101,8 +101,8 @@ pub const Widget = struct {
         pub const DiskData = struct {
             mountpoint: [:0]const u8,
             format: Format = .{},
-            fg: color.Color = .nocolor,
-            bg: color.Color = .nocolor,
+            fg: color.Color = .{ .default = .default },
+            bg: color.Color = .{ .default = .default },
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= WIDGET_BUF_MAX)
@@ -118,8 +118,8 @@ pub const Widget = struct {
         pub const NetData = struct {
             ifr: linux.ifreq,
             format: Format = .{},
-            fg: color.Color = .nocolor,
-            bg: color.Color = .nocolor,
+            fg: color.Color = .{ .default = .default },
+            bg: color.Color = .{ .default = .default },
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 var ifr: linux.ifreq = undefined;
@@ -140,8 +140,8 @@ pub const Widget = struct {
             ps_name: []const u8,
             path: [*:0]const u8,
             format: Format = .{},
-            fg: color.Color = .nocolor,
-            bg: color.Color = .nocolor,
+            fg: color.Color = .{ .default = .default },
+            bg: color.Color = .{ .default = .default },
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= 32) utl.fatal(&.{"BAT: battery name too long"});
@@ -163,8 +163,8 @@ pub const Widget = struct {
             path: [:0]const u8,
             basename: []const u8,
             format: Format = .{},
-            fg: color.Hex = .{},
-            bg: color.Hex = .{},
+            fg: color.Color.Data = .default,
+            bg: color.Color.Data = .default,
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= WIDGET_BUF_MAX)

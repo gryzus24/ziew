@@ -13,14 +13,14 @@ const ColorHandler = struct {
     avail_kb: u64,
     total_kb: u64,
 
-    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
+    pub fn checkPairs(self: @This(), ac: color.Color.Active) color.Color.Data {
         return color.firstColorGEThreshold(
-            switch (@as(typ.DiskOpt.ColorSupported, @enumFromInt(oc.opt))) {
+            switch (@as(typ.DiskOpt.ColorSupported, @enumFromInt(ac.opt))) {
                 .@"%used" => unt.Percent(self.used_kb, self.total_kb),
                 .@"%free" => unt.Percent(self.free_kb, self.total_kb),
                 .@"%available" => unt.Percent(self.avail_kb, self.total_kb),
             }.n.roundAndTruncate(),
-            oc.colors,
+            ac.pairs,
         );
     }
 };
@@ -33,7 +33,8 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
     // TODO: use statvfs instead of this
     var sfs: c.struct_statfs = undefined;
     if (c.statfs(wd.mountpoint, &sfs) != 0) {
-        utl.writeBlockBeg(writer, wd.fg.getDefault(), wd.bg.getDefault());
+        const noop: color.Color.NoopIndirect = .{};
+        utl.writeBlockBeg(writer, wd.fg.get(noop), wd.bg.get(noop));
         utl.writeStr(writer, wd.mountpoint);
         utl.writeStr(writer, ": <not mounted>");
         return utl.writeBlockEnd(writer);
@@ -72,7 +73,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
         .total_kb = total_kb,
     };
 
-    utl.writeBlockBeg(writer, wd.fg.getColor(ch), wd.bg.getColor(ch));
+    utl.writeBlockBeg(writer, wd.fg.get(ch), wd.bg.get(ch));
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.str);
 

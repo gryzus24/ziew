@@ -51,8 +51,8 @@ const Bat = struct {
         self.set.now = true;
     }
 
-    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
-        const batopt_cs: typ.BatOpt.ColorSupported = @enumFromInt(oc.opt);
+    pub fn checkPairs(self: @This(), ac: color.Color.Active) color.Color.Data {
+        const batopt_cs: typ.BatOpt.ColorSupported = @enumFromInt(ac.opt);
         if (batopt_cs == .state) {
             return color.firstColorEQThreshold(
                 switch (self.state[0] & (0xff - 0x20)) {
@@ -62,7 +62,7 @@ const Bat = struct {
                     'N' => 3, // Not-charging
                     else => 4, // Unknown
                 },
-                oc.colors,
+                ac.pairs,
             );
         } else {
             return color.firstColorGEThreshold(
@@ -71,7 +71,7 @@ const Bat = struct {
                     .@"%fulldesign" => unt.Percent(self.now, self.full_design),
                     .state => unreachable,
                 }.n.roundAndTruncate(),
-                oc.colors,
+                ac.pairs,
             );
         }
     }
@@ -84,7 +84,8 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
 
     const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| switch (e) {
         error.FileNotFound => {
-            utl.writeBlockBeg(writer, wd.fg.getDefault(), wd.bg.getDefault());
+            const noop: color.Color.NoopIndirect = .{};
+            utl.writeBlockBeg(writer, wd.fg.get(noop), wd.bg.get(noop));
             utl.writeStr(writer, wd.ps_name);
             utl.writeStr(writer, ": <not found>");
             return utl.writeBlockEnd(writer);
@@ -126,7 +127,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
         if (bat.set.hasSetAll()) break;
     }
 
-    utl.writeBlockBeg(writer, wd.fg.getColor(bat), wd.bg.getColor(bat));
+    utl.writeBlockBeg(writer, wd.fg.get(bat), wd.bg.get(bat));
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.str);
 

@@ -88,10 +88,10 @@ pub const MemState = struct {
         };
     }
 
-    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
+    pub fn checkPairs(self: @This(), ac: color.Color.Active) color.Color.Data {
         return color.firstColorGEThreshold(
             unt.Percent(
-                switch (@as(typ.MemOpt.ColorSupported, @enumFromInt(oc.opt))) {
+                switch (@as(typ.MemOpt.ColorSupported, @enumFromInt(ac.opt))) {
                     .@"%free" => self.free(),
                     .@"%available" => self.avail(),
                     .@"%buffers" => self.buffers(),
@@ -100,7 +100,7 @@ pub const MemState = struct {
                 },
                 self.total(),
             ).n.roundAndTruncate(),
-            oc.colors,
+            ac.pairs,
         );
     }
 
@@ -148,7 +148,7 @@ pub fn widget(
 ) []const u8 {
     const wd = w.wid.MEM;
 
-    utl.writeBlockBeg(writer, wd.fg.getColor(state), wd.bg.getColor(state));
+    utl.writeBlockBeg(writer, wd.fg.get(state), wd.bg.get(state));
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.str);
         const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {

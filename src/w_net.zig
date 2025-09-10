@@ -44,8 +44,8 @@ comptime {
 const ColorHandler = struct {
     up: bool,
 
-    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
-        return color.firstColorEQThreshold(@intFromBool(self.up), oc.colors);
+    pub fn checkPairs(self: @This(), ac: color.Color.Active) color.Color.Data {
+        return color.firstColorEQThreshold(@intFromBool(self.up), ac.pairs);
     }
 };
 
@@ -324,7 +324,7 @@ pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget)
 
     if (demands & INET > 0)
         inet = getInet(Static.sock, &wd.ifr, &_inetbuf);
-    if (demands & (FLAGS | STATE) > 0 or wd.fg == .color or wd.bg == .color)
+    if (demands & (FLAGS | STATE) > 0 or wd.fg == .active or wd.bg == .active)
         flags = getFlags(Static.sock, &wd.ifr, &_iffbuf, &up);
 
     var new_if: ?*IFace = null;
@@ -352,7 +352,7 @@ pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget)
 
     const ch: ColorHandler = .{ .up = up };
 
-    utl.writeBlockBeg(writer, wd.fg.getColor(ch), wd.bg.getColor(ch));
+    utl.writeBlockBeg(writer, wd.fg.get(ch), wd.bg.get(ch));
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.str);
 

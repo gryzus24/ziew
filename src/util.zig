@@ -1,4 +1,5 @@
 const std = @import("std");
+const color = @import("color.zig");
 const typ = @import("type.zig");
 const fmt = std.fmt;
 const fs = std.fs;
@@ -71,27 +72,28 @@ var BLOCK_HEADERS: [4][]u8 = .{ &NC_A, &FG_B, &BG_C, &FGBG_D };
 
 pub fn writeBlockBeg(
     writer: *io.Writer,
-    fg_color: ?*const [7]u8,
-    bg_color: ?*const [7]u8,
+    fg: color.Color.Data,
+    bg: color.Color.Data,
 ) void {
     // zig fmt: off
     const i: u2 = (
-        @as(u2, @intFromBool(fg_color != null)) +
-        @as(u2, @intFromBool(bg_color != null)) * 2);
+        @as(u2, @intFromBool(fg == color.Color.Data.hex)) +
+        @as(u2, @intFromBool(bg == color.Color.Data.hex)) * 2
+    );
     // zig fmt: on
 
     var header = BLOCK_HEADERS[i];
     switch (i) {
         0 => {},
         1 => {
-            @memcpy(header[11..17], fg_color.?[1..]);
+            @memcpy(header[11..17], &fg.hex);
         },
         2 => {
-            @memcpy(header[16..22], bg_color.?[1..]);
+            @memcpy(header[16..22], &bg.hex);
         },
         3 => {
-            @memcpy(header[11..17], fg_color.?[1..]);
-            @memcpy(header[34..40], bg_color.?[1..]);
+            @memcpy(header[11..17], &fg.hex);
+            @memcpy(header[34..40], &bg.hex);
         },
     }
     writeStr(writer, header);

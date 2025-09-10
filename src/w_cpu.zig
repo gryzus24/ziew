@@ -223,11 +223,11 @@ pub const CpuState = struct {
         };
     }
 
-    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
+    pub fn checkPairs(self: @This(), ac: color.Color.Active) color.Color.Data {
         const new, const old = self.getNewOldPtrs();
 
         return color.firstColorGEThreshold(
-            switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(oc.opt))) {
+            switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(ac.opt))) {
                 .@"%all" => self.usage_pct.all.roundAndTruncate(),
                 .@"%user" => self.usage_pct.user.roundAndTruncate(),
                 .@"%sys" => self.usage_pct.sys.roundAndTruncate(),
@@ -235,7 +235,7 @@ pub const CpuState = struct {
                 .running => new.running,
                 .blocked => new.blocked,
             },
-            oc.colors,
+            ac.pairs,
         );
     }
 
@@ -276,7 +276,7 @@ pub fn widget(
     const wd = w.wid.CPU;
     const new, const old = state.getNewOldPtrs();
 
-    utl.writeBlockBeg(writer, wd.fg.getColor(state), wd.bg.getColor(state));
+    utl.writeBlockBeg(writer, wd.fg.get(state), wd.bg.get(state));
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.str);
 

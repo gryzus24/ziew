@@ -18,8 +18,8 @@ comptime {
 
 fn writeBlockError(
     writer: *io.Writer,
-    fg: ?*const [7]u8,
-    bg: ?*const [7]u8,
+    fg: color.Color.Data,
+    bg: color.Color.Data,
     prefix: []const u8,
     msg: []const u8,
 ) []const u8 {
@@ -30,20 +30,22 @@ fn writeBlockError(
     return utl.writeBlockEnd(writer);
 }
 
-fn acceptHex(str: []const u8, pos: *usize) ?color.Hex {
+fn acceptColor(str: []const u8, pos: *usize) color.Color.Data {
     var i: usize = 0;
     defer pos.* += i;
 
-    i = utl.skipSpacesTabs(str, i) orelse return null;
+    i = utl.skipSpacesTabs(str, i) orelse return .default;
+
     const beg = i;
+    if (str[beg] != '#') return .default;
 
-    if (str[i] != '#') return null;
-    i += 1;
-    i = mem.indexOfAnyPos(u8, str, i, " \t") orelse str.len;
+    i = mem.indexOfAnyPos(u8, str, beg + 1, " \t") orelse str.len;
 
-    var hex: color.Hex = .{};
-    _ = hex.set(str[beg..i]);
-    return hex;
+    if (color.acceptHex(str[beg..i])) |ok| {
+        return .{ .hex = ok };
+    } else {
+        return .default;
+    }
 }
 
 fn readFileUntil(file: fs.File, endmarkers: []const u8, buf: *[typ.WIDGET_BUF_MAX]u8) ![]const u8 {
@@ -58,7 +60,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
     const wd = w.wid.READ;
 
     const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| {
-        return writeBlockError(writer, wd.fg.get(), wd.bg.get(), wd.basename, @errorName(e));
+        return writeBlockError(writer, wd.fg, wd.bg, wd.basename, @errorName(e));
     };
     defer file.close();
 
@@ -68,19 +70,19 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
     };
 
     var pos: usize = 0;
-    var fghex: color.Hex = wd.fg;
-    var bghex: color.Hex = wd.bg;
+    var fg = wd.fg;
+    var bg = wd.bg;
 
     for (wd.format.part_opts) |*part| {
         if (@as(typ.ReadOpt, @enumFromInt(part.opt)) == .content) {
-            if (acceptHex(content[pos..], &pos)) |fg| fghex = fg;
-            if (acceptHex(content[pos..], &pos)) |bg| bghex = bg;
+            fg = acceptColor(content[pos..], &pos);
+            bg = acceptColor(content[pos..], &pos);
             if (pos < content.len and ascii.isWhitespace(content[pos])) pos += 1;
             break;
         }
     }
 
-    utl.writeBlockBeg(writer, fghex.get(), bghex.get());
+    utl.writeBlockBeg(writer, fg, bg);
     for (wd.format.part_opts) |*part| {
         utl.writeStr(writer, part.str);
         utl.writeStr(

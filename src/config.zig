@@ -20,13 +20,13 @@ const mem = std.mem;
 const meta = std.meta;
 const posix = std.posix;
 
-// == private ==
+// == private =================================================================
 
 const WidgetAllocator = struct {
     reg: *m.Region,
     widgets: []typ.Widget = &.{},
     format_parts: []typ.Format.Part = &.{},
-    thresh_hexes: []color.ThreshHex = &.{},
+    color_pairs: []color.Color.Active.Pair = &.{},
 
     pub fn newWidget(self: *@This(), wid: typ.Widget.Id) !*typ.Widget {
         const ret = try self.reg.backPushVec(&self.widgets);
@@ -40,17 +40,14 @@ const WidgetAllocator = struct {
         return ret;
     }
 
-    pub fn newThreshHex(self: *@This(), thresh: u8, hex: []const u8) !*color.ThreshHex {
-        const ret = try self.reg.frontPushVec(&self.thresh_hexes);
-        ret.* = .{
-            .thresh = thresh,
-            .hex = blk: {
-                var t: color.Hex = .{};
-                if (!t.set(hex)) return error.BadHex;
-                break :blk t;
-            },
-        };
-        return ret;
+    pub fn newColorPair(self: *@This(), thresh: u8, hex: ?[6]u8) !void {
+        const ret = try self.reg.frontPushVec(&self.color_pairs);
+        ret.*.thresh = thresh;
+        if (hex) |ok| {
+            ret.*.data = .{ .hex = ok };
+        } else {
+            ret.*.data = .default;
+        }
     }
 
     pub fn toOwnedWidgets(self: *@This()) []typ.Widget {
@@ -65,9 +62,9 @@ const WidgetAllocator = struct {
         return ret;
     }
 
-    pub fn toOwnedThreshHexes(self: *@This()) []color.ThreshHex {
-        const ret = self.thresh_hexes;
-        self.thresh_hexes = &.{};
+    pub fn toOwnedColorPairs(self: *@This()) []color.Color.Active.Pair {
+        const ret = self.color_pairs;
+        self.color_pairs = &.{};
         return ret;
     }
 };
@@ -574,13 +571,11 @@ pub fn parse(
                     current_field = 2;
                     return error.WidgetSupportsOnlyDefaultColors;
                 }
-                co = .{
-                    .default = blk: {
-                        var hex: color.Hex = .{};
-                        if (!hex.set(second_field.str)) return error.BadHex;
-                        break :blk hex;
-                    },
-                };
+                if (color.acceptHex(second_field.str)) |ok| {
+                    co = .{ .default = .{ .hex = ok } };
+                } else {
+                    return error.BadHex;
+                }
             } else {
                 current_field = ~@as(usize, 0);
                 if (fields.len <= 2) return error.MissingThresholdColorField;
@@ -593,13 +588,21 @@ pub fn parse(
                         error.Overflow, error.InvalidCharacter => return error.BadThreshold,
                     };
                     if (thresh > 100) return error.ThresholdTooBig;
-                    _ = try wa.newThreshHex(thresh, field.str[sep + 1 ..]);
+
+                    const hexstr = field.str[sep + 1 ..];
+                    if (color.acceptHex(hexstr)) |ok| {
+                        try wa.newColorPair(thresh, ok);
+                    } else if (hexstr.len == 0 or mem.eql(u8, hexstr, "default")) {
+                        try wa.newColorPair(thresh, null);
+                    } else {
+                        return error.BadHex;
+                    }
                     current_field += 1;
                 }
                 co = .{
-                    .color = .{
+                    .active = .{
                         .opt = opt,
-                        .colors = wa.toOwnedThreshHexes(),
+                        .pairs = wa.toOwnedColorPairs(),
                     },
                 };
             }
