@@ -67,37 +67,37 @@ const IFace = struct {
         @memcpy(self.name[0..name.len], name);
     }
 
-    pub fn bytes(self: *const @This(), comptime t: FieldType) u64 {
+    pub fn bytes(self: @This(), comptime t: FieldType) u64 {
         return self.fields[0 + @intFromEnum(t)];
     }
-    pub fn packets(self: *const @This(), comptime t: FieldType) u64 {
+    pub fn packets(self: @This(), comptime t: FieldType) u64 {
         return self.fields[1 + @intFromEnum(t)];
     }
-    pub fn errs(self: *const @This(), comptime t: FieldType) u64 {
+    pub fn errs(self: @This(), comptime t: FieldType) u64 {
         return self.fields[2 + @intFromEnum(t)];
     }
-    pub fn drop(self: *const @This(), comptime t: FieldType) u64 {
+    pub fn drop(self: @This(), comptime t: FieldType) u64 {
         return self.fields[3 + @intFromEnum(t)];
     }
-    pub fn fifo(self: *const @This(), comptime t: FieldType) u64 {
+    pub fn fifo(self: @This(), comptime t: FieldType) u64 {
         return self.fields[4 + @intFromEnum(t)];
     }
-    pub fn rx_frame(self: *const @This()) u64 {
+    pub fn rx_frame(self: @This()) u64 {
         return self.fields[5];
     }
-    pub fn rx_compressed(self: *const @This()) u64 {
+    pub fn rx_compressed(self: @This()) u64 {
         return self.fields[6];
     }
-    pub fn rx_multicast(self: *const @This()) u64 {
+    pub fn rx_multicast(self: @This()) u64 {
         return self.fields[7];
     }
-    pub fn tx_colls(self: *const @This()) u64 {
+    pub fn tx_colls(self: @This()) u64 {
         return self.fields[5 + @intFromEnum(.tx)];
     }
-    pub fn tx_carrier(self: *const @This()) u64 {
+    pub fn tx_carrier(self: @This()) u64 {
         return self.fields[6 + @intFromEnum(.tx)];
     }
-    pub fn tx_compressed(self: *const @This()) u64 {
+    pub fn tx_compressed(self: @This()) u64 {
         return self.fields[7 + @intFromEnum(.tx)];
     }
 };

@@ -103,7 +103,7 @@ pub const Region = struct {
         return @ptrCast(try self.backAllocMany(T, 1));
     }
 
-    pub fn frontSave(self: *const @This(), comptime T: type) SavePoint {
+    pub fn frontSave(self: @This(), comptime T: type) SavePoint {
         return mem.alignForward(usize, self.front, @alignOf(T));
     }
 
@@ -111,7 +111,7 @@ pub const Region = struct {
         self.front = sp;
     }
 
-    pub fn backSave(self: *const @This(), comptime T: type) SavePoint {
+    pub fn backSave(self: @This(), comptime T: type) SavePoint {
         return mem.alignBackward(usize, self.back, @alignOf(T));
     }
 
@@ -154,18 +154,18 @@ pub const Region = struct {
         return &vec.*[vec.len - 1];
     }
 
-    pub fn slice(self: *const @This(), comptime T: type, start: SavePoint, n: usize) []T {
+    pub fn slice(self: @This(), comptime T: type, start: SavePoint, n: usize) []T {
         return mem.bytesAsSlice(T, self.head[start..][0 .. @sizeOf(T) * n]);
     }
 
-    pub fn spaceLeft(self: *const @This(), comptime T: type) usize {
+    pub fn spaceLeft(self: @This(), comptime T: type) usize {
         const f = self.frontSave(T);
         const b = self.backSave(T);
         if (f > b) return 0;
         return b - f;
     }
 
-    pub fn spaceUsed(self: *const @This()) struct { usize, usize } {
+    pub fn spaceUsed(self: @This()) struct { usize, usize } {
         return .{ self.front, self.head.len - self.back };
     }
 };

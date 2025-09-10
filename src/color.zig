@@ -7,8 +7,8 @@ pub const Color = union(enum) {
     default: Data,
     active: Active,
 
-    pub fn get(self: *const @This(), indirect: anytype) Data {
-        return switch (self.*) {
+    pub inline fn get(self: @This(), indirect: anytype) Data {
+        return switch (self) {
             .default => |hex| hex,
             .active => |a| indirect.checkPairs(a),
         };
