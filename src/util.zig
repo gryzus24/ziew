@@ -72,7 +72,7 @@ var FGBG_D = blk: {
 var BLOCK_HEADERS: [4][]u8 = .{ &NC_A, &FG_B, &BG_C, &FGBG_D };
 
 pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
-    const i = fg.use + bg.use;
+    const i = fg.use | (bg.use << 1);
 
     var header = BLOCK_HEADERS[i];
     switch (i) {
