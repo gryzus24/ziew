@@ -14,6 +14,7 @@ const w_time = @import("w_time.zig");
 const builtin = std.builtin;
 const enums = std.enums;
 const fs = std.fs;
+const io = std.io;
 const linux = std.os.linux;
 const math = std.math;
 const mem = std.mem;
@@ -106,20 +107,39 @@ pub const Widget = struct {
         BAT: *BatData,
         READ: *ReadData,
 
+        const DATA_SIZE_MAX = 64;
+
+        comptime {
+            if (@sizeOf(TimeData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(MemData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(CpuData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(DiskData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(NetData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(BatData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(ReadData) > DATA_SIZE_MAX) unreachable;
+        }
+
         const Tag = enum { TIME, MEM, CPU, DISK, NET, BAT, READ };
 
         const NR_WIDGETS = @typeInfo(Tag).@"enum".fields.len;
 
         pub const TimeData = struct {
-            format: [*:0]const u8,
+            format: [FORMAT_SIZE]u8,
+
+            const FORMAT_SIZE = DATA_SIZE_MAX;
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= STRFTIME_FORMAT_BUF_SIZE_MAX)
+                if (arg.len >= FORMAT_SIZE)
                     utl.fatal(&.{"TIME: strftime format too long"});
 
                 const ret = try reg.frontAlloc(@This());
-                ret.* = .{ .format = try reg.frontWriteStrZ(arg) };
+                @memcpy(ret.format[0..arg.len], arg);
+                ret.format[arg.len] = 0;
                 return ret;
+            }
+
+            pub fn getFormat(self: *const @This()) [*:0]const u8 {
+                return @ptrCast(&self.format);
             }
         };
 
@@ -144,25 +164,32 @@ pub const Widget = struct {
         };
 
         pub const DiskData = struct {
-            mountpoint: [:0]const u8,
             format: Format,
+            len: u8,
+            mountpoint: [MOUNTPOINT_SIZE]u8,
+
+            const MOUNTPOINT_SIZE = DATA_SIZE_MAX - 1 - @sizeOf(Format);
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= WIDGET_BUF_MAX)
+                if (arg.len >= MOUNTPOINT_SIZE)
                     utl.fatal(&.{"DISK: mountpoint path too long"});
 
                 const ret = try reg.frontAlloc(@This());
-                ret.* = .{
-                    .mountpoint = try reg.frontWriteStrZ(arg),
-                    .format = .zero,
-                };
+                ret.format = .zero;
+                ret.len = @intCast(arg.len);
+                @memcpy(ret.mountpoint[0..arg.len], arg);
+                ret.mountpoint[arg.len] = 0;
                 return ret;
+            }
+
+            pub fn getMountpoint(self: *const @This()) [:0]const u8 {
+                return self.mountpoint[0..self.len :0];
             }
         };
 
         pub const NetData = struct {
-            ifr: linux.ifreq,
             format: Format,
+            ifr: linux.ifreq,
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 var ifr: linux.ifreq = undefined;
@@ -178,46 +205,67 @@ pub const Widget = struct {
         };
 
         pub const BatData = struct {
-            ps_name: []const u8,
-            path: [*:0]const u8,
             format: Format,
+            ps_off: u8,
+            ps_len: u8,
+            path: [PATH_SIZE]u8,
+
+            const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= 32) utl.fatal(&.{"BAT: battery name too long"});
+                if (arg.len >= 16) utl.fatal(&.{"BAT: battery name too long"});
 
                 const ret = try reg.frontAlloc(@This());
-                var n: usize = 0;
-                const path_base = reg.frontSave(u8);
-                n += (try reg.frontWriteStr("/sys/class/power_supply/")).len;
-                const ps_name_base = reg.frontSave(u8);
-                n += (try reg.frontWriteStr(arg)).len;
-                n += (try reg.frontWriteStr("/uevent\x00")).len;
-                ret.* = .{
-                    .ps_name = reg.slice(u8, ps_name_base, arg.len),
-                    .path = reg.slice(u8, path_base, n)[0 .. n - 1 :0],
-                    .format = .zero,
-                };
+                ret.format = .zero;
+                var fw: io.Writer = .fixed(&ret.path);
+                utl.writeStr(&fw, "/sys/class/power_supply/");
+                ret.ps_off = @intCast(fw.end);
+                ret.ps_len = @intCast(arg.len);
+                utl.writeStr(&fw, arg);
+                utl.writeStr(&fw, "/uevent\x00");
                 return ret;
+            }
+
+            pub fn getPath(self: *const @This()) [*:0]const u8 {
+                return @ptrCast(&self.path);
+            }
+
+            pub fn getPsName(self: *const @This()) []const u8 {
+                return self.path[self.ps_off..][0..self.ps_len];
             }
         };
 
         pub const ReadData = struct {
-            path: [:0]const u8,
-            basename: []const u8,
             format: Format,
+            basename_off: u8,
+            basename_len: u8,
+            path: [PATH_SIZE]u8,
+
+            const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= WIDGET_BUF_MAX)
+                if (arg.len >= PATH_SIZE)
                     utl.fatal(&.{"READ: path too long"});
 
                 const ret = try reg.frontAlloc(@This());
-                const path = try reg.frontWriteStrZ(arg);
-                ret.* = .{
-                    .path = path,
-                    .basename = fs.path.basename(path),
-                    .format = .zero,
-                };
+                ret.format = .zero;
+                var fw: io.Writer = .fixed(&ret.path);
+                utl.writeStr(&fw, arg);
+                utl.writeStr(&fw, "\x00");
+                const basename = fs.path.basename(fw.buffered());
+                ret.basename_off = @intCast(
+                    mem.indexOf(u8, &ret.path, basename) orelse unreachable,
+                );
+                ret.basename_len = @intCast(basename.len);
                 return ret;
+            }
+
+            pub fn getPath(self: *const @This()) [*:0]const u8 {
+                return @ptrCast(&self.path);
+            }
+
+            pub fn getBasename(self: *const @This()) []const u8 {
+                return self.path[self.basename_off..][0..self.basename_len];
             }
         };
 
@@ -449,10 +497,7 @@ pub const WIDGET_INTERVAL_DEFAULT = 50;
 pub const WIDGET_INTERVAL_MAX = 1 << 31;
 
 /// Individual widget maximum buffer size.
-pub const WIDGET_BUF_MAX = 256;
-
-/// Maximum strftime(3) format size.
-pub const STRFTIME_FORMAT_BUF_SIZE_MAX = WIDGET_BUF_MAX / 4;
+pub const WIDGET_BUF_MAX = 192;
 
 // == private =================================================================
 

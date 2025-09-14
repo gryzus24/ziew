@@ -82,12 +82,12 @@ const Bat = struct {
 pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []const u8 {
     const wd = w.wid.BAT;
 
-    const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| switch (e) {
+    const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| switch (e) {
         error.FileNotFound => {
             const noop: typ.Widget.NoopIndirect = .{};
             const fg, const bg = w.check(noop, base);
             utl.writeBlockBeg(writer, fg, bg);
-            utl.writeStr(writer, wd.ps_name);
+            utl.writeStr(writer, wd.getPsName());
             utl.writeStr(writer, ": <not found>");
             return utl.writeBlockEnd(writer);
         },
@@ -135,7 +135,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
 
         const batopt: typ.BatOpt = @enumFromInt(part.opt);
         if (batopt == .arg) {
-            utl.writeStr(writer, wd.ps_name);
+            utl.writeStr(writer, wd.getPsName());
             continue;
         }
         if (batopt == .state) {

@@ -32,11 +32,11 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
 
     // TODO: use statvfs instead of this
     var sfs: c.struct_statfs = undefined;
-    if (c.statfs(wd.mountpoint, &sfs) != 0) {
+    if (c.statfs(wd.getMountpoint(), &sfs) != 0) {
         const noop: typ.Widget.NoopIndirect = .{};
         const fg, const bg = w.check(noop, base);
         utl.writeBlockBeg(writer, fg, bg);
-        utl.writeStr(writer, wd.mountpoint);
+        utl.writeStr(writer, wd.getMountpoint());
         utl.writeStr(writer, ": <not mounted>");
         return utl.writeBlockEnd(writer);
     }
@@ -81,7 +81,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
 
         const diskopt: typ.DiskOpt = @enumFromInt(part.opt);
         if (diskopt == .arg) {
-            utl.writeStr(writer, wd.mountpoint);
+            utl.writeStr(writer, wd.getMountpoint());
             continue;
         }
         (switch (diskopt) {

@@ -16,7 +16,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
 
     utl.writeBlockBeg(writer, w.fg.static, w.bg.static);
     const out = writer.unusedCapacitySlice();
-    const nr_written = c.strftime(out.ptr, out.len, wd.format, &tm);
+    const nr_written = c.strftime(out.ptr, out.len, wd.getFormat(), &tm);
     if (nr_written == 0) {
         @branchHint(.unlikely);
         utl.writeStr(writer, "<empty>");

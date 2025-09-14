@@ -59,12 +59,12 @@ fn readFileUntil(file: fs.File, endmarkers: []const u8, buf: *[typ.WIDGET_BUF_MA
 pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []const u8 {
     const wd = w.wid.READ;
 
-    const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| {
+    const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| {
         return writeBlockError(
             writer,
             w.fg.static,
             w.bg.static,
-            wd.basename,
+            wd.getBasename(),
             @errorName(e),
         );
     };
@@ -72,7 +72,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
 
     var buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
     const content = readFileUntil(file, FILE_END_MARKERS, &buf) catch |e| {
-        utl.fatal(&.{ "READ: read: ", wd.basename, @errorName(e) });
+        utl.fatal(&.{ "READ: read: ", wd.getBasename(), @errorName(e) });
     };
 
     var pos: usize = 0;
@@ -95,8 +95,8 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
             writer,
             switch (@as(typ.ReadOpt, @enumFromInt(part.opt))) {
                 // zig fmt: off
-                .arg      => wd.path,
-                .basename => wd.basename,
+                .arg      => wd.getPath()[0..mem.len(wd.getPath())],
+                .basename => wd.getBasename(),
                 .content  => content[pos..],
                 .raw      => content[0..],
                 // zig fmt: on
