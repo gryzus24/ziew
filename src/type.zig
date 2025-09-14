@@ -454,9 +454,6 @@ pub const WIDGET_BUF_MAX = 256;
 /// Maximum strftime(3) format size.
 pub const STRFTIME_FORMAT_BUF_SIZE_MAX = WIDGET_BUF_MAX / 4;
 
-/// Maximum strftime(3) output size.
-pub const STRFTIME_OUT_BUF_SIZE_MAX = STRFTIME_FORMAT_BUF_SIZE_MAX * 2;
-
 // == private =================================================================
 
 fn MakeEnumSubset(comptime E: type, comptime new_values: []const E) type {
