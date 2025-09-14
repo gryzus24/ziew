@@ -18,8 +18,8 @@ comptime {
 
 fn writeBlockError(
     writer: *io.Writer,
-    fg: color.Color.Data,
-    bg: color.Color.Data,
+    fg: color.Hex,
+    bg: color.Hex,
     prefix: []const u8,
     msg: []const u8,
 ) []const u8 {
@@ -30,7 +30,7 @@ fn writeBlockError(
     return utl.writeBlockEnd(writer);
 }
 
-fn acceptColor(str: []const u8, pos: *usize) color.Color.Data {
+fn acceptColor(str: []const u8, pos: *usize) color.Hex {
     var i: usize = 0;
     defer pos.* += i;
 
@@ -42,7 +42,7 @@ fn acceptColor(str: []const u8, pos: *usize) color.Color.Data {
     i = mem.indexOfAnyPos(u8, str, beg + 1, " \t") orelse str.len;
 
     if (color.acceptHex(str[beg..i])) |ok| {
-        return .{ .hex = ok };
+        return .init(ok);
     } else {
         return .default;
     }
@@ -56,24 +56,30 @@ fn readFileUntil(file: fs.File, endmarkers: []const u8, buf: *[typ.WIDGET_BUF_MA
 
 // == public ==================================================================
 
-pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
+pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []const u8 {
     const wd = w.wid.READ;
 
     const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| {
-        return writeBlockError(writer, wd.fg, wd.bg, wd.basename, @errorName(e));
+        return writeBlockError(
+            writer,
+            w.color.fg.static,
+            w.color.bg.static,
+            wd.basename,
+            @errorName(e),
+        );
     };
     defer file.close();
 
-    var _buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
-    const content = readFileUntil(file, FILE_END_MARKERS, &_buf) catch |e| {
+    var buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
+    const content = readFileUntil(file, FILE_END_MARKERS, &buf) catch |e| {
         utl.fatal(&.{ "READ: read: ", wd.basename, @errorName(e) });
     };
 
     var pos: usize = 0;
-    var fg = wd.fg;
-    var bg = wd.bg;
+    var fg = w.color.fg.static;
+    var bg = w.color.bg.static;
 
-    for (wd.format.part_opts) |*part| {
+    for (wd.format.parts.get(base)) |*part| {
         if (@as(typ.ReadOpt, @enumFromInt(part.opt)) == .content) {
             fg = acceptColor(content[pos..], &pos);
             bg = acceptColor(content[pos..], &pos);
@@ -83,8 +89,8 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
     }
 
     utl.writeBlockBeg(writer, fg, bg);
-    for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.str);
+    for (wd.format.parts.get(base)) |*part| {
+        utl.writeStr(writer, part.str.get(base));
         utl.writeStr(
             writer,
             switch (@as(typ.ReadOpt, @enumFromInt(part.opt))) {
@@ -97,6 +103,6 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
             },
         );
     }
-    utl.writeStr(writer, wd.format.part_last);
+    utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);
 }

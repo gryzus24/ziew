@@ -51,7 +51,7 @@ const Bat = struct {
         self.set.now = true;
     }
 
-    pub fn checkPairs(self: @This(), ac: color.Color.Active) color.Color.Data {
+    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
         const batopt_cs: typ.BatOpt.ColorSupported = @enumFromInt(ac.opt);
         if (batopt_cs == .state) {
             return color.firstColorEQThreshold(
@@ -62,7 +62,7 @@ const Bat = struct {
                     'N' => 3, // Not-charging
                     else => 4, // Unknown
                 },
-                ac.pairs,
+                ac.pairs.get(base),
             );
         } else {
             return color.firstColorGEThreshold(
@@ -71,7 +71,7 @@ const Bat = struct {
                     .@"%fulldesign" => unt.Percent(self.now, self.full_design),
                     .state => unreachable,
                 }.n.roundAndTruncate(),
-                ac.pairs,
+                ac.pairs.get(base),
             );
         }
     }
@@ -79,13 +79,14 @@ const Bat = struct {
 
 // == public ==================================================================
 
-pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
+pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []const u8 {
     const wd = w.wid.BAT;
 
     const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| switch (e) {
         error.FileNotFound => {
-            const noop: color.Color.NoopIndirect = .{};
-            utl.writeBlockBeg(writer, wd.fg.get(noop), wd.bg.get(noop));
+            const noop: typ.Widget.NoopIndirect = .{};
+            const fg, const bg = w.check(noop, base);
+            utl.writeBlockBeg(writer, fg, bg);
             utl.writeStr(writer, wd.ps_name);
             utl.writeStr(writer, ": <not found>");
             return utl.writeBlockEnd(writer);
@@ -127,9 +128,10 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
         if (bat.set.hasSetAll()) break;
     }
 
-    utl.writeBlockBeg(writer, wd.fg.get(bat), wd.bg.get(bat));
-    for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.str);
+    const fg, const bg = w.check(bat, base);
+    utl.writeBlockBeg(writer, fg, bg);
+    for (wd.format.parts.get(base)) |*part| {
+        utl.writeStr(writer, part.str.get(base));
 
         const batopt: typ.BatOpt = @enumFromInt(part.opt);
         if (batopt == .arg) {
@@ -147,8 +149,8 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
             .@"%fulldesign" => unt.Percent(bat.now, bat.full_design),
             .state          => unreachable,
             // zig fmt: on
-        }).write(writer, part.wopts, part.flags.quiet);
+        }).write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.part_last);
+    utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);
 }

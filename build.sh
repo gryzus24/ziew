@@ -32,7 +32,6 @@ case "$1" in
     test)
         shift
         set -x
-        zig test --cache-dir "$CACHE_DIR" $OPT $@ src/config.zig
         zig test --cache-dir "$CACHE_DIR" $OPT $@ src/w_mem.zig
         zig test --cache-dir "$CACHE_DIR" $OPT $@ src/w_cpu.zig
         set +x

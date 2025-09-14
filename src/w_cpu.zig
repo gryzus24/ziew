@@ -68,8 +68,8 @@ const Stat = struct {
     running: u32 = 0,
     blocked: u32 = 0,
     softirq: u64 = 0,
-    nr_cpu_entries: u32 = 0,
-    cpu_entries: [1 + CPUS_MAX]Cpu = .{Cpu{}} ** (1 + CPUS_MAX),
+    nr_entries: u32 = 0,
+    entries: [1 + CPUS_MAX]Cpu = .{Cpu{}} ** (1 + CPUS_MAX),
 };
 
 // == private =================================================================
@@ -80,7 +80,7 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
     while (buf[i] == ' ') : (i += 1) {}
     while (true) {
         for (0..Cpu.NR_FIELDS) |fieldi| {
-            new.cpu_entries[cpui].fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
+            new.entries[cpui].fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
             i += 1;
         }
         // cpuXX  41208 ... 1061 0 [0] 0\n
@@ -93,7 +93,7 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         while (buf[i] != ' ') : (i += 1) {}
         i += 1;
         cpui += 1;
-        if (cpui == new.cpu_entries.len)
+        if (cpui == new.entries.len)
             utl.fatal(&.{"CPU: too many CPUs, recompile with higher CPUS_MAX"});
     }
     i += "intr ".len;
@@ -122,7 +122,7 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
     new.ctxt = utl.atou64BackwardUntil(buf, &i, ' ');
 
     // Value of `nr_cpu_entries` may change - CPUs might go online/offline.
-    new.nr_cpu_entries = cpui;
+    new.nr_entries = cpui;
 }
 
 test "/proc/stat parser" {
@@ -152,16 +152,16 @@ test "/proc/stat parser" {
     ;
     var s: Stat = .{};
     parseProcStat(buf, &s);
-    try t.expect(s.cpu_entries[0].fields[0] == 46232);
-    try t.expect(s.cpu_entries[0].fields[1] == 14);
-    try t.expect(s.cpu_entries[0].fields[6] == 1212);
-    try t.expect(s.cpu_entries[0].fields[7] == 0);
-    try t.expect(s.cpu_entries[1].fields[0] == 9483);
-    try t.expect(s.cpu_entries[1].fields[2] == 1638);
-    try t.expect(s.cpu_entries[12].fields[0] == 858);
-    try t.expect(s.cpu_entries[12].fields[1] == 0);
-    try t.expect(s.cpu_entries[12].fields[6] == 123);
-    try t.expect(s.cpu_entries[12].fields[7] == 0);
+    try t.expect(s.entries[0].fields[0] == 46232);
+    try t.expect(s.entries[0].fields[1] == 14);
+    try t.expect(s.entries[0].fields[6] == 1212);
+    try t.expect(s.entries[0].fields[7] == 0);
+    try t.expect(s.entries[1].fields[0] == 9483);
+    try t.expect(s.entries[1].fields[2] == 1638);
+    try t.expect(s.entries[12].fields[0] == 858);
+    try t.expect(s.entries[12].fields[1] == 0);
+    try t.expect(s.entries[12].fields[6] == 123);
+    try t.expect(s.entries[12].fields[7] == 0);
     try t.expect(s.intr == 1894596);
     try t.expect(s.ctxt == 3055158);
     try t.expect(s.forks == 8594);
@@ -223,7 +223,7 @@ pub const CpuState = struct {
         };
     }
 
-    pub fn checkPairs(self: @This(), ac: color.Color.Active) color.Color.Data {
+    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
         const new, const old = self.getNewOldPtrs();
 
         return color.firstColorGEThreshold(
@@ -235,7 +235,7 @@ pub const CpuState = struct {
                 .running => new.running,
                 .blocked => new.blocked,
             },
-            ac.pairs,
+            ac.pairs.get(base),
         );
     }
 
@@ -264,48 +264,50 @@ pub fn update(state: *CpuState) void {
     var new, const old = state.newStateFlip();
 
     parseProcStat(buf[0..nr_read], new);
-    state.usage_pct = new.cpu_entries[0].delta(&old.cpu_entries[0], 1);
-    state.usage_abs = new.cpu_entries[0].delta(&old.cpu_entries[0], new.nr_cpu_entries);
+    state.usage_pct = new.entries[0].delta(&old.entries[0], 1);
+    state.usage_abs = new.entries[0].delta(&old.entries[0], new.nr_entries);
 }
 
 pub fn widget(
     writer: *io.Writer,
     state: *const CpuState,
     w: *const typ.Widget,
+    base: [*]const u8,
 ) []const u8 {
     const wd = w.wid.CPU;
     const new, const old = state.getNewOldPtrs();
 
-    utl.writeBlockBeg(writer, wd.fg.get(state), wd.bg.get(state));
-    for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.str);
+    const fg, const bg = w.check(state, base);
+    utl.writeBlockBeg(writer, fg, bg);
+    for (wd.format.parts.get(base)) |*part| {
+        utl.writeStr(writer, part.str.get(base));
 
         const cpuopt: typ.CpuOpt = @enumFromInt(part.opt);
         if (cpuopt == .brlbars) {
             var left: u32 = 0;
             var right: u32 = 0;
-            for (1..1 + new.nr_cpu_entries) |i| {
+            for (1..1 + new.nr_entries) |i| {
                 if (i & 1 == 1) {
-                    left = brlBarIntensity(&new.cpu_entries[i], &old.cpu_entries[i]);
+                    left = brlBarIntensity(&new.entries[i], &old.entries[i]);
                 } else {
-                    right = brlBarIntensity(&new.cpu_entries[i], &old.cpu_entries[i]);
+                    right = brlBarIntensity(&new.entries[i], &old.entries[i]);
                     utl.writeStr(writer, BRLBARS[left][right]);
                 }
             }
-            if (new.nr_cpu_entries & 1 == 1)
+            if (new.nr_entries & 1 == 1)
                 utl.writeStr(writer, BRLBARS[left][0]);
 
             continue;
         } else if (cpuopt == .blkbars) {
-            for (1..1 + new.nr_cpu_entries) |i| {
+            for (1..1 + new.nr_entries) |i| {
                 utl.writeStr(
                     writer,
-                    BLKBARS[blkBarIntensity(&new.cpu_entries[i], &old.cpu_entries[i])],
+                    BLKBARS[blkBarIntensity(&new.entries[i], &old.entries[i])],
                 );
             }
             continue;
         }
-        const d = part.flags.diff;
+        const d = part.diff;
         const nu: unt.NumUnit = switch (cpuopt) {
             // zig fmt: off
             .@"%all"  => .{ .n = state.usage_pct.all,  .u = .percent },
@@ -324,8 +326,8 @@ pub fn widget(
             .blkbars  => unreachable,
             // zig fmt: on
         };
-        nu.write(writer, part.wopts, part.flags.quiet);
+        nu.write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.part_last);
+    utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);
 }

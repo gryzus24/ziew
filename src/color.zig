@@ -1,40 +1,27 @@
 const std = @import("std");
+const m = @import("memory.zig");
 const mem = std.mem;
 
 // == public ==================================================================
 
-pub const Color = union(enum) {
-    default: Data,
-    active: Active,
+pub const Hex = struct {
+    use: u8,
+    hex: [6]u8,
 
-    pub inline fn get(self: @This(), indirect: anytype) Data {
-        return switch (self) {
-            .default => |hex| hex,
-            .active => |a| indirect.checkPairs(a),
-        };
+    pub const default: Hex = .{ .use = 0, .hex = undefined };
+
+    pub fn init(hex: [6]u8) @This() {
+        return .{ .use = 1, .hex = hex };
     }
+};
 
-    pub const Data = union(enum) {
-        default,
-        hex: [6]u8,
-    };
+pub const Active = struct {
+    opt: u8,
+    pairs: m.MemSlice(Pair),
 
-    pub const Active = struct {
-        opt: u8,
-        pairs: []Pair,
-
-        pub const Pair = struct {
-            thresh: u8,
-            data: Data,
-        };
-    };
-
-    pub const NoopIndirect = struct {
-        pub fn checkPairs(self: @This(), ac: Active) Data {
-            _ = self;
-            _ = ac;
-            return .default;
-        }
+    pub const Pair = struct {
+        thresh: u8,
+        data: Hex,
     };
 };
 
@@ -68,9 +55,9 @@ pub fn acceptHex(str: []const u8) ?[6]u8 {
     return hex;
 }
 
-pub fn firstColorGEThreshold(value: u64, pairs: []const Color.Active.Pair) Color.Data {
+pub fn firstColorGEThreshold(value: u64, pairs: []const Active.Pair) Hex {
     var i: isize = -1;
-    for (pairs) |*pair| {
+    for (pairs) |pair| {
         if (pair.thresh <= value) {
             i += 1;
         } else {
@@ -82,8 +69,8 @@ pub fn firstColorGEThreshold(value: u64, pairs: []const Color.Active.Pair) Color
     return pairs[@as(usize, @intCast(i))].data;
 }
 
-pub fn firstColorEQThreshold(value: u8, pairs: []const Color.Active.Pair) Color.Data {
-    for (pairs) |*pair| {
+pub fn firstColorEQThreshold(value: u8, pairs: []const Active.Pair) Hex {
+    for (pairs) |pair| {
         if (pair.thresh == value) return pair.data;
     }
     return .default;

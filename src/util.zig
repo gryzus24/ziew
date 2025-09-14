@@ -1,5 +1,6 @@
 const std = @import("std");
 const color = @import("color.zig");
+const m = @import("memory.zig");
 const typ = @import("type.zig");
 const fmt = std.fmt;
 const fs = std.fs;
@@ -70,17 +71,8 @@ var FGBG_D = blk: {
 
 var BLOCK_HEADERS: [4][]u8 = .{ &NC_A, &FG_B, &BG_C, &FGBG_D };
 
-pub fn writeBlockBeg(
-    writer: *io.Writer,
-    fg: color.Color.Data,
-    bg: color.Color.Data,
-) void {
-    // zig fmt: off
-    const i: u2 = (
-        @as(u2, @intFromBool(fg == color.Color.Data.hex)) +
-        @as(u2, @intFromBool(bg == color.Color.Data.hex)) * 2
-    );
-    // zig fmt: on
+pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
+    const i = fg.use + bg.use;
 
     var header = BLOCK_HEADERS[i];
     switch (i) {
@@ -95,6 +87,7 @@ pub fn writeBlockBeg(
             @memcpy(header[11..17], &fg.hex);
             @memcpy(header[34..40], &bg.hex);
         },
+        else => unreachable,
     }
     writeStr(writer, header);
 }
@@ -116,8 +109,6 @@ pub fn writeBlockEnd(writer: *io.Writer) []const u8 {
 
 // == LOGGING =================================================================
 
-pub var bss: [512]u8 = undefined;
-
 const Log = struct {
     fd: linux.fd_t = -1,
 
@@ -132,7 +123,7 @@ const Log = struct {
 };
 
 pub fn bssPrint(comptime format: []const u8, args: anytype) []const u8 {
-    var w: io.Writer = .fixed(&bss);
+    var w: io.Writer = .fixed(&m.g_logging_bss);
     w.print(format, args) catch return &.{};
     return w.buffered();
 }

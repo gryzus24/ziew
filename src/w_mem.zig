@@ -88,7 +88,7 @@ pub const MemState = struct {
         };
     }
 
-    pub fn checkPairs(self: @This(), ac: color.Color.Active) color.Color.Data {
+    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
         return color.firstColorGEThreshold(
             unt.Percent(
                 switch (@as(typ.MemOpt.ColorSupported, @enumFromInt(ac.opt))) {
@@ -100,7 +100,7 @@ pub const MemState = struct {
                 },
                 self.total(),
             ).n.roundAndTruncate(),
-            ac.pairs,
+            ac.pairs.get(base),
         );
     }
 
@@ -145,12 +145,14 @@ pub fn widget(
     writer: *io.Writer,
     state: *const MemState,
     w: *const typ.Widget,
+    base: [*]const u8,
 ) []const u8 {
     const wd = w.wid.MEM;
 
-    utl.writeBlockBeg(writer, wd.fg.get(state), wd.bg.get(state));
-    for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.str);
+    const fg, const bg = w.check(state, base);
+    utl.writeBlockBeg(writer, fg, bg);
+    for (wd.format.parts.get(base)) |*part| {
+        utl.writeStr(writer, part.str.get(base));
         const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {
             // zig fmt: off
             .@"%free"      => unt.Percent(state.free(), state.total()),
@@ -168,8 +170,8 @@ pub fn widget(
             .writeback     => unt.SizeKb(state.writeback()),
             // zig fmt: on
         };
-        nu.write(writer, part.wopts, part.flags.quiet);
+        nu.write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.part_last);
+    utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);
 }

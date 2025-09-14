@@ -71,88 +71,92 @@ fn readArgs() Args {
     return args;
 }
 
-fn fatalConfigParse(e: anyerror, err: cfg.LineParseError) noreturn {
+fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     @branchHint(.cold);
     const log = utl.openLog();
-    const prefix = "fatal: ";
-    log.log(prefix);
-    log.log("config: ");
-    log.log(@errorName(e));
-    if (err.note.len > 0) {
-        log.log(": ");
-        log.log(err.note);
-    }
+    log.log("fatal: config: ");
+    log.log(diag.note);
     log.log("\n");
-    log.log(utl.bssPrint("{:<7}{s}\n", .{ err.nr, err.line }));
-    const beg = @min(err.ebeg, utl.bss.len);
-    const len = @min(err.elen, utl.bss.len);
-    if (len != 0) {
-        log.log(" " ** prefix.len);
-        @memset(utl.bss[0..beg], ' ');
-        log.log(utl.bss[0..beg]);
-        @memset(utl.bss[0..len], '~');
-        log.log(utl.bss[0..len]);
+    log.log(utl.bssPrint("{:<7}{s}\n", .{ diag.line_nr, diag.line }));
+    const beg = @min(diag.field.beg, m.g_logging_bss.len);
+    const end = @min(diag.field.end, m.g_logging_bss.len);
+    if (beg < end) {
+        log.log(" " ** 7);
+        @memset(m.g_logging_bss[0..beg], ' ');
+        log.log(m.g_logging_bss[0..beg]);
+        @memset(m.g_logging_bss[0 .. end - beg], '~');
+        log.log(m.g_logging_bss[0 .. end - beg]);
         log.log("\n");
     }
     linux.exit(1);
 }
 
-fn readConfig(reg: *m.Region, config_path: ?[*:0]const u8) []const typ.Widget {
-    var widgets: []const typ.Widget = undefined;
+fn loadConfig(reg: *m.Region, config_path: ?[*:0]const u8) []typ.Widget {
+    @branchHint(.cold);
 
-    const err = blk: {
-        if (config_path) |path| {
-            if (cfg.readFile(reg, path)) |config_view| {
-                var err: cfg.LineParseError = undefined;
-                widgets = cfg.parse(reg, config_view, &err) catch |e| {
-                    fatalConfigParse(e, err);
-                };
-                if (widgets.len == 0) {
-                    utl.warn(&.{"no widgets loaded: using defaults..."});
-                    break :blk true;
-                } else {
-                    break :blk false;
-                }
-            } else |e| switch (e) {
-                error.FileNotFound => {
-                    utl.warn(&.{"no config file: using defaults..."});
-                    break :blk true;
-                },
-                error.NoSpaceLeft => {
-                    utl.warn(&.{"config file too big: using defaults..."});
-                    break :blk true;
-                },
-            }
+    const path: [*:0]const u8 = blk: {
+        if (config_path) |ok| {
+            break :blk ok;
         } else {
-            utl.warn(&.{"unknown config file path: using defaults..."});
-            break :blk true;
+            if (getConfigPath(reg)) |ok| {
+                break :blk ok;
+            } else |e| switch (e) {
+                error.NoPath => {
+                    utl.warn(&.{"unknown config file path: using defaults..."});
+                    return cfg.defaultConfig(reg);
+                },
+                error.NoSpaceLeft => utl.fatal(&.{"config path too long"}),
+            }
         }
     };
-    if (err)
-        widgets = cfg.defaultConfig(reg);
 
+    const file = fs.cwd().openFileZ(path, .{}) catch |e| switch (e) {
+        error.FileNotFound => {
+            utl.warn(&.{ "config: file not found: ", path[0..mem.len(path)] });
+            utl.warn(&.{"using defaults..."});
+            return cfg.defaultConfig(reg);
+        },
+        else => utl.fatal(&.{ "config: open: ", @errorName(e) }),
+    };
+    defer file.close();
+
+    var linebuf: [256]u8 = undefined;
+    var scratch: [256]u8 align(16) = undefined;
+
+    var reader = file.reader(&linebuf);
+
+    const ret = cfg.parse(reg, &reader.interface, &scratch) catch |e| switch (e) {
+        error.NoSpaceLeft => utl.fatal(&.{"config: out of memory"}),
+    };
+    const widgets = switch (ret) {
+        .ok => |w| w,
+        .err => |diag| fatalConfig(diag),
+    };
+
+    if (widgets.len == 0) {
+        utl.warn(&.{"no widgets loaded: using defaults..."});
+        return cfg.defaultConfig(reg);
+    }
     return widgets;
 }
 
-fn defaultConfigPath(reg: *m.Region) error{NoSpaceLeft}!?[*:0]const u8 {
+fn getConfigPath(reg: *m.Region) error{ NoSpaceLeft, NoPath }![*:0]const u8 {
     var n: usize = 0;
     const base = reg.frontSave(u8);
-    if (posix.getenvZ("XDG_CONFIG_HOME")) |xdg_config_home| {
-        n += (try reg.frontWriteStr(xdg_config_home)).len;
+    if (posix.getenvZ("XDG_CONFIG_HOME")) |ok| {
+        n += (try reg.frontWriteStr(ok)).len;
         n += (try reg.frontWriteStr("/ziew/config\x00")).len;
-    } else if (posix.getenvZ("HOME")) |home| {
-        n += (try reg.frontWriteStr(home)).len;
+    } else if (posix.getenvZ("HOME")) |ok| {
+        n += (try reg.frontWriteStr(ok)).len;
         n += (try reg.frontWriteStr("/.config/ziew/config\x00")).len;
     } else {
-        utl.warn(&.{"$HOME and $XDG_CONFIG_HOME not set"});
-        return null;
+        utl.warn(&.{"neither $HOME nor $XDG_CONFIG_HOME set!"});
+        return error.NoPath;
     }
     return reg.slice(u8, base, n)[0 .. n - 1 :0];
 }
 
 var g_refresh_all = false;
-var g_bss_memory: [8 * heap.pageSize()]u8 align(64) = undefined;
-
 fn sa_handler(signum: c_int) callconv(.c) void {
     if (signum == linux.SIG.USR1) g_refresh_all = true;
 }
@@ -189,20 +193,17 @@ fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
 }
 
 pub fn main() !void {
-    var reg: m.Region = .init(&g_bss_memory);
+    var reg: m.Region = .init(&m.g_bss, "main");
 
     const args = readArgs();
-    const config_path = args.config_path orelse (defaultConfigPath(&reg) catch |e| switch (e) {
-        error.NoSpaceLeft => utl.fatal(&.{"config path too long"}),
-    });
-    const widgets = readConfig(&reg, config_path);
+    const widgets = loadConfig(&reg, args.config_path);
 
     setupSignals();
 
     const sleep_dsec = sleepInterval(widgets);
     const sleep_ts: linux.timespec = .{
-        .sec = @intCast(sleep_dsec / 10),
-        .nsec = @intCast((sleep_dsec % 10) * time.ns_per_s / 10),
+        .sec = sleep_dsec / 10,
+        .nsec = (sleep_dsec % 10) * (time.ns_per_s / 10),
     };
 
     var cpu_state: w_cpu.CpuState = undefined;
@@ -235,22 +236,16 @@ pub fn main() !void {
         else => {},
     };
 
-    // zig fmt: off
-    var time_to_refresh   = try reg.frontAllocMany(typ.DeciSec, widgets.len);
-    @memset(time_to_refresh, 0);
+    var views = try reg.frontAllocMany([]const u8, widgets.len);
+    var bufs = try reg.frontAllocMany([typ.WIDGET_BUF_MAX]u8, widgets.len);
 
-    var widget_bufs       = try reg.frontAllocMany([typ.WIDGET_BUF_MAX]u8, widgets.len);
-    var widget_bufs_views = try reg.frontAllocMany([]const u8, widgets.len);
-    var write_buf         = try reg.frontAllocMany(u8, 2 + widgets.len * typ.WIDGET_BUF_MAX);
-    // zig fmt: on
-
-    write_buf[0] = ',';
-    write_buf[1] = '[';
+    const base = reg.head.ptr;
 
     utl.fdWrite(1, "{\"version\":1}\n[[]");
     while (true) {
         if (g_refresh_all) {
-            @memset(time_to_refresh, 0);
+            @branchHint(.unlikely);
+            for (widgets) |*w| w.interval_now = 0;
             g_refresh_all = false;
         }
 
@@ -259,11 +254,9 @@ pub fn main() !void {
         var net_updated = false;
 
         for (widgets, 0..) |*w, i| {
-            time_to_refresh[i] -|= sleep_dsec;
-            if (time_to_refresh[i] == 0) {
-                time_to_refresh[i] = w.interval;
-
-                var fw: io.Writer = .fixed(&widget_bufs[i]);
+            w.interval_now -|= sleep_dsec;
+            if (w.interval_now == 0) {
+                w.interval_now = w.interval;
 
                 if (w.wid == .CPU and !cpu_updated) {
                     w_cpu.update(&cpu_state);
@@ -279,26 +272,33 @@ pub fn main() !void {
                         net_updated = true;
                     }
                 }
-                widget_bufs_views[i] = switch (w.wid) {
+
+                var fw: io.Writer = .fixed(&bufs[i]);
+                views[i] = switch (w.wid) {
                     .TIME => w_time.widget(&fw, w),
-                    .MEM => w_mem.widget(&fw, &mem_state, w),
-                    .CPU => w_cpu.widget(&fw, &cpu_state, w),
-                    .DISK => w_dysk.widget(&fw, w),
-                    .NET => w_net.widget(&fw, &net_state, w),
-                    .BAT => w_bat.widget(&fw, w),
-                    .READ => w_read.widget(&fw, w),
+                    .MEM => w_mem.widget(&fw, &mem_state, w, base),
+                    .CPU => w_cpu.widget(&fw, &cpu_state, w, base),
+                    .DISK => w_dysk.widget(&fw, w, base),
+                    .NET => w_net.widget(&fw, &net_state, w, base),
+                    .BAT => w_bat.widget(&fw, w, base),
+                    .READ => w_read.widget(&fw, w, base),
                 };
             }
         }
 
+        const dst = reg.head.ptr[reg.front..reg.back];
+
+        dst[0] = ',';
+        dst[1] = '[';
+
         var pos: usize = 2;
-        for (widget_bufs_views) |view| {
-            @memcpy(write_buf[pos .. pos + view.len], view);
+        for (views) |view| {
+            @memcpy(dst[pos .. pos + view.len], view);
             pos += view.len;
         }
-        write_buf[pos - 1] = ']'; // get rid of the trailing comma
+        dst[pos - 1] = ']'; // get rid of the trailing comma
 
-        utl.fdWrite(1, write_buf[0..pos]);
+        utl.fdWrite(1, dst[0..pos]);
 
         var req = sleep_ts;
         while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {
@@ -308,6 +308,5 @@ pub fn main() !void {
             else => break,
         };
     }
-
     unreachable;
 }

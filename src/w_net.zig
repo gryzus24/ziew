@@ -44,8 +44,8 @@ comptime {
 const ColorHandler = struct {
     up: bool,
 
-    pub fn checkPairs(self: @This(), ac: color.Color.Active) color.Color.Data {
-        return color.firstColorEQThreshold(@intFromBool(self.up), ac.pairs);
+    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
+        return color.firstColorEQThreshold(@intFromBool(self.up), ac.pairs.get(base));
     }
 };
 
@@ -246,7 +246,7 @@ pub const NetState = struct {
             for (widgets) |*w| {
                 if (w.wid == .NET) {
                     const wd = w.wid.NET;
-                    for (wd.format.part_opts) |part| {
+                    for (wd.format.parts.get(reg.head.ptr)) |*part| {
                         const opt: typ.NetOpt = @enumFromInt(part.opt);
                         if (opt.requiresProcNetDev()) break :blk true;
                     }
@@ -295,7 +295,12 @@ pub fn update(state: *NetState) void {
     };
 }
 
-pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget) []const u8 {
+pub fn widget(
+    writer: *io.Writer,
+    state: *const ?NetState,
+    w: *const typ.Widget,
+    base: [*]const u8,
+) []const u8 {
     const Static = struct {
         var sock: linux.fd_t = 0;
     };
@@ -319,12 +324,12 @@ pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget)
     if (@typeInfo(typ.NetOpt).@"enum".fields.len >= @bitSizeOf(@TypeOf(demands)))
         @compileError("bump demands bitfield size");
 
-    for (wd.format.part_opts) |*part|
+    for (wd.format.parts.get(base)) |*part|
         demands |= @as(@TypeOf(demands), 1) << @intCast(part.opt);
 
     if (demands & INET > 0)
         inet = getInet(Static.sock, &wd.ifr, &_inetbuf);
-    if (demands & (FLAGS | STATE) > 0 or wd.fg == .active or wd.bg == .active)
+    if (demands & (FLAGS | STATE) > 0 or w.color.flags.fg_active or w.color.flags.bg_active)
         flags = getFlags(Static.sock, &wd.ifr, &_iffbuf, &up);
 
     var new_if: ?*IFace = null;
@@ -352,9 +357,10 @@ pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget)
 
     const ch: ColorHandler = .{ .up = up };
 
-    utl.writeBlockBeg(writer, wd.fg.get(ch), wd.bg.get(ch));
-    for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.str);
+    const fg, const bg = w.check(ch, base);
+    utl.writeBlockBeg(writer, fg, bg);
+    for (wd.format.parts.get(base)) |*part| {
+        utl.writeStr(writer, part.str.get(base));
 
         const opt: typ.NetOpt = @enumFromInt(part.opt);
         if (opt.requiresSocket()) {
@@ -381,7 +387,7 @@ pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget)
         } else {
             const new = new_if.?;
             const old = old_if.?;
-            const d = part.flags.diff;
+            const d = part.diff;
             nu = switch (opt.castTo(typ.NetOpt.ProcNetDevRequired)) {
                 // zig fmt: off
                 .rx_bytes => unt.SizeBytes(utl.calc(new.bytes(.rx), old.bytes(.rx), d)),
@@ -396,8 +402,8 @@ pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget)
                 // zig fmt: on
             };
         }
-        nu.write(writer, part.wopts, part.flags.quiet);
+        nu.write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.part_last);
+    utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);
 }

@@ -22,28 +22,93 @@ const meta = std.meta;
 // == public types ============================================================
 
 // 1/10th of a second
-pub const DeciSec = u64;
+pub const DeciSec = u32;
 
 pub const Format = struct {
-    part_opts: []Part = &.{},
-    part_last: []const u8 = &.{},
+    parts: m.MemSlice(Part),
+    last_str: m.MemSlice(u8),
+
+    pub const zero: Format = .{ .parts = .zero, .last_str = .zero };
 
     pub const Part = struct {
-        str: []const u8,
-        opt: u8 = 0,
-        flags: Flags = .{},
-        wopts: unt.NumUnit.WriteOptions = .{},
+        str: m.MemSlice(u8),
+        opt: u8,
+        diff: bool,
+        quiet: bool,
+        wopts: unt.NumUnit.WriteOptions,
 
-        pub const Flags = packed struct {
-            diff: bool = false,
-            quiet: bool = false,
-        };
+        pub fn initDefault(opt: u8) @This() {
+            return .{
+                .str = .zero,
+                .opt = opt,
+                .diff = false,
+                .quiet = false,
+                .wopts = .default,
+            };
+        }
     };
 };
 
 pub const Widget = struct {
     wid: Id,
-    interval: DeciSec = WIDGET_INTERVAL_DEFAULT,
+    interval: DeciSec,
+    interval_now: DeciSec,
+    color: Color,
+
+    pub fn initDefault(wid: Id) @This() {
+        return .{
+            .wid = wid,
+            .interval = WIDGET_INTERVAL_DEFAULT,
+            .interval_now = 0,
+            .color = .{},
+        };
+    }
+
+    pub const Color = struct {
+        flags: Flags = .{},
+        fg: Data = .{ .static = .default },
+        bg: Data = .{ .static = .default },
+
+        pub const Flags = packed struct {
+            fg_active: bool = false,
+            bg_active: bool = false,
+        };
+
+        pub const Data = union {
+            static: color.Hex,
+            active: color.Active,
+        };
+    };
+
+    pub inline fn check(
+        self: @This(),
+        indirect: anytype,
+        base: [*]const u8,
+    ) struct { color.Hex, color.Hex } {
+        var fg: color.Hex = undefined;
+        var bg: color.Hex = undefined;
+
+        if (self.color.flags.fg_active) {
+            fg = indirect.checkPairs(self.color.fg.active, base);
+        } else {
+            fg = self.color.fg.static;
+        }
+        if (self.color.flags.bg_active) {
+            bg = indirect.checkPairs(self.color.bg.active, base);
+        } else {
+            bg = self.color.bg.static;
+        }
+        return .{ fg, bg };
+    }
+
+    pub const NoopIndirect = struct {
+        pub fn checkPairs(other: @This(), active: color.Active, base: [*]const u8) color.Hex {
+            _ = other;
+            _ = active;
+            _ = base;
+            return .default;
+        }
+    };
 
     pub const Id = union(Tag) {
         TIME: *TimeData,
@@ -59,143 +124,132 @@ pub const Widget = struct {
         const NR_WIDGETS = @typeInfo(Tag).@"enum".fields.len;
 
         pub const TimeData = struct {
-            format: [:0]const u8,
-            fg: color.Color.Data = .default,
-            bg: color.Color.Data = .default,
+            format: [*:0]const u8,
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= STRFTIME_FORMAT_BUF_SIZE_MAX)
                     utl.fatal(&.{"TIME: strftime format too long"});
 
                 const ret = try reg.frontAlloc(@This());
-
                 ret.* = .{ .format = try reg.frontWriteStrZ(arg) };
                 return ret;
             }
         };
 
         pub const MemData = struct {
-            format: Format = .{},
-            fg: color.Color = .{ .default = .default },
-            bg: color.Color = .{ .default = .default },
+            format: Format,
 
             pub fn init(reg: *m.Region) !*@This() {
                 const ret = try reg.frontAlloc(@This());
-                ret.* = .{};
+                ret.* = .{ .format = .zero };
                 return ret;
             }
         };
 
         pub const CpuData = struct {
-            format: Format = .{},
-            fg: color.Color = .{ .default = .default },
-            bg: color.Color = .{ .default = .default },
+            format: Format,
 
             pub fn init(reg: *m.Region) !*@This() {
                 const ret = try reg.frontAlloc(@This());
-                ret.* = .{};
+                ret.* = .{ .format = .zero };
                 return ret;
             }
         };
 
         pub const DiskData = struct {
             mountpoint: [:0]const u8,
-            format: Format = .{},
-            fg: color.Color = .{ .default = .default },
-            bg: color.Color = .{ .default = .default },
+            format: Format,
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= WIDGET_BUF_MAX)
                     utl.fatal(&.{"DISK: mountpoint path too long"});
 
-                const retptr = try reg.frontAlloc(@This());
-
-                retptr.* = .{ .mountpoint = try reg.frontWriteStrZ(arg) };
-                return retptr;
+                const ret = try reg.frontAlloc(@This());
+                ret.* = .{
+                    .mountpoint = try reg.frontWriteStrZ(arg),
+                    .format = .zero,
+                };
+                return ret;
             }
         };
 
         pub const NetData = struct {
             ifr: linux.ifreq,
-            format: Format = .{},
-            fg: color.Color = .{ .default = .default },
-            bg: color.Color = .{ .default = .default },
+            format: Format,
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 var ifr: linux.ifreq = undefined;
                 if (arg.len >= ifr.ifrn.name.len)
                     utl.fatal(&.{ "NET: interface name too long: ", arg });
 
-                const retptr = try reg.frontAlloc(@This());
-
+                const ret = try reg.frontAlloc(@This());
                 @memset(ifr.ifrn.name[0..], 0);
                 @memcpy(ifr.ifrn.name[0..arg.len], arg);
-                retptr.* = .{ .ifr = ifr };
-
-                return retptr;
+                ret.* = .{ .ifr = ifr, .format = .zero };
+                return ret;
             }
         };
 
         pub const BatData = struct {
             ps_name: []const u8,
             path: [*:0]const u8,
-            format: Format = .{},
-            fg: color.Color = .{ .default = .default },
-            bg: color.Color = .{ .default = .default },
+            format: Format,
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= 32) utl.fatal(&.{"BAT: battery name too long"});
 
-                const retptr = try reg.frontAlloc(@This());
-
+                const ret = try reg.frontAlloc(@This());
                 var n: usize = 0;
-                const base = reg.frontSave(u8);
+                const path_base = reg.frontSave(u8);
                 n += (try reg.frontWriteStr("/sys/class/power_supply/")).len;
+                const ps_name_base = reg.frontSave(u8);
                 n += (try reg.frontWriteStr(arg)).len;
                 n += (try reg.frontWriteStr("/uevent\x00")).len;
-
-                retptr.* = .{ .ps_name = arg, .path = reg.slice(u8, base, n)[0 .. n - 1 :0] };
-                return retptr;
+                ret.* = .{
+                    .ps_name = reg.slice(u8, ps_name_base, arg.len),
+                    .path = reg.slice(u8, path_base, n)[0 .. n - 1 :0],
+                    .format = .zero,
+                };
+                return ret;
             }
         };
 
         pub const ReadData = struct {
             path: [:0]const u8,
             basename: []const u8,
-            format: Format = .{},
-            fg: color.Color.Data = .default,
-            bg: color.Color.Data = .default,
+            format: Format,
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= WIDGET_BUF_MAX)
                     utl.fatal(&.{"READ: path too long"});
 
-                const retptr = try reg.frontAlloc(@This());
-
-                retptr.* = .{
-                    .path = try reg.frontWriteStrZ(arg),
-                    .basename = fs.path.basename(arg),
+                const ret = try reg.frontAlloc(@This());
+                const path = try reg.frontWriteStrZ(arg);
+                ret.* = .{
+                    .path = path,
+                    .basename = fs.path.basename(path),
+                    .format = .zero,
                 };
-                return retptr;
+                return ret;
             }
         };
 
-        pub const ArgRequired = MakeEnumSubset(
+        pub const AcceptsArg = MakeEnumSubset(
             Tag,
             &.{ .TIME, .DISK, .NET, .BAT, .READ },
         );
 
-        pub const FormatRequired = MakeEnumSubset(
+        pub const AcceptsFormat = MakeEnumSubset(
             Tag,
             &.{ .MEM, .CPU, .DISK, .NET, .BAT, .READ },
         );
 
-        pub const ColorSupported = MakeEnumSubset(
+        pub const ActiveColorSupported = MakeEnumSubset(
             Tag,
             &.{ .MEM, .CPU, .DISK, .NET, .BAT },
         );
 
-        pub const ColorOnlyDefault = MakeEnumSubset(
+        pub const DefaultColorOnly = MakeEnumSubset(
             Tag,
             &.{ .TIME, .READ },
         );
@@ -204,18 +258,23 @@ pub const Widget = struct {
             return @enumFromInt(@intFromEnum(self));
         }
 
-        pub fn requiresArgParam(self: @This()) bool {
-            _ = meta.intToEnum(ArgRequired, @intFromEnum(self)) catch return false;
+        pub fn acceptsArg(self: @This()) bool {
+            _ = meta.intToEnum(AcceptsArg, @intFromEnum(self)) catch return false;
             return true;
         }
 
-        pub fn requiresFormatParam(self: @This()) bool {
-            _ = meta.intToEnum(FormatRequired, @intFromEnum(self)) catch return false;
+        pub fn acceptsFormat(self: @This()) bool {
+            _ = meta.intToEnum(AcceptsFormat, @intFromEnum(self)) catch return false;
             return true;
         }
 
-        pub fn supportsColor(self: @This()) bool {
-            _ = meta.intToEnum(ColorSupported, @intFromEnum(self)) catch return false;
+        pub fn supportsActiveColor(self: @This()) bool {
+            _ = meta.intToEnum(ActiveColorSupported, @intFromEnum(self)) catch return false;
+            return true;
+        }
+
+        pub fn supportsDefaultColorOnly(self: @This()) bool {
+            _ = meta.intToEnum(DefaultColorOnly, @intFromEnum(self)) catch return false;
             return true;
         }
     };
@@ -246,6 +305,7 @@ pub const MemOpt = enum {
         .@"%free", .@"%available", .@"%buffers", .@"%cached", .@"%used",
     });
 };
+
 pub const CpuOpt = enum {
     @"%all",
     @"%user",
@@ -340,6 +400,7 @@ pub const BatOpt = enum {
         .@"%fullnow", .@"%fulldesign", .state,
     });
 };
+
 pub const ReadOpt = enum {
     arg,
     basename,
@@ -368,12 +429,9 @@ comptime {
 
 // == public constants ========================================================
 
-/// Individual widget maximum buffer size.
-pub const WIDGET_BUF_MAX = 256;
-
 /// Names of options supported by widgets' formats keyed by
 /// @intFromEnum(Widget.Id.Tag).
-pub const WID_OPT_NAMES: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = blk: {
+pub const WID__OPT_NAMES: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = blk: {
     var w: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = undefined;
     for (WID_OPT_TYPE, 0..) |T, i| {
         w[i] = meta.fieldNames(T);
@@ -383,7 +441,7 @@ pub const WID_OPT_NAMES: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = blk: {
 
 /// Particular widgets' format option state of color support keyed by
 /// @intFromEnum(Widget.Id.Tag).
-pub const WID_OPT_COLOR_SUPPORTED: [Widget.Id.NR_WIDGETS][]const bool = blk: {
+pub const WID__OPTS_SUPPORTING_COLOR: [Widget.Id.NR_WIDGETS][]const bool = blk: {
     var w: [Widget.Id.NR_WIDGETS][]const bool = undefined;
     for (WID_OPT_TYPE, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
@@ -402,6 +460,9 @@ pub const WIDGET_INTERVAL_DEFAULT = 50;
 
 /// Maximum widget refresh interval (refresh once and forget).
 pub const WIDGET_INTERVAL_MAX = 1 << 31;
+
+/// Individual widget maximum buffer size.
+pub const WIDGET_BUF_MAX = 256;
 
 /// Maximum strftime(3) format size.
 pub const STRFTIME_FORMAT_BUF_SIZE_MAX = WIDGET_BUF_MAX / 4;
