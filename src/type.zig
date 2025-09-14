@@ -65,14 +65,10 @@ pub const Widget = struct {
     }
 
     pub const Color = struct {
-        flags: Flags = .{},
+        fg_active: bool = false,
+        bg_active: bool = false,
         fg: Data = .{ .static = .default },
         bg: Data = .{ .static = .default },
-
-        pub const Flags = packed struct {
-            fg_active: bool = false,
-            bg_active: bool = false,
-        };
 
         pub const Data = union {
             static: color.Hex,
@@ -88,12 +84,12 @@ pub const Widget = struct {
         var fg: color.Hex = undefined;
         var bg: color.Hex = undefined;
 
-        if (self.color.flags.fg_active) {
+        if (self.color.fg_active) {
             fg = indirect.checkPairs(self.color.fg.active, base);
         } else {
             fg = self.color.fg.static;
         }
-        if (self.color.flags.bg_active) {
+        if (self.color.bg_active) {
             bg = indirect.checkPairs(self.color.bg.active, base);
         } else {
             bg = self.color.bg.static;

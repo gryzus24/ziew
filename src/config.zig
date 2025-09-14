@@ -676,7 +676,7 @@ pub fn parse(
                                         },
                                     },
                                 };
-                                current.color.flags.fg_active = true;
+                                current.color.fg_active = true;
                             },
                             .bg => {
                                 current.color.bg = .{
@@ -685,7 +685,7 @@ pub fn parse(
                                         .len = @intCast(active.pairs.len),
                                     } },
                                 };
-                                current.color.flags.bg_active = true;
+                                current.color.bg_active = true;
                             },
                         }
                     },
