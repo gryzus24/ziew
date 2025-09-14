@@ -53,27 +53,22 @@ pub const Widget = struct {
     wid: Id,
     interval: DeciSec,
     interval_now: DeciSec,
-    color: Color,
+    fg: Color,
+    bg: Color,
 
     pub fn initDefault(wid: Id) @This() {
         return .{
             .wid = wid,
             .interval = WIDGET_INTERVAL_DEFAULT,
             .interval_now = 0,
-            .color = .{},
+            .fg = .{ .static = .default },
+            .bg = .{ .static = .default },
         };
     }
 
-    pub const Color = struct {
-        fg_active: bool = false,
-        bg_active: bool = false,
-        fg: Data = .{ .static = .default },
-        bg: Data = .{ .static = .default },
-
-        pub const Data = union {
-            static: color.Hex,
-            active: color.Active,
-        };
+    pub const Color = union(enum) {
+        active: color.Active,
+        static: color.Hex,
     };
 
     pub inline fn check(
@@ -81,20 +76,16 @@ pub const Widget = struct {
         indirect: anytype,
         base: [*]const u8,
     ) struct { color.Hex, color.Hex } {
-        var fg: color.Hex = undefined;
-        var bg: color.Hex = undefined;
-
-        if (self.color.fg_active) {
-            fg = indirect.checkPairs(self.color.fg.active, base);
-        } else {
-            fg = self.color.fg.static;
-        }
-        if (self.color.bg_active) {
-            bg = indirect.checkPairs(self.color.bg.active, base);
-        } else {
-            bg = self.color.bg.static;
-        }
-        return .{ fg, bg };
+        return .{
+            switch (self.fg) {
+                .active => |active| indirect.checkPairs(active, base),
+                .static => |static| static,
+            },
+            switch (self.bg) {
+                .active => |active| indirect.checkPairs(active, base),
+                .static => |static| static,
+            },
+        };
     }
 
     pub const NoopIndirect = struct {

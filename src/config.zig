@@ -620,12 +620,8 @@ pub fn parse(
                 };
                 switch (data) {
                     .static => |hex| switch (co.type) {
-                        .fg => current.color.fg = .{
-                            .static = .init(hex),
-                        },
-                        .bg => current.color.bg = .{
-                            .static = .init(hex),
-                        },
+                        .fg => current.fg = .{ .static = .init(hex) },
+                        .bg => current.bg = .{ .static = .init(hex) },
                     },
                     .active => |active| {
                         const wid = current.wid.castTo(typ.Widget.Id.ActiveColorSupported);
@@ -667,7 +663,7 @@ pub fn parse(
 
                         switch (co.type) {
                             .fg => {
-                                current.color.fg = .{
+                                current.fg = .{
                                     .active = .{
                                         .opt = opt,
                                         .pairs = .{
@@ -676,16 +672,17 @@ pub fn parse(
                                         },
                                     },
                                 };
-                                current.color.fg_active = true;
                             },
                             .bg => {
-                                current.color.bg = .{
-                                    .active = .{ .opt = opt, .pairs = .{
-                                        .off = @intCast(off),
-                                        .len = @intCast(active.pairs.len),
-                                    } },
+                                current.bg = .{
+                                    .active = .{
+                                        .opt = opt,
+                                        .pairs = .{
+                                            .off = @intCast(off),
+                                            .len = @intCast(active.pairs.len),
+                                        },
+                                    },
                                 };
-                                current.color.bg_active = true;
                             },
                         }
                     },

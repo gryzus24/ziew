@@ -16,7 +16,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
 
     _ = c.localtime_r(&c.time(null), &tm);
 
-    utl.writeBlockBeg(writer, w.color.fg.static, w.color.bg.static);
+    utl.writeBlockBeg(writer, w.fg.static, w.bg.static);
     const nr_written = c.strftime(&outbuf, outbuf.len, wd.format, &tm);
     if (nr_written == 0) {
         @branchHint(.unlikely);

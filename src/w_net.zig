@@ -329,7 +329,7 @@ pub fn widget(
 
     if (demands & INET > 0)
         inet = getInet(Static.sock, &wd.ifr, &_inetbuf);
-    if (demands & (FLAGS | STATE) > 0 or w.color.fg_active or w.color.bg_active)
+    if (demands & (FLAGS | STATE) > 0 or w.fg == .active or w.bg == .active)
         flags = getFlags(Static.sock, &wd.ifr, &_iffbuf, &up);
 
     var new_if: ?*IFace = null;

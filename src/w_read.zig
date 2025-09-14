@@ -62,8 +62,8 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
     const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| {
         return writeBlockError(
             writer,
-            w.color.fg.static,
-            w.color.bg.static,
+            w.fg.static,
+            w.bg.static,
             wd.basename,
             @errorName(e),
         );
@@ -76,8 +76,8 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
     };
 
     var pos: usize = 0;
-    var fg = w.color.fg.static;
-    var bg = w.color.bg.static;
+    var fg = w.fg.static;
+    var bg = w.bg.static;
 
     for (wd.format.parts.get(base)) |*part| {
         if (@as(typ.ReadOpt, @enumFromInt(part.opt)) == .content) {
