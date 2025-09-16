@@ -1,5 +1,6 @@
 const std = @import("std");
 const color = @import("color.zig");
+const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 const utl = @import("util.zig");
@@ -9,12 +10,12 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 
-const CPUS_MAX = 64;
-
 const Cpu = struct {
-    fields: [NR_FIELDS]u64 = .{0} ** NR_FIELDS,
+    fields: [NR_FIELDS]u64,
 
     const NR_FIELDS = 8;
+
+    pub const zero: Cpu = .{ .fields = .{0} ** NR_FIELDS };
 
     pub fn user(self: @This()) u64 {
         // user time includes guest time,
@@ -34,9 +35,15 @@ const Cpu = struct {
     }
 
     const Delta = struct {
-        all: unt.F5608 = .init(0),
-        user: unt.F5608 = .init(0),
-        sys: unt.F5608 = .init(0),
+        all: unt.F5608,
+        user: unt.F5608,
+        sys: unt.F5608,
+
+        pub const zero: Delta = .{
+            .all = .init(0),
+            .user = .init(0),
+            .sys = .init(0),
+        };
     };
 
     pub fn delta(self: *const Cpu, oldself: *const Cpu, mul: u64) Delta {
@@ -47,7 +54,7 @@ const Cpu = struct {
 
         if (total_delta == 0) {
             @branchHint(.cold);
-            return .{};
+            return .zero;
         }
 
         const u_delta_pct = u_delta * 100 * mul;
@@ -62,25 +69,41 @@ const Cpu = struct {
 };
 
 const Stat = struct {
-    intr: u64 = 0,
-    ctxt: u64 = 0,
-    forks: u64 = 0,
-    running: u32 = 0,
-    blocked: u32 = 0,
-    softirq: u64 = 0,
-    nr_entries: u32 = 0,
-    entries: [1 + CPUS_MAX]Cpu = .{Cpu{}} ** (1 + CPUS_MAX),
+    intr: u64,
+    ctxt: u64,
+    forks: u64,
+    running: u32,
+    blocked: u32,
+    softirq: u64,
+    entries: [*]Cpu,
+    nr_cpux_entries: usize,
+
+    pub fn initZero(reg: *m.Region, nr_possible_cpus: u32) !@This() {
+        // First entry is the cumulative stat of every CPU.
+        const entries = try reg.frontAllocMany(Cpu, nr_possible_cpus + 1);
+        for (0..entries.len) |i| entries[i] = .zero;
+        return .{
+            .intr = 0,
+            .ctxt = 0,
+            .forks = 0,
+            .running = 0,
+            .blocked = 0,
+            .softirq = 0,
+            .entries = entries.ptr,
+            .nr_cpux_entries = 0,
+        };
+    }
 };
 
 // == private =================================================================
 
 fn parseProcStat(buf: []const u8, new: *Stat) void {
     var cpui: u32 = 0;
-    var i: usize = "cpu".len;
+    var i = "cpu ".len;
     while (buf[i] == ' ') : (i += 1) {}
     while (true) {
-        for (0..Cpu.NR_FIELDS) |fieldi| {
-            new.entries[cpui].fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
+        for (0..Cpu.NR_FIELDS) |fi| {
+            new.entries[cpui].fields[fi] = utl.atou64ForwardUntil(buf, &i, ' ');
             i += 1;
         }
         // cpuXX  41208 ... 1061 0 [0] 0\n
@@ -93,8 +116,6 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         while (buf[i] != ' ') : (i += 1) {}
         i += 1;
         cpui += 1;
-        if (cpui == new.entries.len)
-            utl.fatal(&.{"CPU: too many CPUs, recompile with higher CPUS_MAX"});
     }
     i += "intr ".len;
     new.intr = utl.atou64ForwardUntil(buf, &i, ' ');
@@ -121,8 +142,8 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
 
     new.ctxt = utl.atou64BackwardUntil(buf, &i, ' ');
 
-    // Value of `nr_cpu_entries` may change - CPUs might go online/offline.
-    new.nr_entries = cpui;
+    // Value of `Stat.nr_cpux_entries` may change - CPUs might go online/offline.
+    new.nr_cpux_entries = cpui;
 }
 
 test "/proc/stat parser" {
@@ -206,17 +227,25 @@ fn blkBarIntensity(new: *const Cpu, old: *const Cpu) u32 {
 // == public ==================================================================
 
 pub const CpuState = struct {
-    left: Stat = .{},
-    right: Stat = .{},
-    left_newest: bool = false,
+    left: Stat,
+    right: Stat,
+    left_newest: bool,
 
-    usage_pct: Cpu.Delta = .{},
-    usage_abs: Cpu.Delta = .{},
+    usage_pct: Cpu.Delta,
+    usage_abs: Cpu.Delta,
 
     proc_stat: fs.File,
 
-    pub fn init() CpuState {
+    pub fn init(reg: *m.Region) !CpuState {
+        const nr_cpus = utl.nrPossibleCpus();
+        const left: Stat = try .initZero(reg, nr_cpus);
+        const right: Stat = try .initZero(reg, nr_cpus);
         return .{
+            .left = left,
+            .right = right,
+            .left_newest = false,
+            .usage_pct = .zero,
+            .usage_abs = .zero,
             .proc_stat = fs.cwd().openFileZ("/proc/stat", .{}) catch |e| {
                 utl.fatal(&.{ "open: /proc/stat: ", @errorName(e) });
             },
@@ -253,7 +282,7 @@ pub const CpuState = struct {
 };
 
 pub fn update(state: *CpuState) void {
-    var buf: [4096 << 1]u8 = undefined;
+    var buf: [2 * 4096]u8 = undefined;
 
     const nr_read = state.proc_stat.pread(&buf, 0) catch |e| {
         utl.fatal(&.{ "CPU: pread: ", @errorName(e) });
@@ -261,11 +290,11 @@ pub fn update(state: *CpuState) void {
     if (nr_read == buf.len)
         utl.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
-    var new, const old = state.newStateFlip();
+    const new, const old = state.newStateFlip();
 
     parseProcStat(buf[0..nr_read], new);
     state.usage_pct = new.entries[0].delta(&old.entries[0], 1);
-    state.usage_abs = new.entries[0].delta(&old.entries[0], new.nr_entries);
+    state.usage_abs = new.entries[0].delta(&old.entries[0], new.nr_cpux_entries);
 }
 
 pub fn widget(
@@ -286,7 +315,7 @@ pub fn widget(
         if (cpuopt == .brlbars) {
             var left: u32 = 0;
             var right: u32 = 0;
-            for (1..1 + new.nr_entries) |i| {
+            for (1..1 + new.nr_cpux_entries) |i| {
                 if (i & 1 == 1) {
                     left = brlBarIntensity(&new.entries[i], &old.entries[i]);
                 } else {
@@ -294,12 +323,12 @@ pub fn widget(
                     utl.writeStr(writer, BRLBARS[left][right]);
                 }
             }
-            if (new.nr_entries & 1 == 1)
+            if (new.nr_cpux_entries & 1 == 1)
                 utl.writeStr(writer, BRLBARS[left][0]);
 
             continue;
         } else if (cpuopt == .blkbars) {
-            for (1..1 + new.nr_entries) |i| {
+            for (1..1 + new.nr_cpux_entries) |i| {
                 utl.writeStr(
                     writer,
                     BLKBARS[blkBarIntensity(&new.entries[i], &old.entries[i])],

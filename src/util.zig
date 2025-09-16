@@ -218,6 +218,7 @@ pub inline fn atou64ForwardUntilOrEOF(
     i.* = j;
     return r;
 }
+
 pub inline fn atou64BackwardUntil(
     buf: []const u8,
     i: *usize,
@@ -261,4 +262,31 @@ pub fn nrDigits(n: u64) u5 {
 
 pub fn calc(new: u64, old: u64, diff: bool) u64 {
     return if (diff) new - old else new;
+}
+
+pub const NR_POSSIBLE_CPUS_MAX = 64;
+
+pub fn nrPossibleCpus() u32 {
+    const path = "/sys/devices/system/cpu/possible";
+    const file = fs.cwd().openFileZ(path, .{}) catch |e| switch (e) {
+        error.FileNotFound => return NR_POSSIBLE_CPUS_MAX,
+        else => fatal(&.{ "open: ", path, ": ", @errorName(e) }),
+    };
+    defer file.close();
+
+    var buf: [16]u8 = undefined;
+    const nr_read = file.read(&buf) catch |e| {
+        fatal(&.{ "read: ", @errorName(e) });
+    };
+    if (nr_read < 2) fatal(&.{"read: empty cpu/possible"});
+
+    var i: usize = nr_read - 2;
+    while (i > 0) : (i -= 1) {
+        if (buf[i] == '-') {
+            i += 1;
+            break;
+        }
+    }
+    const r: u32 = @intCast(atou64ForwardUntil(&buf, &i, '\n') + 1);
+    return @min(r, NR_POSSIBLE_CPUS_MAX);
 }

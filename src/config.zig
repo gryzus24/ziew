@@ -548,9 +548,9 @@ pub fn parse(
         if (line.len == 0) continue;
         if (line[0] == '#') continue;
 
-        var tmpreg: m.Region = .init(scratch, "cfg_tmp");
+        var tmp: m.Region = .init(scratch, "cfg_tmp");
 
-        switch (try parseLine(&tmpreg, line)) {
+        switch (try parseLine(&tmp, line)) {
             .widget => |wi| {
                 current = try reg.backPushVec(&widgets);
                 current.* = .initDefault(wi.wid);

@@ -217,7 +217,7 @@ pub fn main() !void {
     for (widgets) |*w| switch (w.wid) {
         .CPU => {
             if (!cpu_state_inited) {
-                cpu_state = .init();
+                cpu_state = try .init(&reg);
                 cpu_state_inited = true;
             }
         },
@@ -256,6 +256,7 @@ pub fn main() !void {
         for (widgets, 0..) |*w, i| {
             w.interval_now -|= sleep_dsec;
             if (w.interval_now == 0) {
+                @branchHint(.likely);
                 w.interval_now = w.interval;
 
                 if (w.wid == .CPU and !cpu_updated) {
@@ -286,7 +287,7 @@ pub fn main() !void {
             }
         }
 
-        const dst = reg.head.ptr[reg.front..reg.back];
+        const dst = base[reg.front..reg.back];
 
         dst[0] = ',';
         dst[1] = '[';
