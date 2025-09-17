@@ -98,12 +98,11 @@ const Stat = struct {
 // == private =================================================================
 
 fn parseProcStat(buf: []const u8, new: *Stat) void {
-    var cpui: u32 = 0;
-    var i = "cpu ".len;
-    while (buf[i] == ' ') : (i += 1) {}
+    var cpu: usize = 0;
+    var i = "cpu  ".len;
     while (true) {
         for (0..Cpu.NR_FIELDS) |fi| {
-            new.entries[cpui].fields[fi] = utl.atou64ForwardUntil(buf, &i, ' ');
+            new.entries[cpu].fields[fi] = utl.atou64ForwardUntil(buf, &i, ' ');
             i += 1;
         }
         // cpuXX  41208 ... 1061 0 [0] 0\n
@@ -115,7 +114,7 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         i += "cpuX".len;
         while (buf[i] != ' ') : (i += 1) {}
         i += 1;
-        cpui += 1;
+        cpu += 1;
     }
     i += "intr ".len;
     new.intr = utl.atou64ForwardUntil(buf, &i, ' ');
@@ -143,7 +142,7 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
     new.ctxt = utl.atou64BackwardUntil(buf, &i, ' ');
 
     // Value of `Stat.nr_cpux_entries` may change - CPUs might go online/offline.
-    new.nr_cpux_entries = cpui;
+    new.nr_cpux_entries = cpu;
 }
 
 test "/proc/stat parser" {
@@ -171,7 +170,9 @@ test "/proc/stat parser" {
         \\procs_blocked 0
         \\softirq 4426117 1410160 300541 4 137919 8958 0 465908 1604918 6 497706
     ;
-    var s: Stat = .{};
+    var tmem: [4096]u8 align(16) = undefined;
+    var reg: m.Region = .init(&tmem, "cputest");
+    var s: Stat = try .initZero(&reg, utl.nrPossibleCpus());
     parseProcStat(buf, &s);
     try t.expect(s.entries[0].fields[0] == 46232);
     try t.expect(s.entries[0].fields[1] == 14);
