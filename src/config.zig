@@ -140,7 +140,7 @@ const FormatSplitter = struct {
             r.ok.part.end = self.i;
             return r;
         }
-        return .fail(.no_close, .{ .beg = r.ok.opt.beg, .end = self.i });
+        return .fail(.no_close, .{ .beg = r.ok.part.end, .end = self.i });
     }
 };
 
@@ -371,9 +371,9 @@ const ParseLineResult = union(enum) {
     color: struct {
         type: ColorIdentifier,
         data: ?union(enum) {
-            static: [6]u8,
+            hex: [6]u8,
             active: struct {
-                opt: []const u8,
+                opt: Split,
                 pairs: []color.Active.Pair,
             },
         } = null,
@@ -435,10 +435,10 @@ fn parseLine(tmp: *m.Region, line: []const u8) !ParseLineResult {
             },
             .color_default_or_active => {
                 if (color.acceptHex(field)) |ok| {
-                    result.color.data = .{ .static = ok };
+                    result.color.data = .{ .hex = ok };
                     want = .color_default_done;
                 } else {
-                    result.color.data = .{ .active = .{ .opt = field, .pairs = &.{} } };
+                    result.color.data = .{ .active = .{ .opt = split, .pairs = &.{} } };
                     want = .color_active_pair;
                 }
             },
@@ -619,31 +619,38 @@ pub fn parse(
                     );
                 };
                 switch (data) {
-                    .static => |hex| switch (co.type) {
+                    .hex => |hex| switch (co.type) {
                         .fg => current.fg = .{ .static = .init(hex) },
                         .bg => current.bg = .{ .static = .init(hex) },
                     },
                     .active => |active| {
+                        if (current.wid.supportsDefaultColorOnly())
+                            return .fail(
+                                "bad hex: widget doesn't support thresh:#hex pairs",
+                                line,
+                                line_nr,
+                                active.opt,
+                            );
+
                         const wid = current.wid.castTo(typ.Widget.Id.ActiveColorSupported);
-                        const opt = switch (strColorOpt(wid, active.opt)) {
+                        const name = line[active.opt.beg..active.opt.end];
+                        const opt = switch (strColorOpt(wid, name)) {
                             .opt => |o| o,
                             .err => |e| switch (e.what) {
                                 .unknown => {
-                                    log.warn(&.{ "unknown option: ", e.str });
                                     return .fail(
                                         "unknown option",
                                         line,
                                         line_nr,
-                                        .zero,
+                                        active.opt,
                                     );
                                 },
                                 .unsupported => {
-                                    log.warn(&.{ "unsupported option: ", e.str });
                                     return .fail(
-                                        "option doesn't support color pairs",
+                                        "option doesn't support thresh:#hex pairs",
                                         line,
                                         line_nr,
-                                        .zero,
+                                        active.opt,
                                     );
                                 },
                             },
@@ -653,7 +660,7 @@ pub fn parse(
                                 "option requires thresh:#hex pairs",
                                 line,
                                 line_nr,
-                                .zero,
+                                active.opt,
                             );
                         }
                         const T = color.Active.Pair;
@@ -692,4 +699,145 @@ pub fn parse(
         }
     }
     return .{ .ok = widgets };
+}
+
+fn testParse(comptime s: []const u8, reg: *m.Region, scratch: []align(16) u8) !ParseResult {
+    var ior: io.Reader = .fixed(s);
+    return try parse(reg, &ior, scratch);
+}
+
+fn testDiag(r: ParseResult, note: []const u8, line_nr: usize, field: Split) !void {
+    const t = std.testing;
+    std.debug.print("{s}\n", .{r.err.note});
+    try t.expect(mem.eql(u8, r.err.note, note));
+    try t.expect(r.err.line_nr == line_nr);
+    try t.expect(r.err.field.beg == field.beg);
+    try t.expect(r.err.field.end == field.end);
+}
+
+test parse {
+    const t = std.testing;
+    var buf: [0x2000]u8 align(64) = undefined;
+    var reg: m.Region = .init(&buf, "cfgtest");
+    var scratch: [256]u8 align(16) = undefined;
+
+    var ior: io.Reader = .fixed("\n");
+    var r = try parse(&reg, &ior, &scratch);
+    try t.expect(r.ok.len == 0);
+
+    r = try testParse("C\n", &reg, &scratch);
+    try testDiag(r, "unknown identifier", 1, .{ .beg = 0, .end = 1 });
+
+    r = try testParse("\n#\t\n\n\nC\n", &reg, &scratch);
+    try testDiag(r, "unknown identifier", 5, .{ .beg = 0, .end = 1 });
+
+    r = try testParse("CPU\n", &reg, &scratch);
+    try testDiag(r, "widget requires interval", 1, .zero);
+
+    r = try testParse("CPU a\n", &reg, &scratch);
+    try testDiag(r, "bad interval", 1, .{ .beg = 4, .end = 5 });
+
+    r = try testParse("CPU 0.2\n", &reg, &scratch);
+    try testDiag(r, "bad interval", 1, .{ .beg = 4, .end = 7 });
+
+    r = try testParse("CPU 1\n", &reg, &scratch);
+    try testDiag(r, "widget requires format parameter", 1, .zero);
+
+    r = try testParse("CPU arg\n", &reg, &scratch);
+    try testDiag(r, "bad interval", 1, .{ .beg = 4, .end = 7 });
+
+    r = try testParse("CPU 1 arg\n", &reg, &scratch);
+    try testDiag(r, "widget requires format parameter", 1, .zero);
+
+    r = try testParse("CPU 1 format\n", &reg, &scratch);
+    try testDiag(r, "widget requires format parameter", 1, .zero);
+
+    r = try testParse("CPU 1 format \"\n", &reg, &scratch);
+    try t.expect(r.ok.len == 1);
+
+    r = try testParse("CPU 1 format \"\"\n", &reg, &scratch);
+    try t.expect(r.ok.len == 1);
+
+    r = try testParse("CPU 1 format \"{\"\n", &reg, &scratch);
+    try testDiag(r, "no closing brace", 1, .{ .beg = 14, .end = 15 });
+
+    r = try testParse("CPU 1 format \"{ \"\n", &reg, &scratch);
+    try testDiag(r, "no closing brace", 1, .{ .beg = 14, .end = 16 });
+
+    r = try testParse("CPU 1 format \"{ \n", &reg, &scratch);
+    try testDiag(r, "no closing brace", 1, .{ .beg = 14, .end = 15 });
+
+    r = try testParse("CPU 1 format \"}\"\n", &reg, &scratch);
+    try testDiag(r, "no opening brace", 1, .{ .beg = 14, .end = 15 });
+
+    r = try testParse("CPU 1 format \"%all}\"\n", &reg, &scratch);
+    try testDiag(r, "no opening brace", 1, .{ .beg = 14, .end = 19 });
+
+    r = try testParse("CPU 1 format %all}\n", &reg, &scratch);
+    try testDiag(r, "no opening brace", 1, .{ .beg = 13, .end = 18 });
+
+    r = try testParse("CPU 1 format {}\n", &reg, &scratch);
+    try testDiag(r, "unknown option", 1, .{ .beg = 14, .end = 14 });
+
+    r = try testParse("CPU 1 format { }\n", &reg, &scratch);
+    try testDiag(r, "bad key", 1, .{ .beg = 15, .end = 16 });
+
+    r = try testParse("CPU 1 format \"{ }\"\n", &reg, &scratch);
+    try testDiag(r, "unknown option", 1, .{ .beg = 15, .end = 16 });
+
+    r = try testParse("CPU 1 format \"{5all}\"\n", &reg, &scratch);
+    try testDiag(r, "unknown option", 1, .{ .beg = 15, .end = 19 });
+
+    // NOTE: underlining could be more precise.
+    r = try testParse("CPU 1 format \"{%all:W}\"\n", &reg, &scratch);
+    try testDiag(r, "unknown specifier", 1, .{ .beg = 15, .end = 21 });
+
+    r = try testParse("CPU 1 format \"{%all:.11}\"\n", &reg, &scratch);
+    try testDiag(r, "excessive precision", 1, .{ .beg = 15, .end = 23 });
+
+    // NOTE: tabs break underlining.
+    r = try testParse("CPU \t1   format {%all@q:.11}\n", &reg, &scratch);
+    try testDiag(r, "excessive precision", 1, .{ .beg = 17, .end = 27 });
+
+    r = try testParse("CPU 1 format {all:.1}\nF", &reg, &scratch);
+    try testDiag(r, "unknown identifier", 2, .{ .beg = 0, .end = 1 });
+
+    r = try testParse("CPU 1 format {all:.1}\nFG", &reg, &scratch);
+    try testDiag(r, "widget's option and thresh:#hex pairs, or #hex required", 2, .zero);
+
+    r = try testParse("CPU 1 format {all:.1}\nFG 2a", &reg, &scratch);
+    try testDiag(r, "unknown option", 2, .{ .beg = 3, .end = 5 });
+
+    r = try testParse("TIME 1962 arg \"%A %d.%m ~ %H:%M:%S\"\nFG 2a", &reg, &scratch);
+    try testDiag(r, "bad hex: widget doesn't support thresh:#hex pairs", 2, .{ .beg = 3, .end = 5 });
+
+    r = try testParse("TIME 1962 arg \"%A %d.%m ~ %H:%M:%S\"\nFG 2ab", &reg, &scratch);
+    try t.expect(r.ok.len == 1);
+
+    r = try testParse("CPU 1 format {all:.1}\nFG all", &reg, &scratch);
+    try testDiag(r, "option doesn't support thresh:#hex pairs", 2, .{ .beg = 3, .end = 6 });
+
+    r = try testParse("CPU 1 format {all:.1}\nFG %all", &reg, &scratch);
+    try testDiag(r, "option requires thresh:#hex pairs", 2, .{ .beg = 3, .end = 7 });
+
+    r = try testParse("CPU 1 format {all:.1}\nFG %all w", &reg, &scratch);
+    try testDiag(r, "missing threshold", 2, .{ .beg = 8, .end = 9 });
+
+    r = try testParse("CPU 1 format {all:.1}\nFG %all w:", &reg, &scratch);
+    try testDiag(r, "bad threshold", 2, .{ .beg = 8, .end = 10 });
+
+    r = try testParse("CPU 1 format {all:.1}\nFG %all 1:", &reg, &scratch);
+    try t.expect(r.ok.len == 1);
+
+    r = try testParse("CPU 1 format {all:.1}\nFG %all 1:fh", &reg, &scratch);
+    try testDiag(r, "bad hex", 2, .{ .beg = 10, .end = 12 });
+
+    r = try testParse("CPU 1 format {all:.1}\nFG %all 1:ff8 98: 99:012 100:dd", &reg, &scratch);
+    try testDiag(r, "bad hex", 2, .{ .beg = 29, .end = 31 });
+
+    r = try testParse("CPU 1 format {all:.1}\nFG %all 1:ff8 98: 99:012 101:dd", &reg, &scratch);
+    try testDiag(r, "threshold too big (0..100)", 2, .{ .beg = 25, .end = 31 });
+
+    r = try testParse("CPU 1 format {all:.1}\nFG %all 1:ff8 98: 99:012 101:ddd", &reg, &scratch);
+    try testDiag(r, "threshold too big (0..100)", 2, .{ .beg = 25, .end = 32 });
 }
