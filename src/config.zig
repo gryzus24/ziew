@@ -718,7 +718,6 @@ fn testParse(comptime s: []const u8, reg: *m.Region, scratch: []align(16) u8) !P
 
 fn testDiag(r: ParseResult, note: []const u8, line_nr: usize, field: Split) !void {
     const t = std.testing;
-    std.debug.print("{s}\n", .{r.err.note});
     try t.expect(mem.eql(u8, r.err.note, note));
     try t.expect(r.err.line_nr == line_nr);
     try t.expect(r.err.field.beg == field.beg);
