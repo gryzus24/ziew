@@ -73,19 +73,25 @@ fn readArgs() Args {
 
 fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     @branchHint(.cold);
-    const log = utl.openLog();
+    var buf: [256]u8 = undefined;
+
+    const log: utl.Log = .open();
     log.log("fatal: config: ");
     log.log(diag.note);
     log.log("\n");
-    log.log(utl.bssPrint("{:<7}{s}\n", .{ diag.line_nr, diag.line }));
-    const beg = @min(diag.field.beg, m.g_logging_bss.len);
-    const end = @min(diag.field.end, m.g_logging_bss.len);
+
+    var fw: io.Writer = .fixed(&buf);
+    fw.print("{:<7}{s}\n", .{ diag.line_nr, diag.line }) catch {};
+    log.log(fw.buffered());
+
+    const beg = @min(diag.field.beg, buf.len);
+    const end = @min(diag.field.end, buf.len);
     if (beg < end) {
         log.log(" " ** 7);
-        @memset(m.g_logging_bss[0..beg], ' ');
-        log.log(m.g_logging_bss[0..beg]);
-        @memset(m.g_logging_bss[0 .. end - beg], '~');
-        log.log(m.g_logging_bss[0 .. end - beg]);
+        @memset(buf[0..beg], ' ');
+        log.log(buf[0..beg]);
+        @memset(buf[0 .. end - beg], '~');
+        log.log(buf[0 .. end - beg]);
         log.log("\n");
     }
     linux.exit(1);

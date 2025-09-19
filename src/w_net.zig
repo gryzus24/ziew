@@ -129,7 +129,7 @@ const NetDev = struct {
 
 fn openIoctlSocket() linux.fd_t {
     const ret: isize = @bitCast(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
-    if (ret < 0) utl.fatalFmt("NET: socket errno: {}", .{-ret});
+    if (ret < 0) utl.fatal(&.{"NET: socket"});
     return @intCast(ret);
 }
 
@@ -175,7 +175,7 @@ fn getInet(
         },
         -c.EADDRNOTAVAIL => "<no address>",
         -c.ENODEV => "<no device>",
-        else => utl.fatalFmt("NET: inet errno: {}", .{-ret}),
+        else => utl.fatal(&.{"NET: SIOCGIFADDR"}),
     };
 }
 
@@ -209,7 +209,7 @@ fn getFlags(
             iffbuf[0] = '-';
             break :blk iffbuf[0..1];
         },
-        else => utl.fatalFmt("NET: flags errno: {}", .{-ret}),
+        else => utl.fatal(&.{"NET: SIOCGIFFLAGS"}),
     };
 }
 

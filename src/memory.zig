@@ -188,5 +188,4 @@ pub fn MemSlice(T: type) type {
     };
 }
 
-pub var g_bss: [0x4000 - 1552]u8 align(64) = undefined;
-pub var g_logging_bss: [512]u8 = undefined;
+pub var g_bss: [0x4000 - 1024]u8 align(64) = undefined;
