@@ -446,9 +446,9 @@ pub const ReadOpt = enum {
     pub const ColorSupported = enum {};
 };
 
-pub fn strStartToTaggedWidgetId(str: []const u8) ?Widget.Id {
+pub fn strWid(str: []const u8) ?Widget.Id {
     inline for (@typeInfo(Widget.Id.Tag).@"enum".fields) |field| {
-        if (mem.startsWith(u8, str, field.name))
+        if (mem.eql(u8, str, field.name))
             return @unionInit(Widget.Id, field.name, undefined);
     }
     return null;

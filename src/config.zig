@@ -316,9 +316,9 @@ fn acceptInterval(str: []const u8) ?typ.DeciSec {
 const ColorIdentifier = enum { fg, bg };
 
 fn strColorIdentifier(str: []const u8) ?ColorIdentifier {
-    if (mem.startsWith(u8, str, "FG")) {
+    if (mem.eql(u8, str, "FG")) {
         return .fg;
-    } else if (mem.startsWith(u8, str, "BG")) {
+    } else if (mem.eql(u8, str, "BG")) {
         return .bg;
     } else {
         return null;
@@ -398,7 +398,7 @@ fn parseLine(tmp: *m.Region, line: []const u8) !ParseLineResult {
 
         switch (want) {
             .identifier => {
-                if (typ.strStartToTaggedWidgetId(field)) |wid| {
+                if (typ.strWid(field)) |wid| {
                     result = .{ .widget = .{ .wid = wid } };
                     want = .interval;
                 } else if (strColorIdentifier(field)) |ok| {
@@ -737,6 +737,9 @@ test parse {
     r = try testParse("C\n", &reg, &scratch);
     try testDiag(r, "unknown identifier", 1, .{ .beg = 0, .end = 1 });
 
+    r = try testParse("CPUGAH\n", &reg, &scratch);
+    try testDiag(r, "unknown identifier", 1, .{ .beg = 0, .end = 6 });
+
     r = try testParse("\n#\t\n\n\nC\n", &reg, &scratch);
     try testDiag(r, "unknown identifier", 5, .{ .beg = 0, .end = 1 });
 
@@ -810,6 +813,9 @@ test parse {
 
     r = try testParse("CPU 1 format {all:.1}\nF", &reg, &scratch);
     try testDiag(r, "unknown identifier", 2, .{ .beg = 0, .end = 1 });
+
+    r = try testParse("CPU 1 format {all:.1}\nFGB", &reg, &scratch);
+    try testDiag(r, "unknown identifier", 2, .{ .beg = 0, .end = 3 });
 
     r = try testParse("CPU 1 format {all:.1}\nFG", &reg, &scratch);
     try testDiag(r, "widget's option and thresh:#hex pairs, or #hex required", 2, .zero);
