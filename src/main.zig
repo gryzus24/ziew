@@ -110,7 +110,7 @@ fn loadConfig(reg: *m.Region, config_path: ?[*:0]const u8) []typ.Widget {
 
     const file = fs.cwd().openFileZ(path, .{}) catch |e| switch (e) {
         error.FileNotFound => {
-            log.warn(&.{ "config: file not found: ", path[0..mem.len(path)] });
+            log.warn(&.{ "config: file not found: ", mem.sliceTo(path, 0) });
             log.warn(&.{"using defaults..."});
             return cfg.defaultConfig(reg);
         },

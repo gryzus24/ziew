@@ -96,7 +96,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
             writer,
             switch (@as(typ.ReadOpt, @enumFromInt(part.opt))) {
                 // zig fmt: off
-                .arg      => wd.getPath()[0..mem.len(wd.getPath())],
+                .arg      => mem.sliceTo(wd.getPath(), 0),
                 .basename => wd.getBasename(),
                 .content  => content[pos..],
                 .raw      => content[0..],
