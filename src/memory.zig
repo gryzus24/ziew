@@ -188,4 +188,5 @@ pub fn MemSlice(T: type) type {
     };
 }
 
-pub var g_bss: [0x4000 - 1024]u8 align(64) = undefined;
+// Pack with the rest of BSS, DATA, and fiddle some more to avoid internal fragmentation.
+pub var g_bss: [0x4000 - 1024 - 232 - 0x30]u8 align(64) = undefined;
