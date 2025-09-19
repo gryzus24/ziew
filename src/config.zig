@@ -698,7 +698,17 @@ pub fn parse(
             .err => |e| return .fail(e.note, line, line_nr, e.field),
         }
     }
-    return .{ .ok = widgets };
+
+    // Copy to front so we have a chance of fitting everything in one page.
+    const b = reg.back;
+    reg.back = reg.head.len;
+    var widgets_front: []typ.Widget = &.{};
+    for (widgets) |*w| {
+        const ret = try reg.frontPushVec(&widgets_front);
+        ret.* = w.*;
+    }
+    @memset(reg.head[b..], 0);
+    return .{ .ok = widgets_front };
 }
 
 fn testParse(comptime s: []const u8, reg: *m.Region, scratch: []align(16) u8) !ParseResult {
