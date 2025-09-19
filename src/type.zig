@@ -127,7 +127,7 @@ pub const Widget = struct {
         pub const TimeData = struct {
             format: [FORMAT_SIZE]u8,
 
-            const FORMAT_SIZE = DATA_SIZE_MAX;
+            const FORMAT_SIZE = DATA_SIZE_MAX / 2;
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= FORMAT_SIZE)
@@ -498,7 +498,7 @@ pub const WIDGET_INTERVAL_DEFAULT = 50;
 pub const WIDGET_INTERVAL_MAX = 1 << 31;
 
 /// Individual widget maximum buffer size.
-pub const WIDGET_BUF_MAX = 192;
+pub const WIDGET_BUF_MAX = 128;
 
 // == private =================================================================
 
