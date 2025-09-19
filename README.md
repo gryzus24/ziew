@@ -17,13 +17,13 @@ The configuration file of *ziew* resides at `$XDG_CONFIG_HOME/ziew/config` (usua
 You can [download the prebuilt binary](https://github.com/gryzus24/ziew/releases/download/v0.0.9/ziew) from the Releases page. If you do not trust it you can always build directly from source.
 
 ### Building from source
-To build it you will need Zig 0.15.1. Once inside the cloned repository run:
+To build it you will need `Zig 0.15.1`. Once inside the cloned repository run:
 
 ```
 zig build -p . -Doptimize=ReleaseSmall -Dstrip
 ```
 
-The compiled binary will be placed in ./bin, from there you can copy it to somewhere in your $PATH or change `-p` (prefix) e.g. `-p ~/.local` to place the binary in ~/.local/bin. For a debug build, build without the `-Doptimize` and `-Dstrip` options.
+The compiled binary will be placed in ./bin, from there you can copy it to somewhere in your $PATH or change the installation prefix, i.e. `-p ~/.local` to place the binary in the ~/.local/bin directory. Additionally, you can pass the `-Dmarch=native` option to tell the compiler to optimize for your local processor. For a debug build, build without the `-Doptimize` and `-Dstrip` options.
 
 ## Full documentation
 
@@ -83,7 +83,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
     OPTION    - name of the option that can be compared (widget specific),
     THRESHOLD - if OPTION's value is greater than or equal to THRESHOLD
                 widget's color (FG or BG) will be set to COLOR,
-    COLOR     - hexadecimal RGB color value or either left blank or "default"
+    COLOR     - hexadecimal RGB color value, or either left blank or "default"
                 for the default color.
 
     Example
