@@ -73,7 +73,7 @@ pub const Widget = struct {
         static: color.Hex,
     };
 
-    pub inline fn check(
+    pub fn check(
         self: @This(),
         indirect: anytype,
         base: [*]const u8,

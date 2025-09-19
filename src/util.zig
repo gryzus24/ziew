@@ -122,7 +122,7 @@ pub fn repr(str: ?[]const u8) void {
     }
 }
 
-pub fn unsafeAtou64(buf: []const u8) u64 {
+pub inline fn unsafeAtou64(buf: []const u8) u64 {
     var r: u64 = buf[0] & 0x0f;
     for (buf[1..]) |ch| r = r * 10 + (ch & 0x0f);
     return r;
@@ -176,7 +176,7 @@ pub inline fn atou64BackwardUntil(
     return r;
 }
 
-pub fn nrDigits(n: u64) u5 {
+pub inline fn nrDigits(n: u64) u5 {
     var result: u5 = 1;
     var t = n;
     while (true) {
@@ -189,7 +189,7 @@ pub fn nrDigits(n: u64) u5 {
     }
 }
 
-pub fn calc(new: u64, old: u64, diff: bool) u64 {
+pub inline fn calc(new: u64, old: u64, diff: bool) u64 {
     return if (diff) new - old else new;
 }
 
