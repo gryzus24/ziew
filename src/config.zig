@@ -1,9 +1,9 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
-const utl = @import("util.zig");
 const w_bat = @import("w_bat.zig");
 const w_cpu = @import("w_cpu.zig");
 const w_dysk = @import("w_dysk.zig");
@@ -465,7 +465,7 @@ fn parseLine(tmp: *m.Region, line: []const u8) !ParseLineResult {
                 }
             },
             .color_default_done => {
-                utl.warn(&.{ "config: ignoring garbage after default color: ", line });
+                log.warn(&.{ "config: ignoring garbage after default color: ", line });
                 break;
             },
         }
@@ -538,9 +538,9 @@ pub fn parse(
     var line_nr: usize = 0;
     while (true) {
         const line_ = reader.takeDelimiterExclusive('\n') catch |e| switch (e) {
-            error.ReadFailed => utl.fatal(&.{"config: read failed"}),
+            error.ReadFailed => log.fatal(&.{"config: read failed"}),
             error.EndOfStream => break,
-            error.StreamTooLong => utl.fatal(&.{"config: line too long"}),
+            error.StreamTooLong => log.fatal(&.{"config: line too long"}),
         };
         line_nr += 1;
 
@@ -607,7 +607,7 @@ pub fn parse(
             },
             .color => |co| {
                 if (widgets.len == 0) {
-                    utl.warn(&.{ "config: color without a widget: ", line });
+                    log.warn(&.{ "config: color without a widget: ", line });
                     continue;
                 }
                 const data = co.data orelse {
@@ -629,7 +629,7 @@ pub fn parse(
                             .opt => |o| o,
                             .err => |e| switch (e.what) {
                                 .unknown => {
-                                    utl.warn(&.{ "unknown option: ", e.str });
+                                    log.warn(&.{ "unknown option: ", e.str });
                                     return .fail(
                                         "unknown option",
                                         line,
@@ -638,7 +638,7 @@ pub fn parse(
                                     );
                                 },
                                 .unsupported => {
-                                    utl.warn(&.{ "unsupported option: ", e.str });
+                                    log.warn(&.{ "unsupported option: ", e.str });
                                     return .fail(
                                         "option doesn't support color pairs",
                                         line,

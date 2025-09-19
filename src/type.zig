@@ -1,5 +1,6 @@
 const cfg = @import("config.zig");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const m = @import("memory.zig");
 const std = @import("std");
 const unt = @import("unit.zig");
@@ -130,7 +131,7 @@ pub const Widget = struct {
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= FORMAT_SIZE)
-                    utl.fatal(&.{"TIME: strftime format too long"});
+                    log.fatal(&.{"TIME: strftime format too long"});
 
                 const ret = try reg.frontAlloc(@This());
                 @memcpy(ret.format[0..arg.len], arg);
@@ -172,7 +173,7 @@ pub const Widget = struct {
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= MOUNTPOINT_SIZE)
-                    utl.fatal(&.{"DISK: mountpoint path too long"});
+                    log.fatal(&.{"DISK: mountpoint path too long"});
 
                 const ret = try reg.frontAlloc(@This());
                 ret.format = .zero;
@@ -194,7 +195,7 @@ pub const Widget = struct {
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 var ifr: linux.ifreq = undefined;
                 if (arg.len >= ifr.ifrn.name.len)
-                    utl.fatal(&.{ "NET: interface name too long: ", arg });
+                    log.fatal(&.{ "NET: interface name too long: ", arg });
 
                 const ret = try reg.frontAlloc(@This());
                 @memset(ifr.ifrn.name[0..], 0);
@@ -213,7 +214,7 @@ pub const Widget = struct {
             const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= 16) utl.fatal(&.{"BAT: battery name too long"});
+                if (arg.len >= 16) log.fatal(&.{"BAT: battery name too long"});
 
                 const ret = try reg.frontAlloc(@This());
                 ret.format = .zero;
@@ -245,7 +246,7 @@ pub const Widget = struct {
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 if (arg.len >= PATH_SIZE)
-                    utl.fatal(&.{"READ: path too long"});
+                    log.fatal(&.{"READ: path too long"});
 
                 const ret = try reg.frontAlloc(@This());
                 ret.format = .zero;

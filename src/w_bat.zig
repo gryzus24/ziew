@@ -1,5 +1,6 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
@@ -91,22 +92,22 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
             utl.writeStr(writer, ": <not found>");
             return utl.writeBlockEnd(writer);
         },
-        else => utl.fatal(&.{ "BAT: check: ", @errorName(e) }),
+        else => log.fatal(&.{ "BAT: check: ", @errorName(e) }),
     };
     defer file.close();
 
     var buf: [1024]u8 = undefined;
     const nr_read = file.read(&buf) catch |e| {
-        utl.fatal(&.{ "BAT: read: ", @errorName(e) });
+        log.fatal(&.{ "BAT: read: ", @errorName(e) });
     };
-    if (nr_read == 0) utl.fatal(&.{"BAT: empty uevent"});
+    if (nr_read == 0) log.fatal(&.{"BAT: empty uevent"});
 
     var bat: Bat = .{};
 
     var lines = mem.tokenizeScalar(u8, buf[0..nr_read], '\n');
     while (lines.next()) |line| {
         const eqi = mem.indexOfScalar(u8, line, '=') orelse {
-            utl.fatal(&.{"BAT: crazy uevent"});
+            log.fatal(&.{"BAT: crazy uevent"});
         };
         const key = line[0..eqi];
         const val = line[eqi + 1 ..];

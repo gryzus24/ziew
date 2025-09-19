@@ -1,5 +1,6 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
@@ -248,7 +249,7 @@ pub const CpuState = struct {
             .usage_pct = .zero,
             .usage_abs = .zero,
             .proc_stat = fs.cwd().openFileZ("/proc/stat", .{}) catch |e| {
-                utl.fatal(&.{ "open: /proc/stat: ", @errorName(e) });
+                log.fatal(&.{ "open: /proc/stat: ", @errorName(e) });
             },
         };
     }
@@ -286,10 +287,10 @@ pub fn update(state: *CpuState) void {
     var buf: [2 * 4096]u8 = undefined;
 
     const nr_read = state.proc_stat.pread(&buf, 0) catch |e| {
-        utl.fatal(&.{ "CPU: pread: ", @errorName(e) });
+        log.fatal(&.{ "CPU: pread: ", @errorName(e) });
     };
     if (nr_read == buf.len)
-        utl.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
+        log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
     const new, const old = state.newStateFlip();
 

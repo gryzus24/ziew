@@ -1,5 +1,6 @@
 const std = @import("std");
 const cfg = @import("config.zig");
+const log = @import("log.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
@@ -75,24 +76,24 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     @branchHint(.cold);
     var buf: [256]u8 = undefined;
 
-    const log: utl.Log = .open();
-    log.log("fatal: config: ");
-    log.log(diag.note);
-    log.log("\n");
+    const l: log.Log = .open();
+    l.log("fatal: config: ");
+    l.log(diag.note);
+    l.log("\n");
 
     var fw: io.Writer = .fixed(&buf);
     fw.print("{:<7}{s}\n", .{ diag.line_nr, diag.line }) catch {};
-    log.log(fw.buffered());
+    l.log(fw.buffered());
 
     const beg = @min(diag.field.beg, buf.len);
     const end = @min(diag.field.end, buf.len);
     if (beg < end) {
-        log.log(" " ** 7);
+        l.log(" " ** 7);
         @memset(buf[0..beg], ' ');
-        log.log(buf[0..beg]);
+        l.log(buf[0..beg]);
         @memset(buf[0 .. end - beg], '~');
-        log.log(buf[0 .. end - beg]);
-        log.log("\n");
+        l.log(buf[0 .. end - beg]);
+        l.log("\n");
     }
     linux.exit(1);
 }
@@ -108,21 +109,21 @@ fn loadConfig(reg: *m.Region, config_path: ?[*:0]const u8) []typ.Widget {
                 break :blk ok;
             } else |e| switch (e) {
                 error.NoPath => {
-                    utl.warn(&.{"unknown config file path: using defaults..."});
+                    log.warn(&.{"unknown config file path: using defaults..."});
                     return cfg.defaultConfig(reg);
                 },
-                error.NoSpaceLeft => utl.fatal(&.{"config path too long"}),
+                error.NoSpaceLeft => log.fatal(&.{"config path too long"}),
             }
         }
     };
 
     const file = fs.cwd().openFileZ(path, .{}) catch |e| switch (e) {
         error.FileNotFound => {
-            utl.warn(&.{ "config: file not found: ", path[0..mem.len(path)] });
-            utl.warn(&.{"using defaults..."});
+            log.warn(&.{ "config: file not found: ", path[0..mem.len(path)] });
+            log.warn(&.{"using defaults..."});
             return cfg.defaultConfig(reg);
         },
-        else => utl.fatal(&.{ "config: open: ", @errorName(e) }),
+        else => log.fatal(&.{ "config: open: ", @errorName(e) }),
     };
     defer file.close();
 
@@ -132,7 +133,7 @@ fn loadConfig(reg: *m.Region, config_path: ?[*:0]const u8) []typ.Widget {
     var reader = file.reader(&linebuf);
 
     const ret = cfg.parse(reg, &reader.interface, &scratch) catch |e| switch (e) {
-        error.NoSpaceLeft => utl.fatal(&.{"config: out of memory"}),
+        error.NoSpaceLeft => log.fatal(&.{"config: out of memory"}),
     };
     const widgets = switch (ret) {
         .ok => |w| w,
@@ -140,7 +141,7 @@ fn loadConfig(reg: *m.Region, config_path: ?[*:0]const u8) []typ.Widget {
     };
 
     if (widgets.len == 0) {
-        utl.warn(&.{"no widgets loaded: using defaults..."});
+        log.warn(&.{"no widgets loaded: using defaults..."});
         return cfg.defaultConfig(reg);
     }
     return widgets;
@@ -156,7 +157,7 @@ fn getConfigPath(reg: *m.Region) error{ NoSpaceLeft, NoPath }![*:0]const u8 {
         n += (try reg.frontWriteStr(ok)).len;
         n += (try reg.frontWriteStr("/.config/ziew/config\x00")).len;
     } else {
-        utl.warn(&.{"neither $HOME nor $XDG_CONFIG_HOME set!"});
+        log.warn(&.{"neither $HOME nor $XDG_CONFIG_HOME set!"});
         return error.NoPath;
     }
     return reg.slice(u8, base, n)[0 .. n - 1 :0];
@@ -175,7 +176,7 @@ fn setupSignals() void {
     };
 
     if (linux.sigaction(linux.SIG.USR1, &action, null) != 0) {
-        utl.fatal(&.{"sigaction failed"});
+        log.fatal(&.{"sigaction failed"});
     }
 }
 
@@ -191,7 +192,7 @@ fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
         }
     }
     if (gcd < min) {
-        utl.warn(&.{"gcd of intervals < minimum interval, widget refreshes will be inexact"});
+        log.warn(&.{"gcd of intervals < minimum interval, widget refreshes will be inexact"});
     }
     // NOTE: gcd is the obvious choice here, but it might prove
     //       disastrous if the interval is misconfigured...

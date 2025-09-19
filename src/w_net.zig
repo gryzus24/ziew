@@ -1,5 +1,6 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
@@ -129,7 +130,7 @@ const NetDev = struct {
 
 fn openIoctlSocket() linux.fd_t {
     const ret: isize = @bitCast(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
-    if (ret < 0) utl.fatal(&.{"NET: socket"});
+    if (ret < 0) log.fatal(&.{"NET: socket"});
     return @intCast(ret);
 }
 
@@ -175,7 +176,7 @@ fn getInet(
         },
         -c.EADDRNOTAVAIL => "<no address>",
         -c.ENODEV => "<no device>",
-        else => utl.fatal(&.{"NET: SIOCGIFADDR"}),
+        else => log.fatal(&.{"NET: SIOCGIFADDR"}),
     };
 }
 
@@ -209,7 +210,7 @@ fn getFlags(
             iffbuf[0] = '-';
             break :blk iffbuf[0..1];
         },
-        else => utl.fatal(&.{"NET: SIOCGIFFLAGS"}),
+        else => log.fatal(&.{"NET: SIOCGIFFLAGS"}),
     };
 }
 
@@ -257,7 +258,7 @@ pub const NetState = struct {
         if (proc_net_dev_required) {
             return .{
                 .proc_net_dev = fs.cwd().openFileZ("/proc/net/dev", .{}) catch |e| {
-                    utl.fatal(&.{ "open: /proc/net/dev: ", @errorName(e) });
+                    log.fatal(&.{ "open: /proc/net/dev: ", @errorName(e) });
                 },
                 .left = .{ .reg = reg },
                 .right = .{ .reg = reg },
@@ -282,16 +283,16 @@ pub const NetState = struct {
 pub fn update(state: *NetState) void {
     var buf: [4096]u8 = undefined;
     const nr_read = state.proc_net_dev.pread(&buf, 0) catch |e| {
-        utl.fatal(&.{ "NET: pread: ", @errorName(e) });
+        log.fatal(&.{ "NET: pread: ", @errorName(e) });
     };
     if (nr_read == buf.len)
-        utl.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
+        log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
     const new, _ = state.newStateFlip();
     new.freeAll();
 
     parseProcNetDev(buf[0..nr_read], new) catch |e| {
-        utl.fatal(&.{ "NET: parse /proc/net/dev: ", @errorName(e) });
+        log.fatal(&.{ "NET: parse /proc/net/dev: ", @errorName(e) });
     };
 }
 

@@ -1,5 +1,6 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
 const utl = @import("util.zig");
@@ -72,7 +73,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
 
     var buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
     const content = readFileUntil(file, FILE_END_MARKERS, &buf) catch |e| {
-        utl.fatal(&.{ "READ: read: ", wd.getBasename(), @errorName(e) });
+        log.fatal(&.{ "READ: read: ", wd.getBasename(), @errorName(e) });
     };
 
     var pos: usize = 0;
