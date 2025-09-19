@@ -100,21 +100,12 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
 
 fn loadConfig(reg: *m.Region, config_path: ?[*:0]const u8) []typ.Widget {
     @branchHint(.cold);
-
-    const path: [*:0]const u8 = blk: {
-        if (config_path) |ok| {
-            break :blk ok;
-        } else {
-            if (getConfigPath(reg)) |ok| {
-                break :blk ok;
-            } else |e| switch (e) {
-                error.NoPath => {
-                    log.warn(&.{"unknown config file path: using defaults..."});
-                    return cfg.defaultConfig(reg);
-                },
-                error.NoSpaceLeft => log.fatal(&.{"config path too long"}),
-            }
-        }
+    const path = config_path orelse getConfigPath(reg) catch |e| switch (e) {
+        error.NoPath => {
+            log.warn(&.{"unknown config file path: using defaults..."});
+            return cfg.defaultConfig(reg);
+        },
+        error.NoSpaceLeft => log.fatal(&.{"config path too long"}),
     };
 
     const file = fs.cwd().openFileZ(path, .{}) catch |e| switch (e) {
