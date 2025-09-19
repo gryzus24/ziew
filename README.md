@@ -32,7 +32,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
 
 ### Widget line
 
-    WIDGET INTERVAL [arg="ARGUMENT"] [format="FORMAT"]
+    WIDGET INTERVAL [arg "ARGUMENT"] [format "FORMAT"]
 
     WIDGET   - uppercase name of the widget,
     INTERVAL - refresh interval in deciseconds (1/10 of a second),
@@ -63,7 +63,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                             width if unspecified).
 
     Example
-      CPU 25 format="CPU {%all:>3} {blkbars} {forks@dq:>}"
+      CPU 25 format "CPU {%all:>3} {blkbars} {forks@dq:>}"
 
 ### Default color line
 
@@ -110,7 +110,7 @@ Every option and color configuration for each *Widget* is documented below.
     Displays current date and time.
 
     Required
-      arg="ARGUMENT"
+      arg "ARGUMENT"
 
     ARGUMENT
       This widget is special in that its entire argument format is documented
@@ -121,7 +121,7 @@ Every option and color configuration for each *Widget* is documented below.
       [ ] conditional (unsupported)
 
     Example config entry
-      TIME 20 arg="%A %d.%m ~ %H:%M:%S"
+      TIME 20 arg "%A %d.%m ~ %H:%M:%S"
       FG #28ab28
 
 **MEM**
@@ -132,7 +132,7 @@ Every option and color configuration for each *Widget* is documented below.
     K M G T, or as a percentage of total memory if prefixed with a % sign.
 
     Required
-      format="FORMAT"
+      format "FORMAT"
 
     FORMAT options
       * [%]free      - memory which is not utilized at all,
@@ -149,7 +149,7 @@ Every option and color configuration for each *Widget* is documented below.
       [-] conditional (only %-prefixed options supported)
 
     Example config entry
-      MEM 20 format="mem: {used:<2}:{free:>2} [{cached:.0}]"
+      MEM 20 format "mem: {used:<2}:{free:>2} [{cached:.0}]"
       FG %used 0:aaa 50:bbb 60:ccc 70:ddd 80:eee 90:fff
 
 **CPU**
@@ -157,7 +157,7 @@ Every option and color configuration for each *Widget* is documented below.
     Displays cpu usage information from /proc/stat.
 
     Required
-      format="FORMAT"
+      format "FORMAT"
 
     FORMAT options
       * [%]all  - time spent executing both user and kernel code,
@@ -183,7 +183,7 @@ Every option and color configuration for each *Widget* is documented below.
                       supported)
 
     Example config entry
-      CPU 15 format="cpu: {running} {blocked} {brlbars} {all:<}"
+      CPU 15 format "cpu: {running} {blocked} {brlbars} {all:<}"
       FG %all 0:aaa 60:a66 80:f66
 
 **DISK**
@@ -195,8 +195,8 @@ Every option and color configuration for each *Widget* is documented below.
     with a % sign.
 
     Required
-      arg="<MOUNTPOINT>"
-      format="FORMAT"
+      arg "<MOUNTPOINT>"
+      format "FORMAT"
 
     FORMAT options
       * arg          - the provided <MOUNTPOINT> name as specified in the
@@ -213,7 +213,7 @@ Every option and color configuration for each *Widget* is documented below.
       [-] conditional (only %-prefixed options supported)
 
     Example config entry
-      DISK 600 arg="/home" format="{arg} {available}/{total}"
+      DISK 600 arg /home format "{arg} {available}/{total}"
       FG %used 60:a66 80:f66
 
 **NET**
@@ -221,8 +221,8 @@ Every option and color configuration for each *Widget* is documented below.
     Displays current network interface configuration and/or activity.
 
     Required
-      arg="<INTERFACE>"
-      format="FORMAT"
+      arg "<INTERFACE>"
+      format "FORMAT"
 
     FORMAT options
       * arg   - the provided <INTERFACE> name as specified in the argument,
@@ -258,7 +258,7 @@ Every option and color configuration for each *Widget* is documented below.
              1 - interface is up.
 
     Example config entry
-      NET arg="enp5s0" format="{arg}: {inet} {flags} Rx {rx_bytes@dq:>.0}"
+      NET arg enp5s0 format "{arg}: {inet} {flags} Rx {rx_bytes@dq:>.0}"
       FG state 0:888 1:eee
 
 **BAT**
@@ -266,8 +266,8 @@ Every option and color configuration for each *Widget* is documented below.
     Displays power supply statistics from /sys/class/power_supply/<BATTERY>/*.
 
     Required
-      arg="<BATTERY>"
-      format="FORMAT"
+      arg "<BATTERY>"
+      format "FORMAT"
 
     FORMAT options
       * arg         - the <BATTERY> name as specified in the argument,
@@ -287,7 +287,7 @@ Every option and color configuration for each *Widget* is documented below.
              4 - unknown state.
 
     Example config entry
-      BAT 300 arg="BAT0" format="{arg}: {%fulldesign:>2} {state}"
+      BAT 300 arg BAT0 format "{arg}: {%fulldesign:>2} {state}"
       FG state 1:4a4 2:4a4
       BG %fulldesign 0:a00 15:220 25:
 
@@ -298,8 +298,8 @@ Every option and color configuration for each *Widget* is documented below.
     colors.
 
     Required
-      arg="<FILEPATH>"
-      format="FORMAT"
+      arg "<FILEPATH>"
+      format "FORMAT"
 
     FORMAT options
       * arg        the <FILEPATH> name as specified in the argument,
@@ -318,7 +318,7 @@ Every option and color configuration for each *Widget* is documented below.
         [TEXT]                     - default colors
 
     Example config entry
-      READ 10 arg="/home/user/.config/ziew/myfile" format="{arg}: {content}"
+      READ 10 arg /home/user/.config/ziew/myfile format "{arg}: {content}"
 
     Example "myfile" content
       #8a8 greenish text
