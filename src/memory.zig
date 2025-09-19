@@ -1,5 +1,4 @@
 const std = @import("std");
-const utl = @import("util.zig");
 const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
@@ -23,6 +22,13 @@ fn printAlloc(reg: *Region, s: []const u8, comptime T: type, nmemb: usize, pad: 
 }
 
 // == public ==================================================================
+
+pub fn memcpyZ(dst: []u8, src: []const u8) ?[:0]const u8 {
+    if (src.len >= dst.len) return null;
+    @memcpy(dst[0..src.len], src);
+    dst[src.len] = 0;
+    return dst[0..src.len :0];
+}
 
 pub const TRACE_ALLOCATIONS = false;
 
@@ -131,9 +137,7 @@ pub const Region = struct {
 
     pub fn frontWriteStrZ(self: *@This(), str: []const u8) AllocError![:0]const u8 {
         const retptr = try self.frontAllocMany(u8, str.len + 1);
-        @memcpy(retptr[0..str.len], str);
-        retptr[str.len] = 0;
-        return retptr[0..str.len :0];
+        return memcpyZ(retptr, str) orelse unreachable;
     }
 
     pub fn frontPushVec(self: *@This(), vec: anytype) !*meta.Child(@TypeOf(vec.*)) {

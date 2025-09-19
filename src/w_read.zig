@@ -35,7 +35,7 @@ fn acceptColor(str: []const u8, pos: *usize) color.Hex {
     var i: usize = 0;
     defer pos.* += i;
 
-    i = utl.skipSpacesTabs(str, i) orelse return .default;
+    i = mem.indexOfNonePos(u8, str, i, " \t") orelse return .default;
 
     const beg = i;
     if (str[beg] != '#') return .default;

@@ -176,17 +176,6 @@ pub inline fn atou64BackwardUntil(
     return r;
 }
 
-pub fn zeroTerminate(dest: []u8, src: []const u8) ?[:0]const u8 {
-    if (src.len >= dest.len) return null;
-    @memcpy(dest[0..src.len], src);
-    dest[src.len] = 0;
-    return dest[0..src.len :0];
-}
-
-pub fn skipSpacesTabs(str: []const u8, pos: usize) ?usize {
-    return mem.indexOfNonePos(u8, str, pos, " \t");
-}
-
 pub fn nrDigits(n: u64) u5 {
     var result: u5 = 1;
     var t = n;
