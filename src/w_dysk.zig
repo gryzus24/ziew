@@ -13,28 +13,30 @@ const ColorHandler = struct {
     avail_kb: u64,
     total_kb: u64,
 
-    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
+    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
         return color.firstColorGEThreshold(
-            switch (@as(typ.DiskOpt.ColorSupported, @enumFromInt(oc.opt))) {
+            switch (@as(typ.DiskOpt.ColorSupported, @enumFromInt(ac.opt))) {
                 .@"%used" => unt.Percent(self.used_kb, self.total_kb),
                 .@"%free" => unt.Percent(self.free_kb, self.total_kb),
                 .@"%available" => unt.Percent(self.avail_kb, self.total_kb),
             }.n.roundAndTruncate(),
-            oc.colors,
+            ac.pairs.get(base),
         );
     }
 };
 
 // == public ==================================================================
 
-pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
+pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []const u8 {
     const wd = w.wid.DISK;
 
     // TODO: use statvfs instead of this
     var sfs: c.struct_statfs = undefined;
-    if (c.statfs(wd.mountpoint, &sfs) != 0) {
-        utl.writeBlockBeg(writer, wd.fg.getDefault(), wd.bg.getDefault());
-        utl.writeStr(writer, wd.mountpoint);
+    if (c.statfs(wd.getMountpoint(), &sfs) != 0) {
+        const noop: typ.Widget.NoopIndirect = .{};
+        const fg, const bg = w.check(noop, base);
+        utl.writeBlockBeg(writer, fg, bg);
+        utl.writeStr(writer, wd.getMountpoint());
         utl.writeStr(writer, ": <not mounted>");
         return utl.writeBlockEnd(writer);
     }
@@ -72,13 +74,14 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
         .total_kb = total_kb,
     };
 
-    utl.writeBlockBeg(writer, wd.fg.getColor(ch), wd.bg.getColor(ch));
-    for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.str);
+    const fg, const bg = w.check(ch, base);
+    utl.writeBlockBeg(writer, fg, bg);
+    for (wd.format.parts.get(base)) |*part| {
+        utl.writeStr(writer, part.str.get(base));
 
         const diskopt: typ.DiskOpt = @enumFromInt(part.opt);
         if (diskopt == .arg) {
-            utl.writeStr(writer, wd.mountpoint);
+            utl.writeStr(writer, wd.getMountpoint());
             continue;
         }
         (switch (diskopt) {
@@ -92,8 +95,8 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
             .free          => unt.SizeKb(free_kb),
             .available     => unt.SizeKb(avail_kb),
             // zig fmt: on
-        }).write(writer, part.wopts, part.flags.quiet);
+        }).write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.part_last);
+    utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);
 }

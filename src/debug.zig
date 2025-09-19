@@ -177,8 +177,12 @@ pub noinline fn perfEventStart() linux.fd_t { // struct { linux.fd_t, linux.perf
     pe.flags.exclude_hv = true;
 
     const ret: isize = @bitCast(linux.perf_event_open(&pe, 0, 1, -1, 0));
-    if (ret < 0)
-        utl.fatalFmt("perf_event_open: errno: {}\n", .{-ret});
+    if (ret < 0) {
+        var writer = fs.File.stderr().writer(&.{});
+        const stderr = &writer.interface;
+        stderr.print("perf_event_open: errno: {}\n", .{-ret}) catch {};
+        linux.exit(1);
+    }
 
     const fd: linux.fd_t = @intCast(ret);
 

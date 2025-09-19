@@ -110,9 +110,15 @@ pub const NumUnit = struct {
     pub const Alignment = enum { none, right, left };
 
     pub const WriteOptions = struct {
-        alignment: Alignment = .none,
-        width: u8 = 4,
-        precision: u8 = PRECISION_AUTO_VALUE,
+        alignment: Alignment,
+        width: u8,
+        precision: u8,
+
+        pub const default: WriteOptions = .{
+            .alignment = .none,
+            .width = 4,
+            .precision = PRECISION_AUTO_VALUE,
+        };
     };
 
     fn roundedPadPrecisionAuto(self: @This(), width: u8) struct { F5608, u8, u8 } {

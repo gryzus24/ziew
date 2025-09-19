@@ -1,5 +1,6 @@
 const cfg = @import("config.zig");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const m = @import("memory.zig");
 const std = @import("std");
 const unt = @import("unit.zig");
@@ -14,6 +15,7 @@ const w_time = @import("w_time.zig");
 const builtin = std.builtin;
 const enums = std.enums;
 const fs = std.fs;
+const io = std.io;
 const linux = std.os.linux;
 const math = std.math;
 const mem = std.mem;
@@ -22,28 +24,80 @@ const meta = std.meta;
 // == public types ============================================================
 
 // 1/10th of a second
-pub const DeciSec = u64;
+pub const DeciSec = u32;
 
 pub const Format = struct {
-    part_opts: []Part = &.{},
-    part_last: []const u8 = &.{},
+    parts: m.MemSlice(Part),
+    last_str: m.MemSlice(u8),
+
+    pub const zero: Format = .{ .parts = .zero, .last_str = .zero };
 
     pub const Part = struct {
-        str: []const u8,
-        opt: u8 = 0,
-        flags: Flags = .{},
-        wopts: unt.NumUnit.WriteOptions = .{},
+        str: m.MemSlice(u8),
+        opt: u8,
+        diff: bool,
+        quiet: bool,
+        wopts: unt.NumUnit.WriteOptions,
 
-        pub const Flags = packed struct {
-            diff: bool = false,
-            quiet: bool = false,
-        };
+        pub fn initDefault(opt: u8) @This() {
+            return .{
+                .str = .zero,
+                .opt = opt,
+                .diff = false,
+                .quiet = false,
+                .wopts = .default,
+            };
+        }
     };
 };
 
 pub const Widget = struct {
     wid: Id,
-    interval: DeciSec = WIDGET_INTERVAL_DEFAULT,
+    interval: DeciSec,
+    interval_now: DeciSec,
+    fg: Color,
+    bg: Color,
+
+    pub fn initDefault(wid: Id) @This() {
+        return .{
+            .wid = wid,
+            .interval = WIDGET_INTERVAL_DEFAULT,
+            .interval_now = 0,
+            .fg = .{ .static = .default },
+            .bg = .{ .static = .default },
+        };
+    }
+
+    pub const Color = union(enum) {
+        active: color.Active,
+        static: color.Hex,
+    };
+
+    pub inline fn check(
+        self: @This(),
+        indirect: anytype,
+        base: [*]const u8,
+    ) struct { color.Hex, color.Hex } {
+        return .{
+            switch (self.fg) {
+                .active => |active| indirect.checkPairs(active, base),
+                .static => |static| static,
+            },
+            switch (self.bg) {
+                .active => |active| indirect.checkPairs(active, base),
+                .static => |static| static,
+            },
+        };
+    }
+
+    pub const NoopIndirect = struct {
+        pub fn checkPairs(other: @This(), active: color.Active, base: [*]const u8) color.Hex {
+            _ = other;
+            _ = active;
+            _ = base;
+            return .default;
+        }
+    };
 
     pub const Id = union(Tag) {
         TIME: *TimeData,
@@ -54,148 +108,184 @@ pub const Widget = struct {
         BAT: *BatData,
         READ: *ReadData,
 
+        const DATA_SIZE_MAX = 64;
+
+        comptime {
+            if (@sizeOf(TimeData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(MemData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(CpuData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(DiskData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(NetData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(BatData) > DATA_SIZE_MAX) unreachable;
+            if (@sizeOf(ReadData) > DATA_SIZE_MAX) unreachable;
+        }
+
         const Tag = enum { TIME, MEM, CPU, DISK, NET, BAT, READ };
 
         const NR_WIDGETS = @typeInfo(Tag).@"enum".fields.len;
 
         pub const TimeData = struct {
-            format: [:0]const u8,
-            fg: color.Hex = .{},
-            bg: color.Hex = .{},
+            format: [FORMAT_SIZE]u8,
+
+            const FORMAT_SIZE = DATA_SIZE_MAX / 2;
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= STRFTIME_FORMAT_BUF_SIZE_MAX)
-                    utl.fatal(&.{"TIME: strftime format too long"});
+                if (arg.len >= FORMAT_SIZE)
+                    log.fatal(&.{"TIME: strftime format too long"});
 
                 const ret = try reg.frontAlloc(@This());
-
-                ret.* = .{ .format = try reg.frontWriteStrZ(arg) };
+                @memcpy(ret.format[0..arg.len], arg);
+                ret.format[arg.len] = 0;
                 return ret;
+            }
+
+            pub fn getFormat(self: *const @This()) [*:0]const u8 {
+                return @ptrCast(&self.format);
             }
         };
 
         pub const MemData = struct {
-            format: Format = .{},
-            fg: color.Color = .nocolor,
-            bg: color.Color = .nocolor,
+            format: Format,
 
             pub fn init(reg: *m.Region) !*@This() {
                 const ret = try reg.frontAlloc(@This());
-                ret.* = .{};
+                ret.* = .{ .format = .zero };
                 return ret;
             }
         };
 
         pub const CpuData = struct {
-            format: Format = .{},
-            fg: color.Color = .nocolor,
-            bg: color.Color = .nocolor,
+            format: Format,
 
             pub fn init(reg: *m.Region) !*@This() {
                 const ret = try reg.frontAlloc(@This());
-                ret.* = .{};
+                ret.* = .{ .format = .zero };
                 return ret;
             }
         };
 
         pub const DiskData = struct {
-            mountpoint: [:0]const u8,
-            format: Format = .{},
-            fg: color.Color = .nocolor,
-            bg: color.Color = .nocolor,
+            format: Format,
+            len: u8,
+            mountpoint: [MOUNTPOINT_SIZE]u8,
+
+            const MOUNTPOINT_SIZE = DATA_SIZE_MAX - 1 - @sizeOf(Format);
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= WIDGET_BUF_MAX)
-                    utl.fatal(&.{"DISK: mountpoint path too long"});
+                if (arg.len >= MOUNTPOINT_SIZE)
+                    log.fatal(&.{"DISK: mountpoint path too long"});
 
-                const retptr = try reg.frontAlloc(@This());
+                const ret = try reg.frontAlloc(@This());
+                ret.format = .zero;
+                ret.len = @intCast(arg.len);
+                @memcpy(ret.mountpoint[0..arg.len], arg);
+                ret.mountpoint[arg.len] = 0;
+                return ret;
+            }
 
-                retptr.* = .{ .mountpoint = try reg.frontWriteStrZ(arg) };
-                return retptr;
+            pub fn getMountpoint(self: *const @This()) [:0]const u8 {
+                return self.mountpoint[0..self.len :0];
             }
         };
 
         pub const NetData = struct {
+            format: Format,
             ifr: linux.ifreq,
-            format: Format = .{},
-            fg: color.Color = .nocolor,
-            bg: color.Color = .nocolor,
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
                 var ifr: linux.ifreq = undefined;
                 if (arg.len >= ifr.ifrn.name.len)
-                    utl.fatal(&.{ "NET: interface name too long: ", arg });
+                    log.fatal(&.{ "NET: interface name too long: ", arg });
 
-                const retptr = try reg.frontAlloc(@This());
-
+                const ret = try reg.frontAlloc(@This());
                 @memset(ifr.ifrn.name[0..], 0);
                 @memcpy(ifr.ifrn.name[0..arg.len], arg);
-                retptr.* = .{ .ifr = ifr };
-
-                return retptr;
+                ret.* = .{ .ifr = ifr, .format = .zero };
+                return ret;
             }
         };
 
         pub const BatData = struct {
-            ps_name: []const u8,
-            path: [*:0]const u8,
-            format: Format = .{},
-            fg: color.Color = .nocolor,
-            bg: color.Color = .nocolor,
+            format: Format,
+            ps_off: u8,
+            ps_len: u8,
+            path: [PATH_SIZE]u8,
+
+            const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= 32) utl.fatal(&.{"BAT: battery name too long"});
+                if (arg.len >= 16) log.fatal(&.{"BAT: battery name too long"});
 
-                const retptr = try reg.frontAlloc(@This());
+                const ret = try reg.frontAlloc(@This());
+                ret.format = .zero;
+                var fw: io.Writer = .fixed(&ret.path);
+                utl.writeStr(&fw, "/sys/class/power_supply/");
+                ret.ps_off = @intCast(fw.end);
+                ret.ps_len = @intCast(arg.len);
+                utl.writeStr(&fw, arg);
+                utl.writeStr(&fw, "/uevent\x00");
+                return ret;
+            }
 
-                var n: usize = 0;
-                const base = reg.frontSave(u8);
-                n += (try reg.frontWriteStr("/sys/class/power_supply/")).len;
-                n += (try reg.frontWriteStr(arg)).len;
-                n += (try reg.frontWriteStr("/uevent\x00")).len;
+            pub fn getPath(self: *const @This()) [*:0]const u8 {
+                return @ptrCast(&self.path);
+            }
 
-                retptr.* = .{ .ps_name = arg, .path = reg.slice(u8, base, n)[0 .. n - 1 :0] };
-                return retptr;
+            pub fn getPsName(self: *const @This()) []const u8 {
+                return self.path[self.ps_off..][0..self.ps_len];
             }
         };
 
         pub const ReadData = struct {
-            path: [:0]const u8,
-            basename: []const u8,
-            format: Format = .{},
-            fg: color.Hex = .{},
-            bg: color.Hex = .{},
+            format: Format,
+            basename_off: u8,
+            basename_len: u8,
+            path: [PATH_SIZE]u8,
+
+            const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= WIDGET_BUF_MAX)
-                    utl.fatal(&.{"READ: path too long"});
+                if (arg.len >= PATH_SIZE)
+                    log.fatal(&.{"READ: path too long"});
 
-                const retptr = try reg.frontAlloc(@This());
+                const ret = try reg.frontAlloc(@This());
+                ret.format = .zero;
+                var fw: io.Writer = .fixed(&ret.path);
+                utl.writeStr(&fw, arg);
+                utl.writeStr(&fw, "\x00");
+                const basename = fs.path.basename(fw.buffered());
+                ret.basename_off = @intCast(
+                    mem.indexOf(u8, &ret.path, basename) orelse unreachable,
+                );
+                ret.basename_len = @intCast(basename.len);
+                return ret;
+            }
 
-                retptr.* = .{
-                    .path = try reg.frontWriteStrZ(arg),
-                    .basename = fs.path.basename(arg),
-                };
-                return retptr;
+            pub fn getPath(self: *const @This()) [*:0]const u8 {
+                return @ptrCast(&self.path);
+            }
+
+            pub fn getBasename(self: *const @This()) []const u8 {
+                return self.path[self.basename_off..][0..self.basename_len];
             }
         };
 
-        pub const ArgRequired = MakeEnumSubset(
+        pub const AcceptsArg = MakeEnumSubset(
             Tag,
             &.{ .TIME, .DISK, .NET, .BAT, .READ },
         );
 
-        pub const FormatRequired = MakeEnumSubset(
+        pub const AcceptsFormat = MakeEnumSubset(
             Tag,
             &.{ .MEM, .CPU, .DISK, .NET, .BAT, .READ },
         );
 
-        pub const ColorSupported = MakeEnumSubset(
+        pub const ActiveColorSupported = MakeEnumSubset(
             Tag,
             &.{ .MEM, .CPU, .DISK, .NET, .BAT },
         );
 
-        pub const ColorOnlyDefault = MakeEnumSubset(
+        pub const DefaultColorOnly = MakeEnumSubset(
             Tag,
             &.{ .TIME, .READ },
         );
@@ -204,18 +294,23 @@ pub const Widget = struct {
             return @enumFromInt(@intFromEnum(self));
         }
 
-        pub fn requiresArgParam(self: @This()) bool {
-            _ = meta.intToEnum(ArgRequired, @intFromEnum(self)) catch return false;
+        pub fn acceptsArg(self: @This()) bool {
+            _ = meta.intToEnum(AcceptsArg, @intFromEnum(self)) catch return false;
             return true;
         }
 
-        pub fn requiresFormatParam(self: @This()) bool {
-            _ = meta.intToEnum(FormatRequired, @intFromEnum(self)) catch return false;
+        pub fn acceptsFormat(self: @This()) bool {
+            _ = meta.intToEnum(AcceptsFormat, @intFromEnum(self)) catch return false;
             return true;
         }
 
-        pub fn supportsColor(self: @This()) bool {
-            _ = meta.intToEnum(ColorSupported, @intFromEnum(self)) catch return false;
+        pub fn supportsActiveColor(self: @This()) bool {
+            _ = meta.intToEnum(ActiveColorSupported, @intFromEnum(self)) catch return false;
+            return true;
+        }
+
+        pub fn supportsDefaultColorOnly(self: @This()) bool {
+            _ = meta.intToEnum(DefaultColorOnly, @intFromEnum(self)) catch return false;
             return true;
         }
     };
@@ -246,6 +341,7 @@ pub const MemOpt = enum {
         .@"%free", .@"%available", .@"%buffers", .@"%cached", .@"%used",
     });
 };
+
 pub const CpuOpt = enum {
     @"%all",
     @"%user",
@@ -340,6 +436,7 @@ pub const BatOpt = enum {
         .@"%fullnow", .@"%fulldesign", .state,
     });
 };
+
 pub const ReadOpt = enum {
     arg,
     basename,
@@ -368,12 +465,9 @@ comptime {
 
 // == public constants ========================================================
 
-/// Individual widget maximum buffer size.
-pub const WIDGET_BUF_MAX = 256;
-
 /// Names of options supported by widgets' formats keyed by
 /// @intFromEnum(Widget.Id.Tag).
-pub const WID_OPT_NAMES: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = blk: {
+pub const WID__OPT_NAMES: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = blk: {
     var w: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = undefined;
     for (WID_OPT_TYPE, 0..) |T, i| {
         w[i] = meta.fieldNames(T);
@@ -383,7 +477,7 @@ pub const WID_OPT_NAMES: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = blk: {
 
 /// Particular widgets' format option state of color support keyed by
 /// @intFromEnum(Widget.Id.Tag).
-pub const WID_OPT_COLOR_SUPPORTED: [Widget.Id.NR_WIDGETS][]const bool = blk: {
+pub const WID__OPTS_SUPPORTING_COLOR: [Widget.Id.NR_WIDGETS][]const bool = blk: {
     var w: [Widget.Id.NR_WIDGETS][]const bool = undefined;
     for (WID_OPT_TYPE, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
@@ -403,11 +497,8 @@ pub const WIDGET_INTERVAL_DEFAULT = 50;
 /// Maximum widget refresh interval (refresh once and forget).
 pub const WIDGET_INTERVAL_MAX = 1 << 31;
 
-/// Maximum strftime(3) format size.
-pub const STRFTIME_FORMAT_BUF_SIZE_MAX = WIDGET_BUF_MAX / 4;
-
-/// Maximum strftime(3) output size.
-pub const STRFTIME_OUT_BUF_SIZE_MAX = STRFTIME_FORMAT_BUF_SIZE_MAX * 2;
+/// Individual widget maximum buffer size.
+pub const WIDGET_BUF_MAX = 128;
 
 // == private =================================================================
 

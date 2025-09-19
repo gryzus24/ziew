@@ -1,5 +1,6 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
@@ -51,8 +52,8 @@ const Bat = struct {
         self.set.now = true;
     }
 
-    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
-        const batopt_cs: typ.BatOpt.ColorSupported = @enumFromInt(oc.opt);
+    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
+        const batopt_cs: typ.BatOpt.ColorSupported = @enumFromInt(ac.opt);
         if (batopt_cs == .state) {
             return color.firstColorEQThreshold(
                 switch (self.state[0] & (0xff - 0x20)) {
@@ -62,7 +63,7 @@ const Bat = struct {
                     'N' => 3, // Not-charging
                     else => 4, // Unknown
                 },
-                oc.colors,
+                ac.pairs.get(base),
             );
         } else {
             return color.firstColorGEThreshold(
@@ -71,7 +72,7 @@ const Bat = struct {
                     .@"%fulldesign" => unt.Percent(self.now, self.full_design),
                     .state => unreachable,
                 }.n.roundAndTruncate(),
-                oc.colors,
+                ac.pairs.get(base),
             );
         }
     }
@@ -79,32 +80,34 @@ const Bat = struct {
 
 // == public ==================================================================
 
-pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
+pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []const u8 {
     const wd = w.wid.BAT;
 
-    const file = fs.cwd().openFileZ(wd.path, .{}) catch |e| switch (e) {
+    const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| switch (e) {
         error.FileNotFound => {
-            utl.writeBlockBeg(writer, wd.fg.getDefault(), wd.bg.getDefault());
-            utl.writeStr(writer, wd.ps_name);
+            const noop: typ.Widget.NoopIndirect = .{};
+            const fg, const bg = w.check(noop, base);
+            utl.writeBlockBeg(writer, fg, bg);
+            utl.writeStr(writer, wd.getPsName());
             utl.writeStr(writer, ": <not found>");
             return utl.writeBlockEnd(writer);
         },
-        else => utl.fatal(&.{ "BAT: check: ", @errorName(e) }),
+        else => log.fatal(&.{ "BAT: check: ", @errorName(e) }),
     };
     defer file.close();
 
     var buf: [1024]u8 = undefined;
     const nr_read = file.read(&buf) catch |e| {
-        utl.fatal(&.{ "BAT: read: ", @errorName(e) });
+        log.fatal(&.{ "BAT: read: ", @errorName(e) });
     };
-    if (nr_read == 0) utl.fatal(&.{"BAT: empty uevent"});
+    if (nr_read == 0) log.fatal(&.{"BAT: empty uevent"});
 
     var bat: Bat = .{};
 
     var lines = mem.tokenizeScalar(u8, buf[0..nr_read], '\n');
     while (lines.next()) |line| {
         const eqi = mem.indexOfScalar(u8, line, '=') orelse {
-            utl.fatal(&.{"BAT: crazy uevent"});
+            log.fatal(&.{"BAT: crazy uevent"});
         };
         const key = line[0..eqi];
         const val = line[eqi + 1 ..];
@@ -126,13 +129,14 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
         if (bat.set.hasSetAll()) break;
     }
 
-    utl.writeBlockBeg(writer, wd.fg.getColor(bat), wd.bg.getColor(bat));
-    for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.str);
+    const fg, const bg = w.check(bat, base);
+    utl.writeBlockBeg(writer, fg, bg);
+    for (wd.format.parts.get(base)) |*part| {
+        utl.writeStr(writer, part.str.get(base));
 
         const batopt: typ.BatOpt = @enumFromInt(part.opt);
         if (batopt == .arg) {
-            utl.writeStr(writer, wd.ps_name);
+            utl.writeStr(writer, wd.getPsName());
             continue;
         }
         if (batopt == .state) {
@@ -146,8 +150,8 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
             .@"%fulldesign" => unt.Percent(bat.now, bat.full_design),
             .state          => unreachable,
             // zig fmt: on
-        }).write(writer, part.wopts, part.flags.quiet);
+        }).write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.part_last);
+    utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);
 }

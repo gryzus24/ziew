@@ -1,5 +1,6 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 const utl = @import("util.zig");
@@ -83,15 +84,15 @@ pub const MemState = struct {
     pub fn init() MemState {
         return .{
             .proc_meminfo = fs.cwd().openFileZ("/proc/meminfo", .{}) catch |e| {
-                utl.fatal(&.{ "open: /proc/meminfo: ", @errorName(e) });
+                log.fatal(&.{ "open: /proc/meminfo: ", @errorName(e) });
             },
         };
     }
 
-    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
+    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
         return color.firstColorGEThreshold(
             unt.Percent(
-                switch (@as(typ.MemOpt.ColorSupported, @enumFromInt(oc.opt))) {
+                switch (@as(typ.MemOpt.ColorSupported, @enumFromInt(ac.opt))) {
                     .@"%free" => self.free(),
                     .@"%available" => self.avail(),
                     .@"%buffers" => self.buffers(),
@@ -100,7 +101,7 @@ pub const MemState = struct {
                 },
                 self.total(),
             ).n.roundAndTruncate(),
-            oc.colors,
+            ac.pairs.get(base),
         );
     }
 
@@ -133,10 +134,10 @@ pub const MemState = struct {
 pub fn update(state: *MemState) void {
     var buf: [4096]u8 = undefined;
     const nr_read = state.proc_meminfo.pread(&buf, 0) catch |e| {
-        utl.fatal(&.{ "MEM: pread: ", @errorName(e) });
+        log.fatal(&.{ "MEM: pread: ", @errorName(e) });
     };
     if (nr_read == buf.len)
-        utl.fatal(&.{"MEM: /proc/meminfo doesn't fit in 1 page"});
+        log.fatal(&.{"MEM: /proc/meminfo doesn't fit in 1 page"});
 
     parseProcMeminfo(&buf, state);
 }
@@ -145,12 +146,14 @@ pub fn widget(
     writer: *io.Writer,
     state: *const MemState,
     w: *const typ.Widget,
+    base: [*]const u8,
 ) []const u8 {
     const wd = w.wid.MEM;
 
-    utl.writeBlockBeg(writer, wd.fg.getColor(state), wd.bg.getColor(state));
-    for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.str);
+    const fg, const bg = w.check(state, base);
+    utl.writeBlockBeg(writer, fg, bg);
+    for (wd.format.parts.get(base)) |*part| {
+        utl.writeStr(writer, part.str.get(base));
         const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {
             // zig fmt: off
             .@"%free"      => unt.Percent(state.free(), state.total()),
@@ -168,8 +171,8 @@ pub fn widget(
             .writeback     => unt.SizeKb(state.writeback()),
             // zig fmt: on
         };
-        nu.write(writer, part.wopts, part.flags.quiet);
+        nu.write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.part_last);
+    utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);
 }

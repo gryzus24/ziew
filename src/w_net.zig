@@ -1,5 +1,6 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
@@ -44,8 +45,8 @@ comptime {
 const ColorHandler = struct {
     up: bool,
 
-    pub fn checkOptColors(self: @This(), oc: color.OptColors) ?*const [7]u8 {
-        return color.firstColorEQThreshold(@intFromBool(self.up), oc.colors);
+    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
+        return color.firstColorEQThreshold(@intFromBool(self.up), ac.pairs.get(base));
     }
 };
 
@@ -67,37 +68,37 @@ const IFace = struct {
         @memcpy(self.name[0..name.len], name);
     }
 
-    pub fn bytes(self: *const @This(), comptime t: FieldType) u64 {
+    pub fn bytes(self: @This(), comptime t: FieldType) u64 {
         return self.fields[0 + @intFromEnum(t)];
     }
-    pub fn packets(self: *const @This(), comptime t: FieldType) u64 {
+    pub fn packets(self: @This(), comptime t: FieldType) u64 {
         return self.fields[1 + @intFromEnum(t)];
     }
-    pub fn errs(self: *const @This(), comptime t: FieldType) u64 {
+    pub fn errs(self: @This(), comptime t: FieldType) u64 {
         return self.fields[2 + @intFromEnum(t)];
     }
-    pub fn drop(self: *const @This(), comptime t: FieldType) u64 {
+    pub fn drop(self: @This(), comptime t: FieldType) u64 {
         return self.fields[3 + @intFromEnum(t)];
     }
-    pub fn fifo(self: *const @This(), comptime t: FieldType) u64 {
+    pub fn fifo(self: @This(), comptime t: FieldType) u64 {
         return self.fields[4 + @intFromEnum(t)];
     }
-    pub fn rx_frame(self: *const @This()) u64 {
+    pub fn rx_frame(self: @This()) u64 {
         return self.fields[5];
     }
-    pub fn rx_compressed(self: *const @This()) u64 {
+    pub fn rx_compressed(self: @This()) u64 {
         return self.fields[6];
     }
-    pub fn rx_multicast(self: *const @This()) u64 {
+    pub fn rx_multicast(self: @This()) u64 {
         return self.fields[7];
     }
-    pub fn tx_colls(self: *const @This()) u64 {
+    pub fn tx_colls(self: @This()) u64 {
         return self.fields[5 + @intFromEnum(.tx)];
     }
-    pub fn tx_carrier(self: *const @This()) u64 {
+    pub fn tx_carrier(self: @This()) u64 {
         return self.fields[6 + @intFromEnum(.tx)];
     }
-    pub fn tx_compressed(self: *const @This()) u64 {
+    pub fn tx_compressed(self: @This()) u64 {
         return self.fields[7 + @intFromEnum(.tx)];
     }
 };
@@ -129,7 +130,7 @@ const NetDev = struct {
 
 fn openIoctlSocket() linux.fd_t {
     const ret: isize = @bitCast(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
-    if (ret < 0) utl.fatalFmt("NET: socket errno: {}", .{-ret});
+    if (ret < 0) log.fatal(&.{"NET: socket"});
     return @intCast(ret);
 }
 
@@ -171,13 +172,11 @@ fn getInet(
                     i += 2;
                 }
             }
-            inetbuf[i - 1] = 0;
-
-            break :blk inetbuf;
+            break :blk inetbuf[0 .. i - 1];
         },
         -c.EADDRNOTAVAIL => "<no address>",
         -c.ENODEV => "<no device>",
-        else => utl.fatalFmt("NET: inet errno: {}", .{-ret}),
+        else => log.fatal(&.{"NET: SIOCGIFADDR"}),
     };
 }
 
@@ -211,7 +210,7 @@ fn getFlags(
             iffbuf[0] = '-';
             break :blk iffbuf[0..1];
         },
-        else => utl.fatalFmt("NET: flags errno: {}", .{-ret}),
+        else => log.fatal(&.{"NET: SIOCGIFFLAGS"}),
     };
 }
 
@@ -248,7 +247,7 @@ pub const NetState = struct {
             for (widgets) |*w| {
                 if (w.wid == .NET) {
                     const wd = w.wid.NET;
-                    for (wd.format.part_opts) |part| {
+                    for (wd.format.parts.get(reg.head.ptr)) |*part| {
                         const opt: typ.NetOpt = @enumFromInt(part.opt);
                         if (opt.requiresProcNetDev()) break :blk true;
                     }
@@ -259,7 +258,7 @@ pub const NetState = struct {
         if (proc_net_dev_required) {
             return .{
                 .proc_net_dev = fs.cwd().openFileZ("/proc/net/dev", .{}) catch |e| {
-                    utl.fatal(&.{ "open: /proc/net/dev: ", @errorName(e) });
+                    log.fatal(&.{ "open: /proc/net/dev: ", @errorName(e) });
                 },
                 .left = .{ .reg = reg },
                 .right = .{ .reg = reg },
@@ -284,20 +283,25 @@ pub const NetState = struct {
 pub fn update(state: *NetState) void {
     var buf: [4096]u8 = undefined;
     const nr_read = state.proc_net_dev.pread(&buf, 0) catch |e| {
-        utl.fatal(&.{ "NET: pread: ", @errorName(e) });
+        log.fatal(&.{ "NET: pread: ", @errorName(e) });
     };
     if (nr_read == buf.len)
-        utl.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
+        log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
     const new, _ = state.newStateFlip();
     new.freeAll();
 
     parseProcNetDev(buf[0..nr_read], new) catch |e| {
-        utl.fatal(&.{ "NET: parse /proc/net/dev: ", @errorName(e) });
+        log.fatal(&.{ "NET: parse /proc/net/dev: ", @errorName(e) });
     };
 }
 
-pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget) []const u8 {
+pub fn widget(
+    writer: *io.Writer,
+    state: *const ?NetState,
+    w: *const typ.Widget,
+    base: [*]const u8,
+) []const u8 {
     const Static = struct {
         var sock: linux.fd_t = 0;
     };
@@ -321,12 +325,12 @@ pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget)
     if (@typeInfo(typ.NetOpt).@"enum".fields.len >= @bitSizeOf(@TypeOf(demands)))
         @compileError("bump demands bitfield size");
 
-    for (wd.format.part_opts) |*part|
+    for (wd.format.parts.get(base)) |*part|
         demands |= @as(@TypeOf(demands), 1) << @intCast(part.opt);
 
     if (demands & INET > 0)
         inet = getInet(Static.sock, &wd.ifr, &_inetbuf);
-    if (demands & (FLAGS | STATE) > 0 or wd.fg == .color or wd.bg == .color)
+    if (demands & (FLAGS | STATE) > 0 or w.fg == .active or w.bg == .active)
         flags = getFlags(Static.sock, &wd.ifr, &_iffbuf, &up);
 
     var new_if: ?*IFace = null;
@@ -354,9 +358,10 @@ pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget)
 
     const ch: ColorHandler = .{ .up = up };
 
-    utl.writeBlockBeg(writer, wd.fg.getColor(ch), wd.bg.getColor(ch));
-    for (wd.format.part_opts) |*part| {
-        utl.writeStr(writer, part.str);
+    const fg, const bg = w.check(ch, base);
+    utl.writeBlockBeg(writer, fg, bg);
+    for (wd.format.parts.get(base)) |*part| {
+        utl.writeStr(writer, part.str.get(base));
 
         const opt: typ.NetOpt = @enumFromInt(part.opt);
         if (opt.requiresSocket()) {
@@ -383,7 +388,7 @@ pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget)
         } else {
             const new = new_if.?;
             const old = old_if.?;
-            const d = part.flags.diff;
+            const d = part.diff;
             nu = switch (opt.castTo(typ.NetOpt.ProcNetDevRequired)) {
                 // zig fmt: off
                 .rx_bytes => unt.SizeBytes(utl.calc(new.bytes(.rx), old.bytes(.rx), d)),
@@ -398,8 +403,8 @@ pub fn widget(writer: *io.Writer, state: *const ?NetState, w: *const typ.Widget)
                 // zig fmt: on
             };
         }
-        nu.write(writer, part.wopts, part.flags.quiet);
+        nu.write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.part_last);
+    utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);
 }

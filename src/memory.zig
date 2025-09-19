@@ -4,6 +4,7 @@ const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
 const mem = std.mem;
+const meta = std.meta;
 const posix = std.posix;
 
 // == private =================================================================
@@ -16,8 +17,8 @@ fn printAlloc(reg: *Region, s: []const u8, comptime T: type, nmemb: usize, pad: 
     const stderr = &writer.interface;
 
     stderr.print(
-        "F={:<4} B={:<4} T={:<5} | ({s}) PAD={} N={:<4} SZ={:<4} TSZ={:<4} {}\n",
-        .{ front, back, front + back, s, pad, nmemb, @sizeOf(T), total_size, T },
+        "{s:<8} F={:<4} B={:<4} T={:<5} | ({s}) PAD={} N={:<4} SZ={:<4} TSZ={:<4} {}\n",
+        .{ reg.name, front, back, front + back, s, pad, nmemb, @sizeOf(T), total_size, T },
     ) catch {};
 }
 
@@ -42,7 +43,7 @@ pub const TRACE_ALLOCATIONS = false;
 ///       of callers' back allocations.
 pub const Region = struct {
     /// Pointer to the beginning of the address space.
-    head: []align(64) u8,
+    head: []align(16) u8,
 
     /// Current front index - initially `0`.
     front: usize,
@@ -50,11 +51,14 @@ pub const Region = struct {
     /// Current back index - initially `head.len`.
     back: usize,
 
+    /// Region's name - for debugging purposes.
+    name: []const u8,
+
     pub const SavePoint = usize;
     pub const AllocError = error{NoSpaceLeft};
 
-    pub fn init(bytes: []align(64) u8) Region {
-        return .{ .head = bytes, .front = 0, .back = bytes.len };
+    pub fn init(bytes: []align(16) u8, name: []const u8) Region {
+        return .{ .head = bytes, .front = 0, .back = bytes.len, .name = name };
     }
 
     pub fn frontAllocMany(self: *@This(), comptime T: type, nmemb: usize) AllocError![]T {
@@ -103,7 +107,7 @@ pub const Region = struct {
         return @ptrCast(try self.backAllocMany(T, 1));
     }
 
-    pub fn frontSave(self: *const @This(), comptime T: type) SavePoint {
+    pub fn frontSave(self: @This(), comptime T: type) SavePoint {
         return mem.alignForward(usize, self.front, @alignOf(T));
     }
 
@@ -111,7 +115,7 @@ pub const Region = struct {
         self.front = sp;
     }
 
-    pub fn backSave(self: *const @This(), comptime T: type) SavePoint {
+    pub fn backSave(self: @This(), comptime T: type) SavePoint {
         return mem.alignBackward(usize, self.back, @alignOf(T));
     }
 
@@ -132,8 +136,8 @@ pub const Region = struct {
         return retptr[0..str.len :0];
     }
 
-    pub fn frontPushVec(self: *@This(), vec: anytype) !*@TypeOf(vec.*[0]) {
-        const T = @TypeOf(vec.*[0]);
+    pub fn frontPushVec(self: *@This(), vec: anytype) !*meta.Child(@TypeOf(vec.*)) {
+        const T = meta.Child(@TypeOf(vec.*));
         var retptr = try self.frontAllocMany(T, 1);
         if (vec.len == 0) {
             vec.* = retptr;
@@ -143,29 +147,46 @@ pub const Region = struct {
         return &retptr[0];
     }
 
-    pub fn backPushVec(self: *@This(), vec: anytype) !*@TypeOf(vec.*[0]) {
-        const T = @TypeOf(vec.*[0]);
+    pub fn backPushVec(self: *@This(), vec: anytype) !*meta.Child(@TypeOf(vec.*)) {
+        const T = meta.Child(@TypeOf(vec.*));
         var retptr = try self.backAllocMany(T, 1);
         if (vec.len > 0) {
             retptr.len = vec.len + 1;
             mem.copyForwards(T, retptr, vec.*);
         }
         vec.* = retptr;
-        return &vec.*[vec.len - 1];
+        return &retptr[retptr.len - 1];
     }
 
-    pub fn slice(self: *const @This(), comptime T: type, start: SavePoint, n: usize) []T {
+    pub fn slice(self: @This(), comptime T: type, start: SavePoint, n: usize) []T {
         return mem.bytesAsSlice(T, self.head[start..][0 .. @sizeOf(T) * n]);
     }
 
-    pub fn spaceLeft(self: *const @This(), comptime T: type) usize {
+    pub fn spaceLeft(self: @This(), comptime T: type) usize {
         const f = self.frontSave(T);
         const b = self.backSave(T);
         if (f > b) return 0;
         return b - f;
     }
 
-    pub fn spaceUsed(self: *const @This()) struct { usize, usize } {
+    pub fn spaceUsed(self: @This()) struct { usize, usize } {
         return .{ self.front, self.head.len - self.back };
     }
 };
+
+pub fn MemSlice(T: type) type {
+    return struct {
+        off: u16,
+        len: u16,
+
+        pub const zero: MemSlice(T) = .{ .off = 0, .len = 0 };
+
+        pub fn get(self: @This(), base: [*]const u8) []const T {
+            const size = @sizeOf(T) * self.len;
+            return @alignCast(mem.bytesAsSlice(T, base[self.off..][0..size]));
+        }
+    };
+}
+
+// Pack with the rest of BSS, DATA, and fiddle some more to avoid internal fragmentation.
+pub var g_bss: [0x4000 - 1024 - 232 - 0x00]u8 align(64) = undefined;

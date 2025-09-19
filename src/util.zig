@@ -1,4 +1,7 @@
 const std = @import("std");
+const color = @import("color.zig");
+const log = @import("log.zig");
+const m = @import("memory.zig");
 const typ = @import("type.zig");
 const fmt = std.fmt;
 const fs = std.fs;
@@ -69,30 +72,23 @@ var FGBG_D = blk: {
 
 var BLOCK_HEADERS: [4][]u8 = .{ &NC_A, &FG_B, &BG_C, &FGBG_D };
 
-pub fn writeBlockBeg(
-    writer: *io.Writer,
-    fg_color: ?*const [7]u8,
-    bg_color: ?*const [7]u8,
-) void {
-    // zig fmt: off
-    const i: u2 = (
-        @as(u2, @intFromBool(fg_color != null)) +
-        @as(u2, @intFromBool(bg_color != null)) * 2);
-    // zig fmt: on
+pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
+    const i = fg.use | (bg.use << 1);
 
     var header = BLOCK_HEADERS[i];
     switch (i) {
         0 => {},
         1 => {
-            @memcpy(header[11..17], fg_color.?[1..]);
+            @memcpy(header[11..17], &fg.hex);
         },
         2 => {
-            @memcpy(header[16..22], bg_color.?[1..]);
+            @memcpy(header[16..22], &bg.hex);
         },
         3 => {
-            @memcpy(header[11..17], fg_color.?[1..]);
-            @memcpy(header[34..40], bg_color.?[1..]);
+            @memcpy(header[11..17], &fg.hex);
+            @memcpy(header[34..40], &bg.hex);
         },
+        else => unreachable,
     }
     writeStr(writer, header);
 }
@@ -110,69 +106,6 @@ pub fn writeBlockEnd(writer: *io.Writer) []const u8 {
         _ = writer.write(endstr) catch unreachable;
     }
     return writer.buffered();
-}
-
-// == LOGGING =================================================================
-
-pub var bss: [512]u8 = undefined;
-
-const Log = struct {
-    fd: linux.fd_t = -1,
-
-    pub fn log(self: @This(), s: []const u8) void {
-        fdWrite(2, s);
-        if (self.fd != -1) fdWrite(self.fd, s);
-    }
-
-    pub fn close(self: @This()) void {
-        if (self.fd != -1) _ = linux.close(self.fd);
-    }
-};
-
-pub fn bssPrint(comptime format: []const u8, args: anytype) []const u8 {
-    var w: io.Writer = .fixed(&bss);
-    w.print(format, args) catch return &.{};
-    return w.buffered();
-}
-
-pub fn openLog() Log {
-    const path = "/tmp/ziew.log";
-    const file = fs.cwd().createFileZ(path, .{ .truncate = false }) catch |e| switch (e) {
-        error.AccessDenied => {
-            fdWrite(2, "open: " ++ path ++ ": probably sticky, only author can modify\n");
-            return .{};
-        },
-        else => @panic(bssPrint("openLog: {s}", .{@errorName(e)})),
-    };
-
-    file.seekFromEnd(0) catch {};
-    return .{ .fd = file.handle };
-}
-
-pub fn fatal(strings: []const []const u8) noreturn {
-    @branchHint(.cold);
-    const log = openLog();
-    log.log("fatal: ");
-    for (strings) |s| log.log(s);
-    log.log("\n");
-    linux.exit(1);
-}
-
-// inline to avoid comptime duplication
-pub inline fn fatalFmt(comptime format: []const u8, args: anytype) noreturn {
-    @branchHint(.cold);
-    const log = openLog();
-    log.log(bssPrint("fatal: " ++ format ++ "\n", args));
-    linux.exit(1);
-}
-
-pub fn warn(strings: []const []const u8) void {
-    @branchHint(.cold);
-    const log = openLog();
-    defer log.close();
-    log.log("warning: ");
-    for (strings) |s| log.log(s);
-    log.log("\n");
 }
 
 // == MISC ====================================================================
@@ -225,6 +158,7 @@ pub inline fn atou64ForwardUntilOrEOF(
     i.* = j;
     return r;
 }
+
 pub inline fn atou64BackwardUntil(
     buf: []const u8,
     i: *usize,
@@ -268,4 +202,31 @@ pub fn nrDigits(n: u64) u5 {
 
 pub fn calc(new: u64, old: u64, diff: bool) u64 {
     return if (diff) new - old else new;
+}
+
+pub const NR_POSSIBLE_CPUS_MAX = 64;
+
+pub fn nrPossibleCpus() u32 {
+    const path = "/sys/devices/system/cpu/possible";
+    const file = fs.cwd().openFileZ(path, .{}) catch |e| switch (e) {
+        error.FileNotFound => return NR_POSSIBLE_CPUS_MAX,
+        else => log.fatal(&.{ "open: ", path, ": ", @errorName(e) }),
+    };
+    defer file.close();
+
+    var buf: [16]u8 = undefined;
+    const nr_read = file.read(&buf) catch |e| {
+        log.fatal(&.{ "read: ", @errorName(e) });
+    };
+    if (nr_read < 2) log.fatal(&.{"read: empty cpu/possible"});
+
+    var i: usize = nr_read - 2;
+    while (i > 0) : (i -= 1) {
+        if (buf[i] == '-') {
+            i += 1;
+            break;
+        }
+    }
+    const r: u32 = @intCast(atou64ForwardUntil(&buf, &i, '\n') + 1);
+    return @min(r, NR_POSSIBLE_CPUS_MAX);
 }

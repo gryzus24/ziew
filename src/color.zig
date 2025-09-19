@@ -1,98 +1,77 @@
 const std = @import("std");
+const m = @import("memory.zig");
 const mem = std.mem;
 
 // == public ==================================================================
 
 pub const Hex = struct {
-    data: [7]u8 = .{0} ** 7,
+    use: u8,
+    hex: [6]u8,
 
-    pub fn set(self: *@This(), str: []const u8) bool {
-        if (str.len == 0 or mem.eql(u8, str, "default")) {
-            @memset(&self.data, 0);
-            return true;
-        }
+    pub const default: Hex = .{ .use = 0, .hex = .{0} ** 6 };
 
-        const hashash = @intFromBool(str[0] == '#');
-        const ismini = (str.len - hashash) == 3;
-        const isnormal = (str.len - hashash) == 6;
-
-        if (!isnormal and !ismini) return false;
-
-        for (str[hashash..]) |ch| switch (ch) {
-            '0'...'9', 'a'...'f', 'A'...'F' => {},
-            else => return false,
-        };
-
-        self.data[0] = '#';
-        if (ismini) {
-            var i: usize = 1;
-            for (str[hashash..]) |ch| {
-                self.data[i] = ch;
-                i += 1;
-                self.data[i] = ch;
-                i += 1;
-            }
-        } else {
-            @memcpy(self.data[1..], str[hashash..]);
-        }
-        return true;
-    }
-
-    pub fn get(self: *const @This()) ?*const [7]u8 {
-        return if (self.data[0] == 0) null else &self.data;
+    pub fn init(hex: [6]u8) @This() {
+        return .{ .use = 1, .hex = hex };
     }
 };
 
-pub const ThreshHex = struct {
-    thresh: u8,
-    hex: Hex,
-};
-
-pub const OptColors = struct {
+pub const Active = struct {
     opt: u8,
-    colors: []ThreshHex,
+    pairs: m.MemSlice(Pair),
+
+    pub const Pair = struct {
+        thresh: u8,
+        data: Hex,
+    };
 };
 
-pub const Color = union(enum) {
-    nocolor,
-    default: Hex,
-    color: OptColors,
+pub fn acceptHex(str: []const u8) ?[6]u8 {
+    if (str.len == 0) return null;
 
-    pub fn getColor(
-        self: *const @This(),
-        with_checkOptColors: anytype,
-    ) ?*const [7]u8 {
-        return switch (self.*) {
-            .nocolor => null,
-            .default => |*hex| hex.get(),
-            .color => |oc| with_checkOptColors.checkOptColors(oc),
-        };
+    const hashash = @intFromBool(str[0] == '#');
+    const ismini = (str.len - hashash) == 3;
+    const isnormal = (str.len - hashash) == 6;
+
+    if (!isnormal and !ismini) return null;
+
+    for (str[hashash..]) |ch| switch (ch) {
+        '0'...'9', 'a'...'f', 'A'...'F' => {},
+        else => return null,
+    };
+
+    var hex: [6]u8 = undefined;
+
+    if (ismini) {
+        const a = str[hashash..];
+        hex[0] = a[0];
+        hex[1] = a[0];
+        hex[2] = a[1];
+        hex[3] = a[1];
+        hex[4] = a[2];
+        hex[5] = a[2];
+    } else {
+        @memcpy(&hex, str[hashash..]);
     }
+    return hex;
+}
 
-    pub fn getDefault(self: *const @This()) ?*const [7]u8 {
-        return switch (self.*) {
-            .nocolor => null,
-            .default => |*hex| hex.get(),
-            .color => null,
-        };
-    }
-};
-
-pub fn firstColorGEThreshold(value: u64, colors: []const ThreshHex) ?*const [7]u8 {
-    var result: ?*const [7]u8 = null;
-    for (colors) |*color| {
-        if (color.thresh <= value) {
-            result = color.hex.get();
+pub fn firstColorGEThreshold(value: u64, pairs: []const Active.Pair) Hex {
+    var i: isize = -1;
+    for (pairs) |pair| {
+        if (pair.thresh <= value) {
+            i += 1;
         } else {
             break;
         }
     }
-    return result;
+    if (i == -1) return .default;
+
+    return pairs[@as(usize, @intCast(i))].data;
 }
 
-pub fn firstColorEQThreshold(value: u8, colors: []const ThreshHex) ?*const [7]u8 {
-    for (colors) |*color| {
-        if (value == color.thresh) return color.hex.get();
+pub fn firstColorEQThreshold(value: u8, pairs: []const Active.Pair) Hex {
+    for (pairs) |pair| {
+        if (pair.thresh == value) return pair.data;
     }
-    return null;
+    return .default;
 }
