@@ -5,6 +5,10 @@ const io = std.io;
 
 // == private =================================================================
 
+fn digits2_lut(n: u64) [2]u8 {
+    return "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899"[n * 2 ..][0..2].*;
+}
+
 fn KB_UNIT(kb: u64, kb_f5608: F5608) NumUnit {
     const KB8 = 8192;
     const MB8 = 8192 * 1024;
@@ -201,26 +205,19 @@ pub const NumUnit = struct {
             },
             2 => {
                 const n = (rounded.frac() * 100) / (1 << F5608.FRAC_SHIFT);
+                const a, const b = digits2_lut(n);
                 i -= 3;
-                buf[i..][0..3].* = .{
-                    '.',
-                    '0' | @as(u8, @intCast(n / 10 % 10)),
-                    '0' | @as(u8, @intCast(n % 10)),
-                };
+                buf[i..][0..3].* = .{ '.', a, b };
             },
             3 => {
                 const n = (rounded.frac() * 1000) / (1 << F5608.FRAC_SHIFT);
+                const a, const b = digits2_lut(n % 100);
                 i -= 4;
-                buf[i..][0..4].* = .{
-                    '.',
-                    '0' | @as(u8, @intCast(n / 100 % 10)),
-                    '0' | @as(u8, @intCast(n / 10 % 10)),
-                    '0' | @as(u8, @intCast(n % 10)),
-                };
+                buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(n / 100)), a, b };
             },
             else => {
                 if (PRECISION_DIGITS_MAX > 3)
-                    @compileError("well...");
+                    @compileError("PRECISION_DIGITS_MAX > 3");
 
                 unreachable;
             },
@@ -230,7 +227,7 @@ pub const NumUnit = struct {
         while (n >= 100) : (n /= 100) {
             i -= 2;
             const decunits: u8 = @intCast(n % 100);
-            buf[i..][0..2].* = fmt.digits2(decunits);
+            buf[i..][0..2].* = digits2_lut(decunits);
         }
         if (n < 10) {
             i -= 1;
@@ -239,7 +236,7 @@ pub const NumUnit = struct {
             // n < 100
             i -= 2;
             const decunits: u8 = @intCast(n);
-            buf[i..][0..2].* = fmt.digits2(decunits);
+            buf[i..][0..2].* = digits2_lut(decunits);
         }
 
         if (alignment == .right)
