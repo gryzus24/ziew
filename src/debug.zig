@@ -167,38 +167,74 @@ pub fn debugMemoryUsed(reg: *m.Region) !void {
     print("  FRONT = {} BACK = {} TOTAL = {}\n", .{ front, back, front + back });
 }
 
-pub noinline fn perfEventStart() linux.fd_t { // struct { linux.fd_t, linux.perf_event_attr } {
-    var pe: linux.perf_event_attr = .{};
+pub noinline fn perfEventStart() [3]linux.fd_t {
+    // Zig's std doesn't define `read_format` flags, just use separate events
+    // for different counters.
+    var peas: [3]linux.perf_event_attr = .{
+        .{
+            .type = .HARDWARE,
+            .config = @intFromEnum(linux.PERF.COUNT.HW.INSTRUCTIONS),
+            .flags = .{
+                .disabled = true,
+                .exclude_kernel = true,
+                .exclude_hv = true,
+            },
+        },
+        .{
+            .type = .HARDWARE,
+            .config = @intFromEnum(linux.PERF.COUNT.HW.BRANCH_INSTRUCTIONS),
+            .flags = .{
+                .disabled = true,
+                .exclude_kernel = true,
+                .exclude_hv = true,
+            },
+        },
+        .{
+            .type = .HARDWARE,
+            .config = @intFromEnum(linux.PERF.COUNT.HW.BRANCH_MISSES),
+            .flags = .{
+                .disabled = true,
+                .exclude_kernel = true,
+                .exclude_hv = true,
+            },
+        },
+    };
 
-    pe.type = .HARDWARE;
-    pe.config = @intFromEnum(linux.PERF.COUNT.HW.INSTRUCTIONS);
-    pe.flags.disabled = true;
-    pe.flags.exclude_kernel = true;
-    pe.flags.exclude_hv = true;
-
-    const ret: isize = @bitCast(linux.perf_event_open(&pe, 0, 1, -1, 0));
-    if (ret < 0) {
-        var writer = fs.File.stderr().writer(&.{});
-        const stderr = &writer.interface;
-        stderr.print("perf_event_open: errno: {}\n", .{-ret}) catch {};
-        linux.exit(1);
+    var fds: [3]linux.fd_t = .{0} ** 3;
+    for (&peas, 0..) |*pea, i| {
+        const ret: isize = @bitCast(linux.perf_event_open(pea, 0, 1, -1, 0));
+        if (ret < 0) {
+            var writer = fs.File.stderr().writer(&.{});
+            const stderr = &writer.interface;
+            stderr.print("perf_event_open: errno: {}\n", .{-ret}) catch {};
+            linux.exit(1);
+        }
+        fds[i] = @intCast(ret);
     }
 
-    const fd: linux.fd_t = @intCast(ret);
+    for (fds) |fd| _ = linux.ioctl(fd, linux.PERF.EVENT_IOC.RESET, 0);
+    for (fds) |fd| _ = linux.ioctl(fd, linux.PERF.EVENT_IOC.ENABLE, 0);
 
-    _ = linux.ioctl(fd, linux.PERF.EVENT_IOC.RESET, 0);
-    _ = linux.ioctl(fd, linux.PERF.EVENT_IOC.ENABLE, 0);
-
-    return fd;
+    return fds;
 }
 
-pub noinline fn perfEventStop(fd: linux.fd_t) void {
-    defer _ = linux.close(fd);
+pub noinline fn perfEventStop(fds: [3]linux.fd_t) void {
+    defer {
+        for (fds) |fd| _ = linux.close(fd);
+    }
 
-    _ = linux.ioctl(fd, linux.PERF.EVENT_IOC.DISABLE, 0);
+    for (fds) |fd| _ = linux.ioctl(fd, linux.PERF.EVENT_IOC.DISABLE, 0);
 
-    var u64b: [8]u8 = .{0} ** 8;
-    _ = linux.read(fd, &u64b, 8);
+    var out: [3]u64 = .{0} ** 3;
+    for (fds, 0..) |fd, i| {
+        var u64a: [8]u8 = .{0} ** 8;
+        _ = linux.read(fd, &u64a, 8);
+        out[i] = @bitCast(u64a);
+    }
 
-    debug.print("perfEventStop() = {}\n", .{@as(u64, @bitCast(u64b))});
+    var buf: [64]u8 = undefined;
+    var writer = fs.File.stderr().writer(&buf);
+    const stderr = &writer.interface;
+    stderr.print("perfEventStop() = {any}\n", .{out}) catch {};
+    stderr.flush() catch {};
 }
