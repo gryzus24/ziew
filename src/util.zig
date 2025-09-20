@@ -177,16 +177,27 @@ pub inline fn atou64BackwardUntil(
 }
 
 pub inline fn nrDigits(n: u64) u5 {
-    var result: u5 = 1;
-    var t = n;
-    while (true) {
-        if (t < 10) return result;
-        if (t < 100) return result + 1;
-        if (t < 1000) return result + 2;
-        if (t < 10000) return result + 3;
-        t /= 10000;
-        result += 4;
+    // zig fmt: off
+    var r = (
+        1 +
+        @as(u5, @intFromBool(n >= 10)) +
+        @as(u5, @intFromBool(n >= 100)) +
+        @as(u5, @intFromBool(n >= 1000)) +
+        @as(u5, @intFromBool(n >= 10000))
+    );
+    // zig fmt: on
+
+    if (r < 5) {
+        @branchHint(.likely);
+        return r;
     }
+
+    var t = n / 10000;
+    while (t >= 10) {
+        t /= 10;
+        r += 1;
+    }
+    return r;
 }
 
 pub inline fn calc(new: u64, old: u64, diff: bool) u64 {
