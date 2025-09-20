@@ -40,8 +40,8 @@ pub fn debugNumUnit() !void {
     var writer = fs.File.stderr().writer(&buf);
     const stderr = &writer.interface;
 
-    const values: [8]u64 = .{ 9, 94, 948, 1023, 9480, 94800, 948000, 9480000 };
-    const values_width: [8]u8 = .{ 1, 2, 3, 4, 1, 2, 3, 1 };
+    const values: [10]u64 = .{ 9, 94, 948, 9489, 94899, 948999, 10240 - 45, 10240 - 44, 10240 - 1, 10240 };
+    const values_width: [10]u8 = .{ 1, 2, 3, 4, 2, 3, 2, 2, 2, 2 };
     const width_max = 8;
     const precision_max = 3;
 
@@ -58,11 +58,10 @@ pub fn debugNumUnit() !void {
                 if (p == precision_max + 1)
                     p = unt.PRECISION_AUTO_VALUE;
 
-                const o: unt.NumUnit.WriteOptions = .{
-                    .alignment = .right,
-                    .width = w,
-                    .precision = p,
-                };
+                var o: unt.NumUnit.WriteOptions = .default;
+                o.alignment = .right;
+                o.setWidth(w);
+                o.setPrecision(p);
 
                 utl.writeStr(stderr, "|");
                 nu.write(stderr, o, false);

@@ -36,8 +36,8 @@ fn KB_UNIT(kb: u64, kb_f5608: F5608) NumUnit {
 
 // == public ==================================================================
 
-pub const PRECISION_AUTO_VALUE: comptime_int = ~@as(u8, 0);
-pub const PRECISION_DIGITS_MAX: comptime_int = F5608.FRAC_ROUNDING_STEPS.len;
+pub const PRECISION_VALUE_AUTO: comptime_int = ~@as(u8, 0);
+pub const PRECISION_DIGITS_MAX: comptime_int = F5608.ROUND_STEPS.len;
 
 pub const F5608 = struct {
     u: u64,
@@ -67,11 +67,11 @@ pub const F5608 = struct {
     }
 
     pub fn round(self: @This(), precision: u8) F5608 {
-        if (precision >= FRAC_ROUNDING_STEPS.len)
-            return self;
-
-        const step = FRAC_ROUNDING_STEPS[precision];
-        return .{ .u = (self.u + step - 1) / step * step };
+        if (precision < ROUND_STEPS.len) {
+            const step = ROUND_STEPS[precision];
+            return .{ .u = (self.u + step - 1) / step * step };
+        }
+        return self;
     }
 
     pub fn roundAndTruncate(self: @This()) u64 {
@@ -81,13 +81,13 @@ pub const F5608 = struct {
     const FRAC_SHIFT = 8;
     const FRAC_MASK: u64 = (1 << FRAC_SHIFT) - 1;
 
-    const FRAC_ROUNDING_STEPS: [3]u64 = .{
+    const ROUND_STEPS: [3]u64 = .{
         ((1 << FRAC_SHIFT) + 1) / 2,
         ((1 << FRAC_SHIFT) + 19) / 20,
         ((1 << FRAC_SHIFT) + 199) / 200,
     };
     comptime {
-        for (FRAC_ROUNDING_STEPS) |e| {
+        for (ROUND_STEPS) |e| {
             if (e <= 1)
                 @compileError("ROUNDING_STEP too low to make an adjustment");
         }
@@ -118,45 +118,58 @@ pub const NumUnit = struct {
         width: u8,
         precision: u8,
 
+        pub fn setWidth(self: *@This(), w: u8) void {
+            if (w == 0) {
+                self.width = 1;
+            } else {
+                self.width = @min(w, 9);
+            }
+        }
+
+        pub fn setPrecision(self: *@This(), p: u8) void {
+            if (p == PRECISION_VALUE_AUTO) {
+                self.precision = PRECISION_VALUE_AUTO;
+            } else {
+                self.precision = @min(p, PRECISION_DIGITS_MAX);
+            }
+        }
+
         pub const default: WriteOptions = .{
             .alignment = .none,
             .width = 4,
-            .precision = PRECISION_AUTO_VALUE,
+            .precision = PRECISION_VALUE_AUTO,
         };
     };
 
-    fn roundedPadPrecisionAuto(self: @This(), width: u8) struct { F5608, u8, u8 } {
-        const rounded0 = self.n.round(0);
-        const rounded0_nr_digits = utl.nrDigits(rounded0.whole());
-
-        if (rounded0_nr_digits >= width)
-            return .{ rounded0, 0, 0 };
-
+    fn autoRoundPadPrecision(self: @This(), width: u8) struct { F5608, u8, u8 } {
         const nr_digits = utl.nrDigits(self.n.whole());
-        const frac_digits_space = width - nr_digits - 1;
+        const digit_space = width - 1;
 
-        // Can't do much - only the decimal point fits.
-        if (frac_digits_space == 0)
-            return .{ rounded0, 1, 0 };
+        // Do we have space for the fractional part?
+        if (digit_space > nr_digits) {
+            const p = digit_space - nr_digits;
+            const rp = self.n.round(p);
+            const rp_nr_digits = utl.nrDigits(rp.whole());
 
-        if (frac_digits_space >= PRECISION_DIGITS_MAX)
-            return .{
-                self.n,
-                frac_digits_space - PRECISION_DIGITS_MAX,
-                PRECISION_DIGITS_MAX,
-            };
+            if (nr_digits == rp_nr_digits) {
+                @branchHint(.likely);
+                return .{ rp, p -| PRECISION_DIGITS_MAX, p };
+            }
+            // Got rounded up - take one digit off the fractional part and make
+            // sure there is one space of padding inserted if precision digits
+            // hit zero. Otherwise, there is no need to worry about inserting
+            // padding here as enough `digit_space` results in `round` returning
+            // itself making the `nr_digits == rp_nr_digits` check always true.
+            return .{ self.n.round(p - 1), @intFromBool(p == 1), p - 1 };
+        }
 
-        const r = self.n.round(frac_digits_space);
-        if (utl.nrDigits(r.whole()) == nr_digits)
-            return .{ r, 0, frac_digits_space };
-
-        // Got rounded up - take one digit off the fractional part and make sure
-        // there is one space of padding inserted if `frac_digits_space` hits 0.
-        return .{
-            self.n.round(frac_digits_space - 1),
-            @intFromBool(frac_digits_space == 1),
-            frac_digits_space - 1,
-        };
+        // I guess we do not, let's round and not forget about the one cell
+        // of padding filling the preemptively allocated space for a '.' in
+        // the fractional part.
+        const r0 = self.n.round(0);
+        const r0_nr_digits = utl.nrDigits(r0.whole());
+        const pad = @intFromBool(r0_nr_digits == digit_space);
+        return .{ r0, pad, 0 };
     }
 
     pub fn write(
@@ -173,15 +186,14 @@ pub const NumUnit = struct {
             width += 1;
             precision = 0;
         }
-        width &= 0x0f; // space for the integer part of a number
 
-        var rounded: F5608 = undefined;
+        var rp: F5608 = undefined;
         var pad: u8 = undefined;
-        if (precision == PRECISION_AUTO_VALUE) {
-            rounded, pad, precision = self.roundedPadPrecisionAuto(width);
+        if (precision == PRECISION_VALUE_AUTO) {
+            rp, pad, precision = self.autoRoundPadPrecision(width);
         } else {
-            rounded = self.n.round(precision);
-            pad = width -| utl.nrDigits(rounded.whole());
+            rp = self.n.round(precision);
+            pad = width -| utl.nrDigits(rp.whole());
         }
 
         // should be enough
@@ -199,31 +211,26 @@ pub const NumUnit = struct {
         switch (precision) {
             0 => {},
             1 => {
-                const n = (rounded.frac() * 10) / (1 << F5608.FRAC_SHIFT);
+                const n = (rp.frac() * 10) / (1 << F5608.FRAC_SHIFT);
                 i -= 2;
                 buf[i..][0..2].* = .{ '.', '0' | @as(u8, @intCast(n)) };
             },
             2 => {
-                const n = (rounded.frac() * 100) / (1 << F5608.FRAC_SHIFT);
+                const n = (rp.frac() * 100) / (1 << F5608.FRAC_SHIFT);
                 const a, const b = digits2_lut(n);
                 i -= 3;
                 buf[i..][0..3].* = .{ '.', a, b };
             },
-            3 => {
-                const n = (rounded.frac() * 1000) / (1 << F5608.FRAC_SHIFT);
+            else => {
+                const n = (rp.frac() * 1000) / (1 << F5608.FRAC_SHIFT);
                 const a, const b = digits2_lut(n % 100);
                 i -= 4;
                 buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(n / 100)), a, b };
             },
-            else => {
-                if (PRECISION_DIGITS_MAX > 3)
-                    @compileError("PRECISION_DIGITS_MAX > 3");
-
-                unreachable;
-            },
+            PRECISION_VALUE_AUTO => unreachable,
         }
 
-        var n = rounded.whole();
+        var n = rp.whole();
         while (n >= 100) : (n /= 100) {
             i -= 2;
             const decunits: u8 = @intCast(n % 100);
@@ -242,7 +249,7 @@ pub const NumUnit = struct {
         if (alignment == .right)
             i -= pad;
 
-        if (quiet and rounded.u == 0) {
+        if (quiet and rp.u == 0) {
             const spaces: [32]u8 = .{' '} ** 32;
             utl.writeStr(writer, spaces[i..]);
         } else {

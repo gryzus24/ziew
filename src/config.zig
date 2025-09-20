@@ -255,7 +255,7 @@ fn acceptFormat(
             for (specs) |ch| switch (ch) {
                 '<' => ptr.wopts.alignment = .left,
                 '>' => ptr.wopts.alignment = .right,
-                '0'...'9' => ptr.wopts.width = ch & 0x0f,
+                '0'...'9' => ptr.wopts.setWidth(ch & 0x0f),
                 else => return .fail("unknown specifier", split.opt),
             };
         } else {
@@ -263,7 +263,7 @@ fn acceptFormat(
         }
 
         if (prec.len == 1) {
-            ptr.wopts.precision = @min(prec[0] & 0x0f, unt.PRECISION_DIGITS_MAX);
+            ptr.wopts.setPrecision(prec[0] & 0x0f);
         }
         if (prec.len > 1) {
             return .fail("excessive precision", split.opt);
