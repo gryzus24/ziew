@@ -143,14 +143,15 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
             utl.writeStr(writer, bat.state);
             continue;
         }
-        (switch (batopt) {
+        const nu = switch (batopt) {
             // zig fmt: off
             .arg            => unreachable,
             .@"%fullnow"    => unt.Percent(bat.now, bat.full),
             .@"%fulldesign" => unt.Percent(bat.now, bat.full_design),
             .state          => unreachable,
             // zig fmt: on
-        }).write(writer, part.wopts, part.quiet);
+        };
+        nu.write(writer, part.wopts, part.quiet);
     }
     utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);

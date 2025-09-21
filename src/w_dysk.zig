@@ -84,7 +84,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
             utl.writeStr(writer, wd.getMountpoint());
             continue;
         }
-        (switch (diskopt) {
+        const nu = switch (diskopt) {
             // zig fmt: off
             .arg           => unreachable,
             .@"%used"      => unt.Percent(used_kb, total_kb),
@@ -95,7 +95,8 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
             .free          => unt.SizeKb(free_kb),
             .available     => unt.SizeKb(avail_kb),
             // zig fmt: on
-        }).write(writer, part.wopts, part.quiet);
+        };
+        nu.write(writer, part.wopts, part.quiet);
     }
     utl.writeStr(writer, wd.format.last_str.get(base));
     return utl.writeBlockEnd(writer);
