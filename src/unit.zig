@@ -260,13 +260,7 @@ pub const NumUnit = struct {
             },
             else => {
                 @branchHint(.unlikely);
-                var t = n;
-                while (true) {
-                    i -= 1;
-                    buf[i] = '0' | @as(u8, @intCast(t % 10));
-                    t /= 10;
-                    if (t == 0) break;
-                }
+                utl.unsafeU64toa(&buf, n);
             },
         }
 
