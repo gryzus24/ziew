@@ -5,10 +5,6 @@ const io = std.io;
 
 // == private =================================================================
 
-fn digits2_lut(n: u64) [2]u8 {
-    return "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899"[n * 2 ..][0..2].*;
-}
-
 fn KB_UNIT(kb: u64, kb_f5608: F5608) NumUnit {
     const KB8 = 8192;
     const MB8 = 8192 * 1024;
@@ -227,13 +223,13 @@ pub const NumUnit = struct {
             },
             2 => {
                 const n = (rp.frac() * 100) / (1 << F5608.FRAC_SHIFT);
-                const b, const a = digits2_lut(n);
+                const b, const a = utl.digits2_lut(n);
                 i -= 3;
                 buf[i..][0..3].* = .{ '.', b, a };
             },
             else => {
                 const n = (rp.frac() * 1000) / (1 << F5608.FRAC_SHIFT);
-                const b, const a = digits2_lut(n % 100);
+                const b, const a = utl.digits2_lut(n % 100);
                 i -= 4;
                 buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(n / 100)), b, a };
             },
@@ -249,16 +245,16 @@ pub const NumUnit = struct {
             },
             2 => {
                 i -= 2;
-                buf[i..][0..2].* = digits2_lut(n);
+                buf[i..][0..2].* = utl.digits2_lut(n);
             },
             3 => {
-                const b, const a = digits2_lut(n % 100);
+                const b, const a = utl.digits2_lut(n % 100);
                 i -= 3;
                 buf[i..][0..3].* = .{ '0' | @as(u8, @intCast(n / 100)), b, a };
             },
             4 => {
-                const b, const a = digits2_lut(n % 100);
-                const d, const c = digits2_lut(n / 100);
+                const b, const a = utl.digits2_lut(n % 100);
+                const d, const c = utl.digits2_lut(n / 100);
                 i -= 4;
                 buf[i..][0..4].* = .{ d, c, b, a };
             },

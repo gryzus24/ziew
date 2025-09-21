@@ -156,19 +156,15 @@ fn getInet(
             var i: usize = 0;
             for (tuplets) |t| {
                 if (t > 99) {
-                    inetbuf[i + 0] = '0' | @as(u8, @intCast(t / 100 % 10));
-                    inetbuf[i + 1] = '0' | @as(u8, @intCast(t / 10 % 10));
-                    inetbuf[i + 2] = '0' | @as(u8, @intCast(t % 10));
-                    inetbuf[i + 3] = '.';
+                    const b, const a = utl.digits2_lut(t % 100);
+                    inetbuf[i..][0..4].* = .{ '0' | @as(u8, @intCast(t / 100)), b, a, '.' };
                     i += 4;
                 } else if (t > 9) {
-                    inetbuf[i + 0] = '0' | @as(u8, @intCast(t / 10 % 10));
-                    inetbuf[i + 1] = '0' | @as(u8, @intCast(t % 10));
-                    inetbuf[i + 2] = '.';
+                    const b, const a = utl.digits2_lut(t);
+                    inetbuf[i..][0..3].* = .{ b, a, '.' };
                     i += 3;
                 } else {
-                    inetbuf[i + 0] = '0' | @as(u8, @intCast(t % 10));
-                    inetbuf[i + 1] = '.';
+                    inetbuf[i..][0..2].* = .{ '0' | @as(u8, @intCast(t)), '.' };
                     i += 2;
                 }
             }
