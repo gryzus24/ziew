@@ -199,7 +199,7 @@ pub noinline fn perfEventStart() [3]linux.fd_t {
         },
     };
 
-    var fds: [3]linux.fd_t = .{0} ** 3;
+    var fds: [3]linux.fd_t = @splat(0);
     for (&peas, 0..) |*pea, i| {
         const ret: isize = @bitCast(linux.perf_event_open(pea, 0, 1, -1, 0));
         if (ret < 0) {
@@ -224,9 +224,9 @@ pub noinline fn perfEventStop(fds: [3]linux.fd_t) void {
 
     for (fds) |fd| _ = linux.ioctl(fd, linux.PERF.EVENT_IOC.DISABLE, 0);
 
-    var out: [3]u64 = .{0} ** 3;
+    var out: [3]u64 = @splat(0);
     for (fds, 0..) |fd, i| {
-        var u64a: [8]u8 = .{0} ** 8;
+        var u64a: [8]u8 = @splat(0);
         _ = linux.read(fd, &u64a, 8);
         out[i] = @bitCast(u64a);
     }

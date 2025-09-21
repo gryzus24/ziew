@@ -16,7 +16,7 @@ const Cpu = struct {
 
     const NR_FIELDS = 8;
 
-    pub const zero: Cpu = .{ .fields = .{0} ** NR_FIELDS };
+    pub const zero: Cpu = .{ .fields = @splat(0) };
 
     pub fn user(self: @This()) u64 {
         // user time includes guest time,

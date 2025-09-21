@@ -481,7 +481,7 @@ pub const WID__OPTS_SUPPORTING_COLOR: [Widget.Id.NR_WIDGETS][]const bool = blk: 
     var w: [Widget.Id.NR_WIDGETS][]const bool = undefined;
     for (WID_OPT_TYPE, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
-        var supporting_color: [len]bool = .{false} ** len;
+        var supporting_color: [len]bool = @splat(false);
         for (enums.values(T.ColorSupported)) |v| {
             supporting_color[@intFromEnum(v)] = true;
         }

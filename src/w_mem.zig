@@ -78,7 +78,7 @@ test "/proc/meminfo parser" {
 // == public ==================================================================
 
 pub const MemState = struct {
-    fields: [7]u64 = .{0} ** 7,
+    fields: [7]u64 = @splat(0),
     proc_meminfo: fs.File,
 
     pub fn init() MemState {

@@ -54,7 +54,7 @@ const IFace = struct {
     const NR_FIELDS = 16;
 
     name: [linux.IFNAMESIZE]u8 = .{'-'} ++ (.{0} ** 15),
-    fields: [NR_FIELDS]u64 = .{0} ** NR_FIELDS,
+    fields: [NR_FIELDS]u64 = @splat(0),
     node: std.SinglyLinkedList.Node,
 
     const FieldType = enum(u64) {
@@ -306,8 +306,8 @@ pub fn widget(
 
     const wd = w.wid.NET;
 
-    var _inetbuf: [INET_BUF_SIZE]u8 = .{0} ** INET_BUF_SIZE;
-    var _iffbuf: [IFF_BUF_MAX]u8 = .{0} ** IFF_BUF_MAX;
+    var _inetbuf: [INET_BUF_SIZE]u8 = @splat(0);
+    var _iffbuf: [IFF_BUF_MAX]u8 = @splat(0);
 
     var inet: []const u8 = undefined;
     var flags: []const u8 = undefined;

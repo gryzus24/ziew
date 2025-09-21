@@ -8,7 +8,7 @@ pub const Hex = struct {
     use: u8,
     hex: [6]u8,
 
-    pub const default: Hex = .{ .use = 0, .hex = .{0} ** 6 };
+    pub const default: Hex = .{ .use = 0, .hex = @splat(0) };
 
     pub fn init(hex: [6]u8) @This() {
         return .{ .use = 1, .hex = hex };
