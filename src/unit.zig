@@ -141,7 +141,7 @@ pub const NumUnit = struct {
         };
     };
 
-    fn autoRoundPadPrecision(self: @This(), width: u8) struct { F5608, u8, u8 } {
+    fn autoRoundPadPrecision(self: @This(), width: u8) struct { F5608, u8, u8, u8 } {
         const nr_digits = utl.nrDigits(self.n.whole());
         const digit_space = width - 1;
 
@@ -153,14 +153,14 @@ pub const NumUnit = struct {
 
             if (nr_digits == rp_nr_digits) {
                 @branchHint(.likely);
-                return .{ rp, p -| PRECISION_DIGITS_MAX, p };
+                return .{ rp, p -| PRECISION_DIGITS_MAX, p, rp_nr_digits };
             }
             // Got rounded up - take one digit off the fractional part and make
             // sure there is one space of padding inserted if precision digits
             // hit zero. Otherwise, there is no need to worry about inserting
             // padding here as enough `digit_space` results in `round` returning
             // itself making the `nr_digits == rp_nr_digits` check always true.
-            return .{ self.n.round(p - 1), @intFromBool(p == 1), p - 1 };
+            return .{ self.n.round(p - 1), @intFromBool(p == 1), p - 1, rp_nr_digits };
         }
 
         // I guess we do not, let's round and not forget about the one cell
@@ -169,7 +169,7 @@ pub const NumUnit = struct {
         const r0 = self.n.round(0);
         const r0_nr_digits = utl.nrDigits(r0.whole());
         const pad = @intFromBool(r0_nr_digits == digit_space);
-        return .{ r0, pad, 0 };
+        return .{ r0, pad, 0, r0_nr_digits };
     }
 
     pub fn write(
@@ -189,11 +189,13 @@ pub const NumUnit = struct {
 
         var rp: F5608 = undefined;
         var pad: u8 = undefined;
+        var nr_digits: u8 = undefined;
         if (precision == PRECISION_VALUE_AUTO) {
-            rp, pad, precision = self.autoRoundPadPrecision(width);
+            rp, pad, precision, nr_digits = self.autoRoundPadPrecision(width);
         } else {
             rp = self.n.round(precision);
-            pad = width -| utl.nrDigits(rp.whole());
+            nr_digits = utl.nrDigits(rp.whole());
+            pad = width -| nr_digits;
         }
 
         // should be enough
@@ -217,33 +219,51 @@ pub const NumUnit = struct {
             },
             2 => {
                 const n = (rp.frac() * 100) / (1 << F5608.FRAC_SHIFT);
-                const a, const b = digits2_lut(n);
+                const b, const a = digits2_lut(n);
                 i -= 3;
-                buf[i..][0..3].* = .{ '.', a, b };
+                buf[i..][0..3].* = .{ '.', b, a };
             },
             else => {
                 const n = (rp.frac() * 1000) / (1 << F5608.FRAC_SHIFT);
-                const a, const b = digits2_lut(n % 100);
+                const b, const a = digits2_lut(n % 100);
                 i -= 4;
-                buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(n / 100)), a, b };
+                buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(n / 100)), b, a };
             },
             PRECISION_VALUE_AUTO => unreachable,
         }
 
-        var n = rp.whole();
-        while (n >= 100) : (n /= 100) {
-            i -= 2;
-            const decunits: u8 = @intCast(n % 100);
-            buf[i..][0..2].* = digits2_lut(decunits);
-        }
-        if (n < 10) {
-            i -= 1;
-            buf[i] = '0' | @as(u8, @intCast(n));
-        } else {
-            // n < 100
-            i -= 2;
-            const decunits: u8 = @intCast(n);
-            buf[i..][0..2].* = digits2_lut(decunits);
+        const n = rp.whole();
+        switch (nr_digits) {
+            0 => unreachable,
+            1 => {
+                i -= 1;
+                buf[i] = '0' | @as(u8, @intCast(n));
+            },
+            2 => {
+                i -= 2;
+                buf[i..][0..2].* = digits2_lut(n);
+            },
+            3 => {
+                const b, const a = digits2_lut(n % 100);
+                i -= 3;
+                buf[i..][0..3].* = .{ '0' | @as(u8, @intCast(n / 100)), b, a };
+            },
+            4 => {
+                const b, const a = digits2_lut(n % 100);
+                const d, const c = digits2_lut(n / 100);
+                i -= 4;
+                buf[i..][0..4].* = .{ d, c, b, a };
+            },
+            else => {
+                @branchHint(.unlikely);
+                var t = n;
+                while (true) {
+                    i -= 1;
+                    buf[i] = '0' | @as(u8, @intCast(t % 10));
+                    t /= 10;
+                    if (t == 0) break;
+                }
+            },
         }
 
         if (alignment == .right)

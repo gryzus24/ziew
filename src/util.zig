@@ -176,14 +176,14 @@ pub inline fn atou64BackwardUntil(
     return r;
 }
 
-pub inline fn nrDigits(n: u64) u5 {
+pub inline fn nrDigits(n: u64) u8 {
     // zig fmt: off
     var r = (
         1 +
-        @as(u5, @intFromBool(n >= 10)) +
-        @as(u5, @intFromBool(n >= 100)) +
-        @as(u5, @intFromBool(n >= 1000)) +
-        @as(u5, @intFromBool(n >= 10000))
+        @as(u8, @intFromBool(n >= 10)) +
+        @as(u8, @intFromBool(n >= 100)) +
+        @as(u8, @intFromBool(n >= 1000)) +
+        @as(u8, @intFromBool(n >= 10000))
     );
     // zig fmt: on
 
