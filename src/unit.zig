@@ -178,6 +178,15 @@ pub const NumUnit = struct {
         opts: WriteOptions,
         quiet: bool,
     ) void {
+        // Fits in 128 bits; width(9) + dot(1) + frac(3) + unit(1),
+        // we can use overlapping stores with an XMM register for copying.
+        const HALF = 16;
+
+        if (writer.unusedCapacityLen() < HALF) {
+            @branchHint(.unlikely);
+            return;
+        }
+
         const alignment = opts.alignment;
         var width = opts.width;
         var precision = opts.precision;
@@ -198,9 +207,8 @@ pub const NumUnit = struct {
             pad = width -| nr_digits;
         }
 
-        // should be enough
-        var buf: [32]u8 = .{' '} ** 32;
-        var i = buf.len;
+        var buf: [HALF * 2]u8 = @splat(' ');
+        var i = buf.len / 2;
 
         if (alignment == .left)
             i -= pad;
@@ -269,12 +277,16 @@ pub const NumUnit = struct {
         if (alignment == .right)
             i -= pad;
 
+        var w: @Vector(HALF, u8) = undefined;
         if (quiet and rp.u == 0) {
-            const spaces: [32]u8 = .{' '} ** 32;
-            utl.writeStr(writer, spaces[i..]);
+            // Copying from the second half of the buffer (instead of
+            // using @splat) tricks the compiler into emitting cmovs.
+            w = buf[HALF..].*;
         } else {
-            utl.writeStr(writer, buf[i..]);
+            w = buf[i..][0..HALF].*;
         }
+        writer.buffer[writer.end..][0..HALF].* = w;
+        writer.end += HALF - i;
     }
 };
 
