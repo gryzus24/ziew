@@ -93,19 +93,20 @@ pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
     writeStr(writer, header);
 }
 
-pub fn writeBlockEnd(writer: *io.Writer) []const u8 {
+pub inline fn writeBlockEnd(writer: *io.Writer) []const u8 {
     const endstr = "\"},";
-    const nr_written = writer.write(endstr) catch |e| switch (e) {
-        error.WriteFailed => 0,
-    };
-    if (nr_written < endstr.len) {
-        @branchHint(.unlikely);
-        const undoamt: comptime_int = "...".len + endstr.len;
-        writer.undo(undoamt);
-        _ = writer.write("...") catch unreachable;
-        _ = writer.write(endstr) catch unreachable;
+    const cap = writer.unusedCapacityLen();
+
+    if (endstr.len <= cap) {
+        @branchHint(.likely);
+        writer.buffer[writer.end..][0..3].* = endstr.*;
+        return writer.buffer[0 .. writer.end + 3];
     }
-    return writer.buffered();
+
+    const undo = endstr.len - cap;
+    writer.end -= undo;
+    writer.buffer[writer.end - 3 ..][0..6].* = ("..." ++ endstr).*;
+    return writer.buffer[0 .. writer.end + 3];
 }
 
 // == MISC ====================================================================
