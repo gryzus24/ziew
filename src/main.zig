@@ -292,7 +292,18 @@ pub fn main() !void {
 
         var pos: usize = 2;
         for (views) |view| {
-            @memcpy(dst[pos .. pos + view.len], view);
+            dst[pos..][0..64].* = view.ptr[0..64].*;
+            if (view.len > 64) {
+                @branchHint(.unlikely);
+                const e = (view.len + 15) & ~@as(usize, 0x0f);
+                var i: usize = 64;
+                while (true) {
+                    dst[pos + i ..][0..16].* = view.ptr[i..][0..16].*;
+                    i += 16;
+                    if (i == e)
+                        break;
+                }
+            }
             pos += view.len;
         }
         dst[pos - 1] = ']'; // get rid of the trailing comma
