@@ -16,30 +16,28 @@ const mem = std.mem;
 
 const INET_BUF_SIZE = (4 * "255".len) + (3 * ".".len) + 1;
 
-// i-th bit IF flag abbreviation.
-const IFF_NAME: [16][]const u8 = .{
+// I-th bit IF flag abbreviations.
+const IFF_BIT_NAMES: [16][]const u8 = .{
     "U",  "B",  "D",  "L", "Pt", "Nt", "R",  "Na",
-    "Pr", "Al", "Ma", "S", "Mu", "Po", "Au", "D",
+    "Pr", "Al", "Ma", "S", "Mu", "Po", "Au", "Dy",
 };
+
+// Iteration in alphabetical order of IFF_BIT_NAMES.
+const IFF_BIT_NAMES_ALPHA_ITER = .{
+    9, 14, 1, 2, 15, 3, 10, 12, 7, 5, 13, 8, 4, 6, 11, 0,
+};
+
 const IFF_BUF_MAX = blk: {
     var w = 0;
-    for (IFF_NAME) |e| {
-        w += e.len;
-    }
+    for (IFF_BIT_NAMES) |e| w += e.len;
     break :blk w + 1;
 };
 
-// Iteration in alphabetical order of IFF_NAME over IF flag bits.
-const IFF_ALPHA_ORDER: [16]u16 = .{
-    9, 14, 1, 2, 15, 3, 10, 12, 7, 5, 13, 8, 4, 6, 11, 0,
-};
 comptime {
-    var w = 0;
-    for (IFF_ALPHA_ORDER) |e| {
-        w += e;
-    }
-    if (w != IFF_ALPHA_ORDER.len * (IFF_ALPHA_ORDER.len - 1) / 2)
-        @compileError("Bad IFF_ALPHA_ORDER sum");
+    var sum = 0;
+    for (IFF_BIT_NAMES_ALPHA_ITER) |e| sum += e;
+    if (sum != IFF_BIT_NAMES_ALPHA_ITER.len * (IFF_BIT_NAMES_ALPHA_ITER.len - 1) / 2)
+        @compileError("Bad IFF_BIT_NAMES_ALPHA sum");
 }
 
 const ColorHandler = struct {
@@ -193,9 +191,9 @@ fn getFlags(
             const flags: u16 = @bitCast(ifr.ifru.flags);
 
             var n: usize = 0;
-            inline for (IFF_ALPHA_ORDER) |i| {
+            inline for (IFF_BIT_NAMES_ALPHA_ITER) |i| {
                 if (flags & (1 << i) > 0) {
-                    const s = IFF_NAME[i];
+                    const s = IFF_BIT_NAMES[i];
                     @memcpy(iffbuf[n..][0..s.len], s);
                     n += s.len;
                 }
