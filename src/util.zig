@@ -34,63 +34,43 @@ pub inline fn writeStr(writer: *io.Writer, s: []const u8) void {
     _ = writer.write(s) catch {};
 }
 
-const A =
-    \\{"full_text":"
-;
-var NC_A = blk: {
-    var w: [A.len]u8 = undefined;
-    @memcpy(&w, A);
-    break :blk w;
-};
-
-const B =
-    \\{"color":"#XXXXXX","full_text":"
-;
-var FG_B = blk: {
-    var w: [B.len]u8 = undefined;
-    @memcpy(&w, B);
-    break :blk w;
-};
-
-const C =
-    \\{"background":"#XXXXXX","full_text":"
-;
-var BG_C = blk: {
-    var w: [C.len]u8 = undefined;
-    @memcpy(&w, C);
-    break :blk w;
-};
-
-const D =
-    \\{"color":"#XXXXXX","background":"#XXXXXX","full_text":"
-;
-var FGBG_D = blk: {
-    var w: [D.len]u8 = undefined;
-    @memcpy(&w, D);
-    break :blk w;
-};
-
-var BLOCK_HEADERS: [4][]u8 = .{ &NC_A, &FG_B, &BG_C, &FGBG_D };
-
 pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
-    const i = fg.use | (bg.use << 1);
+    if (typ.WIDGET_BUF_MAX < 64)
+        @compileError("typ.WIDGET_BUF_MAX < 64");
 
-    var header = BLOCK_HEADERS[i];
-    switch (i) {
-        0 => {},
+    switch (fg.use | (bg.use << 1)) {
+        0 => {
+            const str = "{\"full_text\":\"";
+            writer.buffer[writer.end..][0..16].* = (str ++ .{ 0, 0 }).*;
+            writer.end += str.len;
+        },
         1 => {
-            @memcpy(header[11..17], &fg.hex);
+            const str =
+                \\{"color":"#XXXXXX","full_text":"
+            ;
+            writer.buffer[writer.end..][0..32].* = str.*;
+            writer.buffer[writer.end..][11..17].* = fg.hex;
+            writer.end += str.len;
         },
         2 => {
-            @memcpy(header[16..22], &bg.hex);
+            const str =
+                \\{"background":"#XXXXXX","full_text":"
+            ;
+            writer.buffer[writer.end..][0..37].* = str.*;
+            writer.buffer[writer.end..][16..22].* = bg.hex;
+            writer.end += str.len;
         },
         3 => {
-            @memcpy(header[11..17], &fg.hex);
-            @memcpy(header[34..40], &bg.hex);
+            const str =
+                \\{"color":"#XXXXXX","background":"#XXXXXX","full_text":"
+            ;
+            writer.buffer[writer.end..][0..55].* = str.*;
+            writer.buffer[writer.end..][11..17].* = fg.hex;
+            writer.buffer[writer.end..][34..40].* = bg.hex;
+            writer.end += str.len;
         },
         else => unreachable,
     }
-    writeStr(writer, header);
 }
 
 pub inline fn writeBlockEnd(writer: *io.Writer) []const u8 {
