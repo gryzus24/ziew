@@ -85,7 +85,7 @@ pub inline fn writeBlockEnd(writer: *io.Writer) []const u8 {
 
     const undo = endstr.len - cap;
     writer.end -= undo;
-    writer.buffer[writer.end - 3 ..][0..6].* = ("..." ++ endstr).*;
+    writer.buffer[writer.end - 3 ..][0..6].* = ("…" ++ endstr).*;
     return writer.buffer[0 .. writer.end + 3];
 }
 
