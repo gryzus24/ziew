@@ -31,7 +31,10 @@ pub inline fn fdWriteV(fd: linux.fd_t, vs: anytype) void {
 }
 
 pub inline fn writeStr(writer: *io.Writer, s: []const u8) void {
-    _ = writer.write(s) catch {};
+    const n = @min(s.len, writer.unusedCapacityLen());
+    const dst = writer.buffer[writer.end..];
+    for (0..n) |i| dst[i] = s[i];
+    writer.end += n;
 }
 
 pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
@@ -42,7 +45,7 @@ pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
     switch (fg.use | (bg.use << 1)) {
         0 => {
             const str = "{\"full_text\":\"";
-            dst[0..16].* = (str ++ .{ 0, 0 }).*;
+            dst[0..16].* = (str ++ .{ undefined, undefined }).*;
             writer.end += str.len;
         },
         1 => {
