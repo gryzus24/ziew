@@ -324,18 +324,20 @@ pub fn widget(
 
             var left: u32 = 0;
             var right: u32 = 0;
+
+            const buffer = writer.buffer;
             var pos = writer.end;
             for (1..1 + new.nr_cpux_entries) |i| {
                 if (i & 1 == 1) {
                     left = brlBarIntensity(&new.entries[i], &old.entries[i]);
                 } else {
                     right = brlBarIntensity(&new.entries[i], &old.entries[i]);
-                    writer.buffer[pos..][0..3].* = BRLBARS[left][right];
+                    buffer[pos..][0..3].* = BRLBARS[left][right];
                     pos += 3;
                 }
             }
             if (new.nr_cpux_entries & 1 == 1) {
-                writer.buffer[pos..][0..3].* = BRLBARS[left][0];
+                buffer[pos..][0..3].* = BRLBARS[left][0];
                 pos += 3;
             }
             writer.end = pos;
@@ -347,9 +349,10 @@ pub fn widget(
                 break;
             }
 
+            const buffer = writer.buffer;
             var pos = writer.end;
             for (1..1 + new.nr_cpux_entries) |i| {
-                writer.buffer[pos..][0..3].* =
+                buffer[pos..][0..3].* =
                     BLKBARS[blkBarIntensity(&new.entries[i], &old.entries[i])];
                 pos += 3;
             }

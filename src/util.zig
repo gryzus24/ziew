@@ -38,35 +38,36 @@ pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
     if (typ.WIDGET_BUF_MAX < 64)
         @compileError("typ.WIDGET_BUF_MAX < 64");
 
+    const dst = writer.buffer[writer.end..];
     switch (fg.use | (bg.use << 1)) {
         0 => {
             const str = "{\"full_text\":\"";
-            writer.buffer[writer.end..][0..16].* = (str ++ .{ 0, 0 }).*;
+            dst[0..16].* = (str ++ .{ 0, 0 }).*;
             writer.end += str.len;
         },
         1 => {
             const str =
                 \\{"color":"#XXXXXX","full_text":"
             ;
-            writer.buffer[writer.end..][0..32].* = str.*;
-            writer.buffer[writer.end..][11..17].* = fg.hex;
+            dst[0..32].* = str.*;
+            dst[11..17].* = fg.hex;
             writer.end += str.len;
         },
         2 => {
             const str =
                 \\{"background":"#XXXXXX","full_text":"
             ;
-            writer.buffer[writer.end..][0..37].* = str.*;
-            writer.buffer[writer.end..][16..22].* = bg.hex;
+            dst[0..37].* = str.*;
+            dst[16..22].* = bg.hex;
             writer.end += str.len;
         },
         3 => {
             const str =
                 \\{"color":"#XXXXXX","background":"#XXXXXX","full_text":"
             ;
-            writer.buffer[writer.end..][0..55].* = str.*;
-            writer.buffer[writer.end..][11..17].* = fg.hex;
-            writer.buffer[writer.end..][34..40].* = bg.hex;
+            dst[0..55].* = str.*;
+            dst[11..17].* = fg.hex;
+            dst[34..40].* = bg.hex;
             writer.end += str.len;
         },
         else => unreachable,
@@ -76,17 +77,19 @@ pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
 pub inline fn writeBlockEnd(writer: *io.Writer) []const u8 {
     const endstr = "\"},";
     const cap = writer.unusedCapacityLen();
+    const buffer = writer.buffer;
+    const end = writer.end;
 
     if (endstr.len <= cap) {
         @branchHint(.likely);
-        writer.buffer[writer.end..][0..3].* = endstr.*;
-        return writer.buffer[0 .. writer.end + 3];
+        buffer[end..][0..3].* = endstr.*;
+        writer.end = end + 3;
+        return buffer[0 .. end + 3];
     }
 
-    const undo = endstr.len - cap;
-    writer.end -= undo;
-    writer.buffer[writer.end - 3 ..][0..6].* = ("…" ++ endstr).*;
-    return writer.buffer[0 .. writer.end + 3];
+    buffer[buffer.len - 6 ..][0..6].* = ("…" ++ endstr).*;
+    writer.end = buffer.len;
+    return buffer;
 }
 
 // == MISC ====================================================================

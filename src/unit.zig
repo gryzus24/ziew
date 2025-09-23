@@ -181,9 +181,10 @@ pub const NumUnit = struct {
         const avail = writer.unusedCapacityLen();
         if (avail < HALF) {
             @branchHint(.unlikely);
+            const buffer = writer.buffer;
             var pos = writer.end;
             for (0..@min(avail, 2)) |_| {
-                writer.buffer[pos] = '@';
+                buffer[pos] = '@';
                 pos += 1;
             }
             writer.end = pos;
