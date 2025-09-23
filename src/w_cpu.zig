@@ -193,12 +193,12 @@ test "/proc/stat parser" {
     try t.expect(s.softirq == 4426117);
 }
 
-const BRLBARS: [5][5][]const u8 = .{
-    .{ "⠀", "⢀", "⢠", "⢰", "⢸" },
-    .{ "⡀", "⣀", "⣠", "⣰", "⣸" },
-    .{ "⡄", "⣄", "⣤", "⣴", "⣼" },
-    .{ "⡆", "⣆", "⣦", "⣶", "⣾" },
-    .{ "⡇", "⣇", "⣧", "⣷", "⣿" },
+const BRLBARS: [5][5][3]u8 = .{
+    .{ "⠀".*, "⢀".*, "⢠".*, "⢰".*, "⢸".* },
+    .{ "⡀".*, "⣀".*, "⣠".*, "⣰".*, "⣸".* },
+    .{ "⡄".*, "⣄".*, "⣤".*, "⣴".*, "⣼".* },
+    .{ "⡆".*, "⣆".*, "⣦".*, "⣶".*, "⣾".* },
+    .{ "⡇".*, "⣇".*, "⣧".*, "⣷".*, "⣿".* },
 };
 
 fn brlBarIntensity(new: *const Cpu, old: *const Cpu) u32 {
@@ -213,8 +213,8 @@ fn brlBarIntensity(new: *const Cpu, old: *const Cpu) u32 {
     };
 }
 
-const BLKBARS: [9][]const u8 = .{
-    " ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█",
+const BLKBARS: [9][3]u8 = .{
+    "⠀".*, "▁".*, "▂".*, "▃".*, "▄".*, "▅".*, "▆".*, "▇".*, "█".*,
 };
 
 fn blkBarIntensity(new: *const Cpu, old: *const Cpu) u32 {
@@ -315,27 +315,45 @@ pub fn widget(
 
         const cpuopt: typ.CpuOpt = @enumFromInt(part.opt);
         if (cpuopt == .brlbars) {
+            // Yes, I know it's off by one.
+            const needed = new.nr_cpux_entries * BRLBARS[0][0].len;
+            if (writer.unusedCapacityLen() < needed) {
+                @branchHint(.unlikely);
+                break;
+            }
+
             var left: u32 = 0;
             var right: u32 = 0;
+            var pos = writer.end;
             for (1..1 + new.nr_cpux_entries) |i| {
                 if (i & 1 == 1) {
                     left = brlBarIntensity(&new.entries[i], &old.entries[i]);
                 } else {
                     right = brlBarIntensity(&new.entries[i], &old.entries[i]);
-                    utl.writeStr(writer, BRLBARS[left][right]);
+                    writer.buffer[pos..][0..3].* = BRLBARS[left][right];
+                    pos += 3;
                 }
             }
-            if (new.nr_cpux_entries & 1 == 1)
-                utl.writeStr(writer, BRLBARS[left][0]);
-
+            if (new.nr_cpux_entries & 1 == 1) {
+                writer.buffer[pos..][0..3].* = BRLBARS[left][0];
+                pos += 3;
+            }
+            writer.end = pos;
             continue;
         } else if (cpuopt == .blkbars) {
-            for (1..1 + new.nr_cpux_entries) |i| {
-                utl.writeStr(
-                    writer,
-                    BLKBARS[blkBarIntensity(&new.entries[i], &old.entries[i])],
-                );
+            const needed = new.nr_cpux_entries * BLKBARS[0].len;
+            if (writer.unusedCapacityLen() < needed) {
+                @branchHint(.unlikely);
+                break;
             }
+
+            var pos = writer.end;
+            for (1..1 + new.nr_cpux_entries) |i| {
+                writer.buffer[pos..][0..3].* =
+                    BLKBARS[blkBarIntensity(&new.entries[i], &old.entries[i])];
+                pos += 3;
+            }
+            writer.end = pos;
             continue;
         }
         const d = part.diff;
