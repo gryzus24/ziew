@@ -189,6 +189,28 @@ pub fn MemSlice(T: type) type {
             const size = @sizeOf(T) * self.len;
             return @alignCast(mem.bytesAsSlice(T, base[self.off..][0..size]));
         }
+
+        pub inline fn writeBytes(
+            self: @This(),
+            writer: *io.Writer,
+            base: [*]const u8,
+        ) void {
+            const n = @min(self.len, writer.unusedCapacityLen());
+            // Avoid an additional load through the writer pointer on every
+            // iteration. Same as adding `noalias` to the writer parameter, but
+            // plays well with forced inlining into callers without `noalias`
+            // added therein. It leads to more register spills though as,
+            // no wonder, the optimizer prioritizes loops over prologues.
+            const dst = writer.buffer[writer.end..];
+            // `off` should be upcast to at least u32 to avoid a zero extending
+            // load during addressing. Alternatively, we can set up a pointer
+            // with proper offset applied before entering the loop.
+            const src = base[self.off..];
+            for (0..n) |i| {
+                dst[i] = src[i];
+            }
+            writer.end += n;
+        }
     };
 }
 

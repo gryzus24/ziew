@@ -355,7 +355,7 @@ pub fn widget(
     const fg, const bg = w.check(ch, base);
     utl.writeBlockBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
-        utl.writeStr(writer, part.str.get(base));
+        part.str.writeBytes(writer, base);
 
         const opt: typ.NetOpt = @enumFromInt(part.opt);
         if (opt.requiresSocket()) {
@@ -399,6 +399,6 @@ pub fn widget(
         }
         nu.write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.last_str.get(base));
+    wd.format.last_str.writeBytes(writer, base);
     return utl.writeBlockEnd(writer);
 }

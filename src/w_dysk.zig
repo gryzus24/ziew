@@ -77,7 +77,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
     const fg, const bg = w.check(ch, base);
     utl.writeBlockBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
-        utl.writeStr(writer, part.str.get(base));
+        part.str.writeBytes(writer, base);
 
         const diskopt: typ.DiskOpt = @enumFromInt(part.opt);
         if (diskopt == .arg) {
@@ -98,6 +98,6 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
         };
         nu.write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.last_str.get(base));
+    wd.format.last_str.writeBytes(writer, base);
     return utl.writeBlockEnd(writer);
 }

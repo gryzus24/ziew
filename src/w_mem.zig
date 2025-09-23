@@ -153,7 +153,7 @@ pub fn widget(
     const fg, const bg = w.check(state, base);
     utl.writeBlockBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
-        utl.writeStr(writer, part.str.get(base));
+        part.str.writeBytes(writer, base);
         const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {
             // zig fmt: off
             .@"%free"      => unt.Percent(state.free(), state.total()),
@@ -173,6 +173,6 @@ pub fn widget(
         };
         nu.write(writer, part.wopts, part.quiet);
     }
-    utl.writeStr(writer, wd.format.last_str.get(base));
+    wd.format.last_str.writeBytes(writer, base);
     return utl.writeBlockEnd(writer);
 }

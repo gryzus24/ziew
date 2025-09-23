@@ -91,7 +91,7 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
 
     utl.writeBlockBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
-        utl.writeStr(writer, part.str.get(base));
+        part.str.writeBytes(writer, base);
         utl.writeStr(
             writer,
             switch (@as(typ.ReadOpt, @enumFromInt(part.opt))) {
@@ -104,6 +104,6 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
             },
         );
     }
-    utl.writeStr(writer, wd.format.last_str.get(base));
+    wd.format.last_str.writeBytes(writer, base);
     return utl.writeBlockEnd(writer);
 }
