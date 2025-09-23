@@ -178,8 +178,15 @@ pub const NumUnit = struct {
         // we can use overlapping stores with an XMM register for copying.
         const HALF = 16;
 
-        if (writer.unusedCapacityLen() < HALF) {
+        const avail = writer.unusedCapacityLen();
+        if (avail < HALF) {
             @branchHint(.unlikely);
+            var pos = writer.end;
+            for (0..@min(avail, 2)) |_| {
+                writer.buffer[pos] = '@';
+                pos += 1;
+            }
+            writer.end = pos;
             return;
         }
 
