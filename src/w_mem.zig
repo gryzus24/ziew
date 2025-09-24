@@ -15,21 +15,21 @@ fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
     const MEMINFO_KEY_LEN = "xxxxxxxx:       ".len;
 
     var i: usize = MEMINFO_KEY_LEN;
-    for (0..5) |fieldi| {
+    for (0..5) |fi| {
         while (buf[i] == ' ') : (i += 1) {}
-        new.fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
+        new.fields[fi] = utl.atou64ForwardUntil(buf, &i, ' ');
         i += " kB\n".len + MEMINFO_KEY_LEN;
     }
-    // we can safely skip /9/ fields
-    i += "0 kb\n".len + 8 * (MEMINFO_KEY_LEN + "0 kb\n".len);
+    // We can safely skip ~11 fields - it depends on the kernel configuration.
+    i += "0 kb\n".len + 10 * (MEMINFO_KEY_LEN + "0 kb\n".len);
 
     // look for Dirty
     while (buf[i] != 'D') : (i += 1) {}
     i += MEMINFO_KEY_LEN;
 
-    for (5..7) |fieldi| {
+    for (5..7) |fi| {
         while (buf[i] == ' ') : (i += 1) {}
-        new.fields[fieldi] = utl.atou64ForwardUntil(buf, &i, ' ');
+        new.fields[fi] = utl.atou64ForwardUntil(buf, &i, ' ');
         i += " kb\n".len + MEMINFO_KEY_LEN;
     }
 }
