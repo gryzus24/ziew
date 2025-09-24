@@ -61,9 +61,9 @@ const IFace = struct {
     };
 
     pub fn setName(self: *@This(), name: []const u8) void {
+        self.name[0..16].* = @splat(0);
         // note: length check omitted
-        @memset(self.name[0..], 0);
-        @memcpy(self.name[0..name.len], name);
+        for (0..name.len) |i| self.name[i] = name[i];
     }
 
     pub fn bytes(self: @This(), comptime t: FieldType) u64 {
