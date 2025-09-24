@@ -104,13 +104,17 @@ pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []con
 
     var bat: Bat = .{};
 
-    var lines = mem.tokenizeScalar(u8, buf[0..nr_read], '\n');
-    while (lines.next()) |line| {
-        const eqi = mem.indexOfScalar(u8, line, '=') orelse {
+    var nls: utl.IndexIterator(u8, '\n') = .init(buf[0..nr_read]);
+    var last: usize = 0;
+    while (nls.next()) |nl| {
+        const line = buf[last..nl];
+        last = nl + 1;
+
+        const i = mem.indexOfScalar(u8, line, '=') orelse {
             log.fatal(&.{"BAT: crazy uevent"});
         };
-        const key = line[0..eqi];
-        const val = line[eqi + 1 ..];
+        const key = line[0..i];
+        const val = line[i + 1 ..];
 
         if (!mem.startsWith(u8, key, "POWER_SUPPLY_")) continue;
         const cmp = key["POWER_SUPPLY_".len..];
