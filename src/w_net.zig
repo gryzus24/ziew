@@ -209,7 +209,7 @@ fn getFlags(
 }
 
 fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
-    var nls: utl.NewlineIterator = .init(buf);
+    var nls: utl.IndexIterator(u8, '\n') = .init(buf);
 
     var last: usize = undefined;
     last = nls.next() orelse unreachable;

@@ -240,50 +240,55 @@ pub fn unsafeU64toa(dst: []u8, n: u64) void {
     }
 }
 
-pub const NewlineIterator = struct {
-    buf: []const u8,
-    i: usize,
-    bits: meta.Int(.unsigned, BlockSize),
+// This is so naive and untweaked yet it benches faster than
+// `mem.indexOfScalarPos` in a loop on random input and has
+// a nice 20%/20% frontend/backend ratio in that scenario.
+pub fn IndexIterator(comptime T: type, findme: T) type {
+    return struct {
+        buf: []const T,
+        i: usize,
+        bits: meta.Int(.unsigned, BlockSize),
 
-    const BlockSize = std.simd.suggestVectorLength(u8) orelse 8;
-    const Block = @Vector(BlockSize, u8);
+        const BlockSize = @min(64, 2 * (simd.suggestVectorLength(T) orelse 8));
+        const Block = @Vector(BlockSize, T);
 
-    pub fn init(buf: []const u8) @This() {
-        return .{ .buf = buf, .i = 0, .bits = 0 };
-    }
+        pub fn init(buf: []const T) @This() {
+            return .{ .buf = buf, .i = 0, .bits = 0 };
+        }
 
-    inline fn nextBit(self: *@This()) usize {
-        const lsb = self.bits & (~self.bits + 1);
-        const i = self.i;
-        const j = @ctz(self.bits);
-        self.bits ^= lsb;
-        // It's very likely self.bits == 0, make it branchless.
-        self.i += @intFromBool(self.bits == 0) * @as(usize, BlockSize);
-        return i + j;
-    }
+        inline fn nextBit(self: *@This()) usize {
+            const lsb = self.bits & (~self.bits + 1);
+            const i = self.i;
+            const j = @ctz(self.bits);
+            self.bits ^= lsb;
+            // It's very likely self.bits == 0, make it branchless.
+            self.i += @intFromBool(self.bits == 0) * @as(usize, BlockSize);
+            return i + j;
+        }
 
-    pub fn next(self: *@This()) ?usize {
-        if (self.bits != 0)
-            return self.nextBit();
-
-        const len = self.buf.len;
-        while (self.i < len & ~@as(usize, BlockSize - 1)) {
-            const block: Block = self.buf[self.i..][0..BlockSize].*;
-            const mask = block == @as(Block, @splat('\n'));
-            if (@reduce(.Or, mask)) {
-                self.bits = @bitCast(mask);
+        pub fn next(self: *@This()) ?usize {
+            if (self.bits != 0)
                 return self.nextBit();
+
+            const len = self.buf.len;
+            while (self.i < len & ~@as(usize, BlockSize - 1)) {
+                const block: Block = self.buf[self.i..][0..BlockSize].*;
+                const mask = block == @as(Block, @splat(findme));
+                if (@reduce(.Or, mask)) {
+                    self.bits = @bitCast(mask);
+                    return self.nextBit();
+                }
+                self.i += BlockSize;
             }
-            self.i += BlockSize;
-        }
-        var i = self.i;
-        while (i < len) : (i += 1) {
-            if (self.buf[i] == '\n') {
-                self.i = i + 1;
-                return i;
+            var i = self.i;
+            while (i < len) : (i += 1) {
+                if (self.buf[i] == findme) {
+                    self.i = i + 1;
+                    return i;
+                }
             }
+            self.i = self.buf.len;
+            return null;
         }
-        self.i = self.buf.len;
-        return null;
-    }
-};
+    };
+}
