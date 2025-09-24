@@ -8,7 +8,9 @@ const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
 const mem = std.mem;
+const meta = std.meta;
 const posix = std.posix;
+const simd = std.simd;
 const zig = std.zig;
 
 // zig fmt: off
@@ -237,3 +239,51 @@ pub fn unsafeU64toa(dst: []u8, n: u64) void {
         dst[i..][0..2].* = digits2_lut(t);
     }
 }
+
+pub const NewlineIterator = struct {
+    buf: []const u8,
+    i: usize,
+    bits: meta.Int(.unsigned, BlockSize),
+
+    const BlockSize = std.simd.suggestVectorLength(u8) orelse 8;
+    const Block = @Vector(BlockSize, u8);
+
+    pub fn init(buf: []const u8) @This() {
+        return .{ .buf = buf, .i = 0, .bits = 0 };
+    }
+
+    inline fn nextBit(self: *@This()) usize {
+        const lsb = self.bits & (~self.bits + 1);
+        const i = self.i;
+        const j = @ctz(self.bits);
+        self.bits ^= lsb;
+        // It's very likely self.bits == 0, make it branchless.
+        self.i += @intFromBool(self.bits == 0) * @as(usize, BlockSize);
+        return i + j;
+    }
+
+    pub fn next(self: *@This()) ?usize {
+        if (self.bits != 0)
+            return self.nextBit();
+
+        const len = self.buf.len;
+        while (self.i < len & ~@as(usize, BlockSize - 1)) {
+            const block: Block = self.buf[self.i..][0..BlockSize].*;
+            const mask = block == @as(Block, @splat('\n'));
+            if (@reduce(.Or, mask)) {
+                self.bits = @bitCast(mask);
+                return self.nextBit();
+            }
+            self.i += BlockSize;
+        }
+        var i = self.i;
+        while (i < len) : (i += 1) {
+            if (self.buf[i] == '\n') {
+                self.i = i + 1;
+                return i;
+            }
+        }
+        self.i = self.buf.len;
+        return null;
+    }
+};
