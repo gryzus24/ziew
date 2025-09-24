@@ -108,7 +108,7 @@ const NetDev = struct {
 
     const IFaceList = std.SinglyLinkedList;
 
-    pub fn newIf(self: *@This()) !*IFace {
+    pub fn allocIf(self: *@This()) !*IFace {
         var new: *IFace = undefined;
         if (self.free.popFirst()) |free| {
             new = @fieldParentPtr("node", free);
@@ -209,20 +209,27 @@ fn getFlags(
 }
 
 fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
-    var lines = mem.tokenizeScalar(u8, buf, '\n');
-    _ = lines.next() orelse unreachable;
-    _ = lines.next() orelse unreachable;
-    while (lines.next()) |line| {
+    var nls: utl.NewlineIterator = .init(buf);
+
+    var last: usize = undefined;
+    last = nls.next() orelse unreachable;
+    last = nls.next() orelse unreachable;
+    while (nls.next()) |nl| {
+        const line = buf[last + 1 .. nl];
+        last = nl;
+
         var i: usize = 0;
         while (line[i] == ' ') : (i += 1) {}
         var j = i;
         while (line[j] != ':') : (j += 1) {}
-        var new_if = try netdev.newIf();
+        var new_if = try netdev.allocIf();
         new_if.setName(line[i..j]);
-        j += 1; // skip ':'
-        for (0..IFace.NR_FIELDS) |field_indx| {
+        j += 1;
+
+        for (0..IFace.NR_FIELDS) |fi| {
             while (line[j] == ' ') : (j += 1) {}
-            new_if.fields[field_indx] = utl.atou64ForwardUntilOrEOF(line, &j, ' ');
+            new_if.fields[fi] = utl.atou64ForwardUntilOrEOF(line, &j, ' ');
+            j += 1;
         }
     }
 }
