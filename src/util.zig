@@ -165,6 +165,20 @@ pub inline fn atou64BackwardUntil(
     return r;
 }
 
+pub fn atou32V9Back(buf: []const u8) u32 {
+    const Block = @Vector(8, u32);
+
+    const exp: Block = .{
+        100_000_000, 10_000_000, 1_000_000,
+        100_000,     10_000,     1_000,
+        100,         10,
+    };
+    const u = buf[buf.len - 1];
+    const block: Block = buf[buf.len - 9 ..][0..8].*;
+    const r = (block & @as(Block, @splat(0x0f))) * exp;
+    return @reduce(.Add, r) + (u & 0x0f);
+}
+
 pub inline fn nrDigits(n: u64) u8 {
     // zig fmt: off
     var r = (

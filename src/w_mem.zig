@@ -12,25 +12,30 @@ const mem = std.mem;
 // == private =================================================================
 
 fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
-    const MEMINFO_KEY_LEN = "xxxxxxxx:       ".len;
+    const KEY_LEN = "xxxxxxxx:       ".len;
+    const VAL_LEN = 8;
+    const UNIT_LEN = " kB".len;
+    const FIELD_LEN = KEY_LEN + VAL_LEN + UNIT_LEN;
 
-    var i: usize = MEMINFO_KEY_LEN;
-    for (0..5) |fi| {
-        while (buf[i] == ' ') : (i += 1) {}
-        new.fields[fi] = utl.atou64ForwardUntil(buf, &i, ' ');
-        i += " kB\n".len + MEMINFO_KEY_LEN;
-    }
-    // We can safely skip ~11 fields - it depends on the kernel configuration.
-    i += "0 kb\n".len + 10 * (MEMINFO_KEY_LEN + "0 kb\n".len);
+    // This isn't the most optimal arrangement of loops in terms of
+    // instructions executed, but it generates nice and small code.
+    var i: usize = FIELD_LEN;
+    for (0..7) |fi| {
+        while (buf[i] != '\n') : (i += 1) {}
+        // Will break on systems with over 953 GB of RAM.
+        new.fields[fi] = utl.atou32V9Back(buf[0 .. i - "kb\n".len]);
 
-    // look for Dirty
-    while (buf[i] != 'D') : (i += 1) {}
-    i += MEMINFO_KEY_LEN;
-
-    for (5..7) |fi| {
-        while (buf[i] == ' ') : (i += 1) {}
-        new.fields[fi] = utl.atou64ForwardUntil(buf, &i, ' ');
-        i += " kb\n".len + MEMINFO_KEY_LEN;
+        if (fi == 4) {
+            // Skipping 11 fields is tight for kernels
+            // with HIGHMEM and ZSWAP configured out.
+            i += 11 * (FIELD_LEN + 1);
+            while (true) {
+                while (buf[i] != '\n') : (i += 1) {}
+                if (buf[i + 1] == 'D') break;
+                i += FIELD_LEN + 1;
+            }
+        }
+        i += FIELD_LEN + 1;
     }
 }
 
@@ -38,9 +43,9 @@ test "/proc/meminfo parser" {
     const t = std.testing;
 
     const buf =
-        \\MemTotal:       16324532 kB
+        \\MemTotal:       163245324 kB
         \\MemFree:         6628464 kB
-        \\MemAvailable:   10621004 kB
+        \\MemAvailable:   106210048 kB
         \\Buffers:          234640 kB
         \\Cached:          3970504 kB
         \\SwapCached:            0 kB
@@ -63,12 +68,17 @@ test "/proc/meminfo parser" {
         \\Shmem:            224264 kB
         \\KReclaimable:     352524 kB
         \\Slab:             453728 kB
+        \\SReclaimable:      22222 kB
+        \\SUnreclaim:        33333 kB
+        \\KernelStack:       11184 kB
+        \\PageTables:        17444 kB
+        \\SecPageTables:      2056 kB
     ;
     var s: MemState = .init();
     parseProcMeminfo(buf, &s);
-    try t.expect(s.total() == 16324532);
+    try t.expect(s.total() == 163245324);
     try t.expect(s.free() == 6628464);
-    try t.expect(s.avail() == 10621004);
+    try t.expect(s.avail() == 106210048);
     try t.expect(s.buffers() == 234640);
     try t.expect(s.cached() == 3970504);
     try t.expect(s.dirty() == 28);
