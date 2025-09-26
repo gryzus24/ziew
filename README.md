@@ -160,19 +160,20 @@ Every option and color configuration for each *Widget* is documented below.
       format "FORMAT"
 
     FORMAT options
-      * [%]all  - time spent executing both user and kernel code,
-      * [%]user - time spent executing user code,
-      * [%]sys  - time spent executing kernel code,
-      * intr    - number of serviced interrupts,
-      * ctxt    - number of context switches,
-      * forks   - number of forks,
-      * running - number of processes running right now,
-      * blocked - number of processes blocked on I/O right now,
-      * softirq - number of serviced software interrupts,
-      * brlbars - visualization of %all CPU usage as narrow (Braille
-                  characters) bars, one bar per CPU,
-      * blkbars - same as above, but needs more space, as it uses actual block
-                  characters with more granularity.
+      * [%]all    - time spent executing both user and kernel code,
+      * [%]user   - time spent executing user code,
+      * [%]sys    - time spent executing kernel code,
+      * [%]iowait - time spent waiting on I/O (see proc_stat(5) for details),
+      * intr      - number of serviced interrupts,
+      * ctxt      - number of context switches,
+      * forks     - number of forks,
+      * running   - number of processes running right now,
+      * blocked   - number of processes blocked on I/O right now,
+      * softirq   - number of serviced software interrupts,
+      * brlbars   - visualization of %all CPU usage as narrow (Braille
+                    characters) bars, one bar per CPU,
+      * blkbars   - same as above, but needs more space, as it uses actual
+                    block characters with more granularity.
 
     Option flag @d may affect
       intr, ctxt, forks, softirq

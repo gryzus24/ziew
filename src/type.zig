@@ -346,9 +346,11 @@ pub const CpuOpt = enum {
     @"%all",
     @"%user",
     @"%sys",
+    @"%iowait",
     all,
     user,
     sys,
+    iowait,
     intr,
     ctxt,
     forks,
@@ -359,7 +361,7 @@ pub const CpuOpt = enum {
     blkbars,
 
     pub const ColorSupported = MakeEnumSubset(@This(), &.{
-        .@"%all", .@"%user", .@"%sys", .forks, .running, .blocked,
+        .@"%all", .@"%user", .@"%sys", .@"%iowait", .forks, .running, .blocked,
     });
 };
 
