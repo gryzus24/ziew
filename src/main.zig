@@ -33,7 +33,7 @@ fn showHelpAndExit() noreturn {
 }
 
 fn showVersionAndExit() noreturn {
-    utl.fdWrite(2, "ziew 0.0.9\n");
+    utl.fdWrite(2, "ziew 0.0.10\n");
     linux.exit(0);
 }
 
