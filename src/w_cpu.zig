@@ -11,61 +11,64 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 
+const DELTA_ZERO_CHECK = false;
+
 const Cpu = struct {
-    fields: [NR_FIELDS]u64,
+    user: u64,
+    sys: u64,
+    idle: u64,
+    iowait: u64,
 
-    const NR_FIELDS = 8;
-
-    pub const zero: Cpu = .{ .fields = @splat(0) };
-
-    pub fn user(self: @This()) u64 {
-        // user time includes guest time,
-        // check: v6.6-rc3/source/kernel/sched/cputime.c#L143
-        //          user             nice
-        return self.fields[0] + self.fields[1];
-    }
-
-    pub fn sys(self: @This()) u64 {
-        //          system           irq              softirq          steal
-        return self.fields[2] + self.fields[5] + self.fields[6] + self.fields[7];
-    }
-
-    pub fn idle(self: @This()) u64 {
-        //          idle             iowait
-        return self.fields[3] + self.fields[4];
-    }
+    pub const zero: Cpu = .{ .user = 0, .sys = 0, .idle = 0, .iowait = 0 };
 
     const Delta = struct {
         all: unt.F5608,
         user: unt.F5608,
         sys: unt.F5608,
+        iowait: unt.F5608,
 
         pub const zero: Delta = .{
             .all = .init(0),
             .user = .init(0),
             .sys = .init(0),
+            .iowait = .init(0),
         };
     };
 
-    pub fn delta(self: *const Cpu, oldself: *const Cpu, mul: u64) Delta {
-        const u_delta = self.user() - oldself.user();
-        const s_delta = self.sys() - oldself.sys();
-        const i_delta = self.idle() - oldself.idle();
-        const total_delta = u_delta + s_delta + i_delta;
+    inline fn __delta(self: Cpu, old: Cpu, nr_cpus: u32) Delta {
+        const V = @Vector(4, u64);
+        const a: V = .{ self.user, self.sys, self.idle, self.iowait };
+        const b: V = .{ old.user, old.sys, old.idle, old.iowait };
+        const diff = a - b;
+        const diff_total = @reduce(.Add, diff);
 
-        if (total_delta == 0) {
+        if (DELTA_ZERO_CHECK and diff_total == 0) {
             @branchHint(.cold);
             return .zero;
         }
 
-        const u_delta_pct = u_delta * 100 * mul;
-        const s_delta_pct = s_delta * 100 * mul;
+        // Doing vector multiplication isn't worth it as some
+        // callers are interested only in the `.all` value.
+        const u = diff[0] * (100 << unt.F5608.FRAC_SHIFT) * nr_cpus;
+        const s = diff[1] * (100 << unt.F5608.FRAC_SHIFT) * nr_cpus;
+        const w = diff[3] * (100 << unt.F5608.FRAC_SHIFT) * nr_cpus;
 
+        // zig fmt: off
         return .{
-            .all = unt.F5608.init(u_delta_pct + s_delta_pct).div(total_delta),
-            .user = unt.F5608.init(u_delta_pct).div(total_delta),
-            .sys = unt.F5608.init(s_delta_pct).div(total_delta),
+            .all    = .{ .u = (u + s) / diff_total },
+            .user   = .{ .u = u / diff_total },
+            .sys    = .{ .u = s / diff_total },
+            .iowait = .{ .u = w / diff_total },
         };
+        // zig fmt: on
+    }
+
+    pub inline fn delta(self: Cpu, old: Cpu) Delta {
+        return self.__delta(old, 1);
+    }
+
+    pub inline fn deltaN(self: Cpu, old: Cpu, nr_cpus: u32) Delta {
+        return self.__delta(old, nr_cpus);
     }
 };
 
@@ -102,10 +105,21 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
     var cpu: usize = 0;
     var i = "cpu  ".len;
     while (true) {
-        for (0..Cpu.NR_FIELDS) |fi| {
-            new.entries[cpu].fields[fi] = utl.atou64ForwardUntil(buf, &i, ' ');
+        var fields: [8]u64 = undefined;
+        for (0..fields.len) |fi| {
+            fields[fi] = utl.atou64ForwardUntil(buf, &i, ' ');
             i += 1;
         }
+        // zig fmt: off
+        // User time includes guest time. Check v6.17 kernel/sched/cputime.c#L158
+        //                        user        nice
+        //                        system      irq         softirq     steal
+        new.entries[cpu].user   = fields[0] + fields[1];
+        new.entries[cpu].sys    = fields[2] + fields[5] + fields[6] + fields[7];
+        new.entries[cpu].idle   = fields[3];
+        new.entries[cpu].iowait = fields[4];
+        // zif fmt: on
+
         // cpuXX  41208 ... 1061 0 [0] 0\n
         i += 4;
         // cpuXX  41208 ... 1061 0 0 0\n[c] (best case)
@@ -201,8 +215,8 @@ const BRLBARS: [5][5][3]u8 = .{
     .{ "⡇".*, "⣇".*, "⣧".*, "⣷".*, "⣿".* },
 };
 
-fn brlBarIntensity(new: *const Cpu, old: *const Cpu) u32 {
-    const pct = new.delta(old, 1).all;
+fn brlBarIntensity(new: Cpu, old: Cpu) u32 {
+    const pct = new.delta(old).all;
 
     if (pct.u == 0) return 0;
     return switch (pct.whole()) {
@@ -217,8 +231,8 @@ const BLKBARS: [9][3]u8 = .{
     "⠀".*, "▁".*, "▂".*, "▃".*, "▄".*, "▅".*, "▆".*, "▇".*, "█".*,
 };
 
-fn blkBarIntensity(new: *const Cpu, old: *const Cpu) u32 {
-    const pct = new.delta(old, 1).all;
+fn blkBarIntensity(new: Cpu, old: Cpu) u32 {
+    const pct = new.delta(old).all;
 
     if (pct.u == 0) return 0;
     const part = comptime unt.F5608.init(100).div(8).u;
@@ -292,11 +306,14 @@ pub fn update(state: *CpuState) void {
     if (nr_read == buf.len)
         log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
-    const new, const old = state.newStateFlip();
+    const new_stat, const old_stat = state.newStateFlip();
 
-    parseProcStat(buf[0..nr_read], new);
-    state.usage_pct = new.entries[0].delta(&old.entries[0], 1);
-    state.usage_abs = new.entries[0].delta(&old.entries[0], new.nr_cpux_entries);
+    parseProcStat(buf[0..nr_read], new_stat);
+
+    const new = new_stat.entries[0];
+    const old = old_stat.entries[0];
+    state.usage_pct = new.delta(old);
+    state.usage_abs = new.deltaN(old, @intCast(new_stat.nr_cpux_entries));
 }
 
 pub fn widget(
@@ -329,9 +346,9 @@ pub fn widget(
             var pos = writer.end;
             for (1..1 + new.nr_cpux_entries) |i| {
                 if (i & 1 == 1) {
-                    left = brlBarIntensity(&new.entries[i], &old.entries[i]);
+                    left = brlBarIntensity(new.entries[i], old.entries[i]);
                 } else {
-                    right = brlBarIntensity(&new.entries[i], &old.entries[i]);
+                    right = brlBarIntensity(new.entries[i], old.entries[i]);
                     buffer[pos..][0..3].* = BRLBARS[left][right];
                     pos += 3;
                 }
@@ -353,7 +370,7 @@ pub fn widget(
             var pos = writer.end;
             for (1..1 + new.nr_cpux_entries) |i| {
                 buffer[pos..][0..3].* =
-                    BLKBARS[blkBarIntensity(&new.entries[i], &old.entries[i])];
+                    BLKBARS[blkBarIntensity(new.entries[i], old.entries[i])];
                 pos += 3;
             }
             writer.end = pos;

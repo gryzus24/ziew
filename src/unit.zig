@@ -74,8 +74,8 @@ pub const F5608 = struct {
         return self.round(0).whole();
     }
 
-    const FRAC_SHIFT = 8;
-    const FRAC_MASK: u64 = (1 << FRAC_SHIFT) - 1;
+    pub const FRAC_SHIFT = 8;
+    pub const FRAC_MASK: u64 = (1 << FRAC_SHIFT) - 1;
 
     const ROUND_STEPS: [3]u64 = .{
         ((1 << FRAC_SHIFT) + 1) / 2,
