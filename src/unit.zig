@@ -5,28 +5,19 @@ const io = std.io;
 
 // == private =================================================================
 
-fn KB_UNIT(kb: u64, kb_f5608: F5608) NumUnit {
-    const KB8 = 8192;
-    const MB8 = 8192 * 1024;
-    const GB8 = 8192 * 1024 * 1024;
+inline fn KB_UNIT(kb: F5608) NumUnit {
+    const KB8 = 8192 << F5608.FRAC_SHIFT;
+    const MB8 = 8192 * 1024 << F5608.FRAC_SHIFT;
+    const GB8 = 8192 * 1024 * 1024 << F5608.FRAC_SHIFT;
 
-    return switch (kb) {
-        0...KB8 - 1 => .{
-            .n = kb_f5608,
-            .u = .kilo,
-        },
-        KB8...MB8 - 1 => .{
-            .n = kb_f5608.div(1024),
-            .u = .mega,
-        },
-        MB8...GB8 - 1 => .{
-            .n = kb_f5608.div(1024 * 1024),
-            .u = .giga,
-        },
-        else => .{
-            .n = kb_f5608.div(1024 * 1024 * 1024),
-            .u = .tera,
-        },
+    const i =
+        @as(usize, @intFromBool(kb.u >= KB8)) +
+        @as(usize, @intFromBool(kb.u >= MB8)) +
+        @as(usize, @intFromBool(kb.u >= GB8));
+
+    return .{
+        .n = .{ .u = kb.u >> ([4]u6{ 0, 10, 20, 30 })[i] },
+        .u = ([4]NumUnit.Unit{ .kilo, .mega, .giga, .tera })[i],
     };
 }
 
@@ -289,12 +280,11 @@ pub const NumUnit = struct {
 };
 
 pub fn SizeKb(value: u64) NumUnit {
-    return KB_UNIT(value, F5608.init(value));
+    return KB_UNIT(F5608.init(value));
 }
 
 pub fn SizeBytes(value: u64) NumUnit {
-    const kb = F5608.init(value).div(1024);
-    return KB_UNIT(kb.whole(), kb);
+    return KB_UNIT(F5608.init(value).div(1024));
 }
 
 pub fn Percent(value: u64, total: u64) NumUnit {
