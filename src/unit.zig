@@ -6,18 +6,24 @@ const io = std.io;
 // == private =================================================================
 
 inline fn KB_UNIT(kb: F5608) NumUnit {
-    const KB8 = 8192 << F5608.FRAC_SHIFT;
-    const MB8 = 8192 * 1024 << F5608.FRAC_SHIFT;
-    const GB8 = 8192 * 1024 * 1024 << F5608.FRAC_SHIFT;
+    const MB_8 = 8192 << F5608.FRAC_SHIFT;
+    const GB_8 = 8192 * 1024 << F5608.FRAC_SHIFT;
+    const TB_8 = 8192 * 1024 * 1024 << F5608.FRAC_SHIFT;
 
-    const i =
-        @as(usize, @intFromBool(kb.u >= KB8)) +
-        @as(usize, @intFromBool(kb.u >= MB8)) +
-        @as(usize, @intFromBool(kb.u >= GB8));
+    const shift =
+        @as(u6, @intFromBool(kb.u >= MB_8)) * 10 +
+        @as(u6, @intFromBool(kb.u >= GB_8)) * 10 +
+        @as(u6, @intFromBool(kb.u >= TB_8)) * 10;
+
+    const unit =
+        @as(u64, @intFromEnum(NumUnit.Unit.kilo)) |
+        @as(u64, @intFromEnum(NumUnit.Unit.mega)) << 10 |
+        @as(u64, @intFromEnum(NumUnit.Unit.giga)) << 20 |
+        @as(u64, @intFromEnum(NumUnit.Unit.tera)) << 30;
 
     return .{
-        .n = .{ .u = kb.u >> ([4]u6{ 0, 10, 20, 30 })[i] },
-        .u = ([4]NumUnit.Unit{ .kilo, .mega, .giga, .tera })[i],
+        .n = .{ .u = kb.u >> shift },
+        .u = @enumFromInt((unit >> shift) & 0xff),
     };
 }
 
