@@ -303,11 +303,10 @@ pub fn UnitSI(value: u64) NumUnit {
     const G = 1000 * 1000 * 1000;
     const T = 1000 * 1000 * 1000 * 1000;
 
-    return switch (value) {
-        0...K - 1 => .{ .n = F5608.init(value), .u = .si_one },
-        K...M - 1 => .{ .n = F5608.init(value).div(K), .u = .si_kilo },
-        M...G - 1 => .{ .n = F5608.init(value).div(M), .u = .si_mega },
-        G...T - 1 => .{ .n = F5608.init(value).div(G), .u = .si_giga },
-        else => .{ .n = F5608.init(value).div(T), .u = .si_tera },
-    };
+    const f = F5608.init(value);
+    if (value < K) return .{ .n = f, .u = .si_one };
+    if (value < M) return .{ .n = f.div(K), .u = .si_kilo };
+    if (value < G) return .{ .n = f.div(M), .u = .si_mega };
+    if (value < T) return .{ .n = f.div(G), .u = .si_giga };
+    return .{ .n = f.div(T), .u = .si_tera };
 }
