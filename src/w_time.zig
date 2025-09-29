@@ -8,7 +8,7 @@ const io = std.io;
 
 // == public ==================================================================
 
-pub fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
+pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
     const wd = w.wid.TIME;
 
     var tm: c.struct_tm = undefined;

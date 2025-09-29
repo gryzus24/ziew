@@ -297,7 +297,7 @@ pub fn update(state: *NetState) void {
     };
 }
 
-pub fn widget(
+pub noinline fn widget(
     writer: *io.Writer,
     state: *const ?NetState,
     w: *const typ.Widget,

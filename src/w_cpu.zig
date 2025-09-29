@@ -317,7 +317,7 @@ pub fn update(state: *CpuState) void {
     state.usage_abs = new.deltaN(old, @intCast(new_stat.nr_cpux_entries));
 }
 
-pub fn widget(
+pub noinline fn widget(
     writer: *io.Writer,
     state: *const CpuState,
     w: *const typ.Widget,

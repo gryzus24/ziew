@@ -80,7 +80,7 @@ const Bat = struct {
 
 // == public ==================================================================
 
-pub fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []const u8 {
+pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []const u8 {
     const wd = w.wid.BAT;
 
     const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| switch (e) {

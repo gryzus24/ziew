@@ -152,7 +152,7 @@ pub fn update(state: *MemState) void {
     parseProcMeminfo(&buf, state);
 }
 
-pub fn widget(
+pub noinline fn widget(
     writer: *io.Writer,
     state: *const MemState,
     w: *const typ.Widget,
