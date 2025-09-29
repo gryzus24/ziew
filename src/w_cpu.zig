@@ -118,7 +118,7 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         new.entries[cpu].sys    = fields[2] + fields[5] + fields[6] + fields[7];
         new.entries[cpu].idle   = fields[3];
         new.entries[cpu].iowait = fields[4];
-        // zif fmt: on
+        // zig fmt: on
 
         // cpuXX  41208 ... 1061 0 [0] 0\n
         i += 4;
@@ -189,16 +189,16 @@ test "/proc/stat parser" {
     var reg: m.Region = .init(&tmem, "cputest");
     var s: Stat = try .initZero(&reg, utl.nrPossibleCpus());
     parseProcStat(buf, &s);
-    try t.expect(s.entries[0].fields[0] == 46232);
-    try t.expect(s.entries[0].fields[1] == 14);
-    try t.expect(s.entries[0].fields[6] == 1212);
-    try t.expect(s.entries[0].fields[7] == 0);
-    try t.expect(s.entries[1].fields[0] == 9483);
-    try t.expect(s.entries[1].fields[2] == 1638);
-    try t.expect(s.entries[12].fields[0] == 858);
-    try t.expect(s.entries[12].fields[1] == 0);
-    try t.expect(s.entries[12].fields[6] == 123);
-    try t.expect(s.entries[12].fields[7] == 0);
+    try t.expect(s.entries[0].user == 46232 + 14);
+    try t.expect(s.entries[0].sys == 14383 + 2994 + 1212 + 0);
+    try t.expect(s.entries[0].idle == 12181824);
+    try t.expect(s.entries[0].iowait == 2122);
+    try t.expect(s.entries[1].user == 9483 + 5);
+    try t.expect(s.entries[1].sys == 1638 + 917 + 227 + 0);
+    try t.expect(s.entries[12].user == 858 + 0);
+    try t.expect(s.entries[12].sys == 769 + 119 + 123 + 0);
+    try t.expect(s.entries[12].idle == 1019145);
+    try t.expect(s.entries[12].iowait == 138);
     try t.expect(s.intr == 1894596);
     try t.expect(s.ctxt == 3055158);
     try t.expect(s.forks == 8594);
