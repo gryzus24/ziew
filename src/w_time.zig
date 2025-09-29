@@ -5,20 +5,24 @@ const typ = @import("type.zig");
 const utl = @import("util.zig");
 const c = utl.c;
 const io = std.io;
+const linux = std.os.linux;
 
 // == public ==================================================================
 
 pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget) void {
     const wd = w.wid.TIME;
 
+    var ts: linux.timespec = undefined;
     var tm: c.struct_tm = undefined;
-    _ = c.localtime_r(&c.time(null), &tm);
+
+    _ = linux.clock_gettime(.REALTIME, &ts);
+    _ = c.localtime_r(&ts.sec, &tm);
 
     utl.writeWidgetBeg(writer, w.fg.static, w.bg.static);
     const out = writer.unusedCapacitySlice();
     const nr_written = c.strftime(out.ptr, out.len, wd.getFormat(), &tm);
     if (nr_written == 0) {
-        @branchHint(.unlikely);
+        @branchHint(.cold);
         utl.writeStr(writer, "<empty>");
     } else {
         writer.end += nr_written;
