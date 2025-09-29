@@ -154,9 +154,9 @@ pub fn update(state: *MemState) void {
 
 pub noinline fn widget(
     writer: *io.Writer,
-    state: *const MemState,
     w: *const typ.Widget,
     base: [*]const u8,
+    state: *const MemState,
 ) void {
     const wd = w.wid.MEM;
 

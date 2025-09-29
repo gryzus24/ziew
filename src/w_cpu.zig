@@ -319,9 +319,9 @@ pub fn update(state: *CpuState) void {
 
 pub noinline fn widget(
     writer: *io.Writer,
-    state: *const CpuState,
     w: *const typ.Widget,
     base: [*]const u8,
+    state: *const CpuState,
 ) void {
     const wd = w.wid.CPU;
     const new, const old = state.getNewOldPtrs();

@@ -275,10 +275,10 @@ pub fn main() !void {
                 var fw: io.Writer = .fixed(&bufs[i]);
                 switch (w.wid) {
                     .TIME => w_time.widget(&fw, w),
-                    .MEM => w_mem.widget(&fw, &mem_state, w, base),
-                    .CPU => w_cpu.widget(&fw, &cpu_state, w, base),
+                    .MEM => w_mem.widget(&fw, w, base, &mem_state),
+                    .CPU => w_cpu.widget(&fw, w, base, &cpu_state),
                     .DISK => w_dysk.widget(&fw, w, base),
-                    .NET => w_net.widget(&fw, &net_state, w, base),
+                    .NET => w_net.widget(&fw, w, base, &net_state),
                     .BAT => w_bat.widget(&fw, w, base),
                     .READ => w_read.widget(&fw, w, base),
                 }

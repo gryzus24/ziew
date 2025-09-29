@@ -299,9 +299,9 @@ pub fn update(state: *NetState) void {
 
 pub noinline fn widget(
     writer: *io.Writer,
-    state: *const ?NetState,
     w: *const typ.Widget,
     base: [*]const u8,
+    state: *const ?NetState,
 ) void {
     const Static = struct {
         var sock: linux.fd_t = 0;
