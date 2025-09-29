@@ -157,11 +157,11 @@ pub noinline fn widget(
     state: *const MemState,
     w: *const typ.Widget,
     base: [*]const u8,
-) []const u8 {
+) void {
     const wd = w.wid.MEM;
 
     const fg, const bg = w.check(state, base);
-    utl.writeBlockBeg(writer, fg, bg);
+    utl.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
         const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {
@@ -184,5 +184,4 @@ pub noinline fn widget(
         nu.write(writer, part.wopts, part.quiet);
     }
     wd.format.last_str.writeBytes(writer, base);
-    return utl.writeBlockEnd(writer);
 }

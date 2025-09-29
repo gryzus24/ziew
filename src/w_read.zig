@@ -23,12 +23,11 @@ fn writeBlockError(
     bg: color.Hex,
     prefix: []const u8,
     msg: []const u8,
-) []const u8 {
-    utl.writeBlockBeg(writer, fg, bg);
+) void {
+    utl.writeWidgetBeg(writer, fg, bg);
     utl.writeStr(writer, prefix);
     utl.writeStr(writer, ": ");
     utl.writeStr(writer, msg);
-    return utl.writeBlockEnd(writer);
 }
 
 fn acceptColor(str: []const u8, pos: *usize) color.Hex {
@@ -57,7 +56,7 @@ fn readFileUntil(file: fs.File, endmarkers: []const u8, buf: *[typ.WIDGET_BUF_MA
 
 // == public ==================================================================
 
-pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []const u8 {
+pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.wid.READ;
 
     const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| {
@@ -89,7 +88,7 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
         }
     }
 
-    utl.writeBlockBeg(writer, fg, bg);
+    utl.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
         utl.writeStr(
@@ -105,5 +104,4 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
         );
     }
     wd.format.last_str.writeBytes(writer, base);
-    return utl.writeBlockEnd(writer);
 }

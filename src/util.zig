@@ -39,7 +39,7 @@ pub inline fn writeStr(writer: *io.Writer, s: []const u8) void {
     writer.end += n;
 }
 
-pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
+pub fn writeWidgetBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
     if (typ.WIDGET_BUF_MAX < 64)
         @compileError("typ.WIDGET_BUF_MAX < 64");
 
@@ -79,7 +79,7 @@ pub fn writeBlockBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
     }
 }
 
-pub inline fn writeBlockEnd(writer: *io.Writer) []const u8 {
+pub fn writeWidgetEnd(writer: *io.Writer) []const u8 {
     const endstr = "\"},";
     const cap = writer.unusedCapacityLen();
     const buffer = writer.buffer;

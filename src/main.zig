@@ -273,7 +273,7 @@ pub fn main() !void {
                 }
 
                 var fw: io.Writer = .fixed(&bufs[i]);
-                views[i] = switch (w.wid) {
+                switch (w.wid) {
                     .TIME => w_time.widget(&fw, w),
                     .MEM => w_mem.widget(&fw, &mem_state, w, base),
                     .CPU => w_cpu.widget(&fw, &cpu_state, w, base),
@@ -281,7 +281,8 @@ pub fn main() !void {
                     .NET => w_net.widget(&fw, &net_state, w, base),
                     .BAT => w_bat.widget(&fw, w, base),
                     .READ => w_read.widget(&fw, w, base),
-                };
+                }
+                views[i] = utl.writeWidgetEnd(&fw);
             }
         }
 

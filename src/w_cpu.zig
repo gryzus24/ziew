@@ -322,12 +322,12 @@ pub noinline fn widget(
     state: *const CpuState,
     w: *const typ.Widget,
     base: [*]const u8,
-) []const u8 {
+) void {
     const wd = w.wid.CPU;
     const new, const old = state.getNewOldPtrs();
 
     const fg, const bg = w.check(state, base);
-    utl.writeBlockBeg(writer, fg, bg);
+    utl.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
@@ -401,5 +401,4 @@ pub noinline fn widget(
         nu.write(writer, part.wopts, part.quiet);
     }
     wd.format.last_str.writeBytes(writer, base);
-    return utl.writeBlockEnd(writer);
 }

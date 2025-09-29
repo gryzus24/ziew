@@ -80,17 +80,17 @@ const Bat = struct {
 
 // == public ==================================================================
 
-pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) []const u8 {
+pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.wid.BAT;
 
     const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| switch (e) {
         error.FileNotFound => {
             const noop: typ.Widget.NoopIndirect = .{};
             const fg, const bg = w.check(noop, base);
-            utl.writeBlockBeg(writer, fg, bg);
+            utl.writeWidgetBeg(writer, fg, bg);
             utl.writeStr(writer, wd.getPsName());
             utl.writeStr(writer, ": <not found>");
-            return utl.writeBlockEnd(writer);
+            return;
         },
         else => log.fatal(&.{ "BAT: check: ", @errorName(e) }),
     };
@@ -134,7 +134,7 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
     }
 
     const fg, const bg = w.check(bat, base);
-    utl.writeBlockBeg(writer, fg, bg);
+    utl.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
@@ -158,5 +158,4 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
         nu.write(writer, part.wopts, part.quiet);
     }
     wd.format.last_str.writeBytes(writer, base);
-    return utl.writeBlockEnd(writer);
 }

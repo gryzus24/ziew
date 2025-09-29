@@ -302,7 +302,7 @@ pub noinline fn widget(
     state: *const ?NetState,
     w: *const typ.Widget,
     base: [*]const u8,
-) []const u8 {
+) void {
     const Static = struct {
         var sock: linux.fd_t = 0;
     };
@@ -360,7 +360,7 @@ pub noinline fn widget(
     const ch: ColorHandler = .{ .up = up };
 
     const fg, const bg = w.check(ch, base);
-    utl.writeBlockBeg(writer, fg, bg);
+    utl.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
@@ -407,5 +407,4 @@ pub noinline fn widget(
         nu.write(writer, part.wopts, part.quiet);
     }
     wd.format.last_str.writeBytes(writer, base);
-    return utl.writeBlockEnd(writer);
 }

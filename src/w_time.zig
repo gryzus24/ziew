@@ -8,13 +8,13 @@ const io = std.io;
 
 // == public ==================================================================
 
-pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
+pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget) void {
     const wd = w.wid.TIME;
 
     var tm: c.struct_tm = undefined;
     _ = c.localtime_r(&c.time(null), &tm);
 
-    utl.writeBlockBeg(writer, w.fg.static, w.bg.static);
+    utl.writeWidgetBeg(writer, w.fg.static, w.bg.static);
     const out = writer.unusedCapacitySlice();
     const nr_written = c.strftime(out.ptr, out.len, wd.getFormat(), &tm);
     if (nr_written == 0) {
@@ -23,5 +23,4 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget) []const u8 {
     } else {
         writer.end += nr_written;
     }
-    return utl.writeBlockEnd(writer);
 }
