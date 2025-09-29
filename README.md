@@ -95,7 +95,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
 ### Widgets
 Widget | Data source
 ------ | -----------
-| TIME | strftime(3)
+| TIME | clock_gettime(2), strftime(3)
 | MEM  | /proc/meminfo
 | CPU  | /proc/stat
 | DISK | statfs(2)
@@ -110,18 +110,28 @@ Every option and color configuration for each *Widget* is documented below.
     Displays current date and time.
 
     Required
-      arg "ARGUMENT"
+      arg "<STRFTIME STRING>"
+      format "FORMAT"
 
-    ARGUMENT
+    STRFTIME STRING
       This widget is special in that its entire argument format is documented
       in the strftime(3) man page and not here.
+
+    FORMAT options
+      * arg   - the provided <STRFTIME STRING> as specified in the argument,
+      * time  - time as formatted by the strftime(3) function.
+      * <N>   - as an extension of the strftime(3) functionality this widget
+                supports displaying fractional part of the timestamp acquired
+                from the clock_gettime(2) syscall. Specify the number of digits
+                of precision <N> as an option, where <N> is within [1, 9].
+                The resulting timestamp is not rounded.
 
     Colors
       [+] default
       [ ] conditional (unsupported)
 
     Example config entry
-      TIME 20 arg "%A %d.%m ~ %H:%M:%S"
+      TIME 20 arg "%A %d.%m ~ %H:%M:%S" format "{time}.{3}"
       FG #28ab28
 
 **MEM**

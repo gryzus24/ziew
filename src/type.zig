@@ -125,22 +125,24 @@ pub const Widget = struct {
         const NR_WIDGETS = @typeInfo(Tag).@"enum".fields.len;
 
         pub const TimeData = struct {
-            format: [FORMAT_SIZE]u8,
+            format: Format,
+            strf: [STRF_SIZE]u8,
 
-            const FORMAT_SIZE = DATA_SIZE_MAX / 2;
+            const STRF_SIZE = DATA_SIZE_MAX - @sizeOf(Format);
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= FORMAT_SIZE)
+                if (arg.len >= STRF_SIZE)
                     log.fatal(&.{"TIME: strftime format too long"});
 
                 const ret = try reg.frontAlloc(@This());
-                @memcpy(ret.format[0..arg.len], arg);
-                ret.format[arg.len] = 0;
+                ret.format = .zero;
+                @memcpy(ret.strf[0..arg.len], arg);
+                ret.strf[arg.len] = 0;
                 return ret;
             }
 
-            pub fn getFormat(self: *const @This()) [*:0]const u8 {
-                return @ptrCast(&self.format);
+            pub fn getStrf(self: *const @This()) [*:0]const u8 {
+                return @ptrCast(&self.strf);
             }
         };
 
@@ -277,7 +279,7 @@ pub const Widget = struct {
 
         pub const AcceptsFormat = MakeEnumSubset(
             Tag,
-            &.{ .MEM, .CPU, .DISK, .NET, .BAT, .READ },
+            &.{ .TIME, .MEM, .CPU, .DISK, .NET, .BAT, .READ },
         );
 
         pub const ActiveColorSupported = MakeEnumSubset(
@@ -317,7 +319,17 @@ pub const Widget = struct {
 };
 
 pub const TimeOpt = enum {
-    @"-",
+    arg,
+    @"1",
+    @"2",
+    @"3",
+    @"4",
+    @"5",
+    @"6",
+    @"7",
+    @"8",
+    @"9",
+    time,
 
     pub const ColorSupported = enum {};
 };

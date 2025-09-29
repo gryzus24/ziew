@@ -274,7 +274,7 @@ pub fn main() !void {
 
                 var fw: io.Writer = .fixed(&bufs[i]);
                 switch (w.wid) {
-                    .TIME => w_time.widget(&fw, w),
+                    .TIME => w_time.widget(&fw, w, base),
                     .MEM => w_mem.widget(&fw, w, base, &mem_state),
                     .CPU => w_cpu.widget(&fw, w, base, &cpu_state),
                     .DISK => w_dysk.widget(&fw, w, base),

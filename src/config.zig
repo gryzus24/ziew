@@ -490,7 +490,7 @@ pub fn defaultConfig(reg: *m.Region) []typ.Widget {
         \\BAT 300 arg BAT0 format "BAT {%fulldesign:.2} {state}"
         \\FG state 1:4a4 2:4a4
         \\BG %fulldesign 0:a00 15:220 25:
-        \\TIME 20 arg "%A %d.%m ~ %H:%M:%S "
+        \\TIME 20 arg "%A %d.%m ~ %H:%M:%S" format "{time}"
         \\FG bb9
     ;
     var reader: io.Reader = .fixed(config);
@@ -578,6 +578,7 @@ pub fn parse(
                         const format = line[ok.beg..ok.end];
                         const wid = current.wid.castTo(typ.Widget.Id.AcceptsFormat);
                         const ref = switch (wid) {
+                            .TIME => &current.wid.TIME.format,
                             .MEM => blk: {
                                 current.wid.MEM = try .init(reg);
                                 break :blk &current.wid.MEM.format;

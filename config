@@ -67,7 +67,7 @@ FG state       1:4a4 2:4a4
 BG %fulldesign 0:a00 15:220 25:
 
 # See strftime(3) for details about the format.
-TIME 20 arg "%A %d.%m ~ %H:%M:%S"
+TIME 20 arg "%A %d.%m ~ %H:%M:%S" format "{time}"
 FG bb9
 
 # vim: ft=config
