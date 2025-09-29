@@ -270,31 +270,29 @@ pub fn IndexIterator(comptime T: type, findme: T) type {
             return .{ .buf = buf, .i = 0, .bits = 0 };
         }
 
-        inline fn nextBit(self: *@This()) usize {
+        inline fn nextBit(self: *@This(), i: usize) usize {
             const lsb = self.bits & (~self.bits + 1);
-            const i = self.i;
             const j = @ctz(self.bits);
             self.bits ^= lsb;
-            // It's very likely self.bits == 0, make it branchless.
-            self.i += @intFromBool(self.bits == 0) * @as(usize, BlockSize);
+            self.i = i + @intFromBool(self.bits == 0) * @as(usize, BlockSize);
             return i + j;
         }
 
         pub fn next(self: *@This()) ?usize {
+            var i = self.i;
             if (self.bits != 0)
-                return self.nextBit();
+                return self.nextBit(i);
 
             const len = self.buf.len;
-            while (self.i < len & ~@as(usize, BlockSize - 1)) {
-                const block: Block = self.buf[self.i..][0..BlockSize].*;
+            while (i < len & ~@as(usize, BlockSize - 1)) {
+                const block: Block = self.buf[i..][0..BlockSize].*;
                 const mask = block == @as(Block, @splat(findme));
                 if (@reduce(.Or, mask)) {
                     self.bits = @bitCast(mask);
-                    return self.nextBit();
+                    return self.nextBit(i);
                 }
-                self.i += BlockSize;
+                i += BlockSize;
             }
-            var i = self.i;
             while (i < len) : (i += 1) {
                 if (self.buf[i] == findme) {
                     self.i = i + 1;
