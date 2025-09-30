@@ -247,9 +247,13 @@ pub fn main() !void {
             g_refresh_all = false;
         }
 
-        var cpu_updated = false;
-        var mem_updated = false;
-        var net_updated = false;
+        const Update = packed struct(u32) {
+            net: bool = false,
+            cpu: bool = false,
+            mem: bool = false,
+            _: u29 = 0,
+        };
+        var updated: Update = .{ .net = net_state == null };
 
         for (widgets, 0..) |*w, i| {
             w.interval_now -|= sleep_dsec;
@@ -261,26 +265,24 @@ pub fn main() !void {
                 switch (w.wid) {
                     .TIME => w_time.widget(&fw, w, base),
                     .MEM => {
-                        if (!mem_updated) {
+                        if (!updated.mem) {
                             w_mem.update(&mem_state);
-                            mem_updated = true;
+                            updated.mem = true;
                         }
                         w_mem.widget(&fw, w, base, &mem_state);
                     },
                     .CPU => {
-                        if (!cpu_updated) {
+                        if (!updated.cpu) {
                             w_cpu.update(&cpu_state);
-                            cpu_updated = true;
+                            updated.cpu = true;
                         }
                         w_cpu.widget(&fw, w, base, &cpu_state);
                     },
                     .DISK => w_dysk.widget(&fw, w, base),
                     .NET => {
-                        if (!net_updated) {
-                            if (net_state) |*ok| {
-                                w_net.update(ok);
-                                net_updated = true;
-                            }
+                        if (!updated.net) {
+                            w_net.update(&net_state.?);
+                            updated.net = true;
                         }
                         w_net.widget(&fw, w, base, &net_state);
                     },
