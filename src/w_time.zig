@@ -25,7 +25,7 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
         switch (@as(typ.TimeOpt, @enumFromInt(part.opt))) {
             .arg => utl.writeStr(writer, mem.sliceTo(wd.getStrf(), 0)),
             .time => {
-                const dst = writer.unusedCapacitySlice();
+                const dst = writer.buffer[writer.end..];
                 const nr_written = c.strftime(dst.ptr, dst.len, wd.getStrf(), &tm);
                 writer.end += nr_written;
             },
@@ -36,19 +36,19 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
                     100,         10,         1,
                 };
                 const nsec: u32 = @intCast(ts.nsec);
-                const dst = writer.unusedCapacitySlice();
+                var n = @min(part.opt, writer.unusedCapacityLen());
 
+                const dst = writer.buffer[writer.end..];
                 var i: usize = 0;
-                var nr_to_write = @min(part.opt, dst.len);
-                while (nr_to_write >= 2) {
-                    const n = (nsec / DIV[i + 1]) % 100;
-                    dst[i..][0..2].* = utl.digits2_lut(n);
+                while (n >= 2) {
+                    const t = (nsec / DIV[i + 1]) % 100;
+                    dst[i..][0..2].* = utl.digits2_lut(t);
                     i += 2;
-                    nr_to_write -= 2;
+                    n -= 2;
                 }
-                if (nr_to_write == 1) {
-                    const n = (nsec / DIV[i]) % 10;
-                    dst[i] = '0' | @as(u8, @intCast(n));
+                if (n == 1) {
+                    const t = (nsec / DIV[i]) % 10;
+                    dst[i] = '0' | @as(u8, @intCast(t));
                     i += 1;
                 }
                 writer.end += i;
