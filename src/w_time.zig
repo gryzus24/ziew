@@ -13,7 +13,6 @@ const mem = std.mem;
 pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.wid.TIME;
 
-    var buf: [32]u8 = undefined;
     var ts: linux.timespec = undefined;
     var tm: c.struct_tm = undefined;
 
@@ -23,40 +22,38 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
     utl.writeWidgetBeg(writer, w.fg.static, w.bg.static);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
-        const str = switch (@as(typ.TimeOpt, @enumFromInt(part.opt))) {
-            .arg => mem.sliceTo(&wd.strf, 0),
-            .time => blk: {
-                const nr_written = c.strftime(&buf, buf.len, wd.getStrf(), &tm);
-                if (nr_written == 0) {
-                    @branchHint(.cold);
-                    break :blk "<empty>";
-                } else {
-                    break :blk buf[0..nr_written];
-                }
+        switch (@as(typ.TimeOpt, @enumFromInt(part.opt))) {
+            .arg => utl.writeStr(writer, mem.sliceTo(wd.getStrf(), 0)),
+            .time => {
+                const dst = writer.unusedCapacitySlice();
+                const nr_written = c.strftime(dst.ptr, dst.len, wd.getStrf(), &tm);
+                writer.end += nr_written;
             },
-            .@"1", .@"2", .@"3", .@"4", .@"5", .@"6", .@"7", .@"8", .@"9" => blk: {
+            .@"1", .@"2", .@"3", .@"4", .@"5", .@"6", .@"7", .@"8", .@"9" => {
                 const DIV: [9]u32 = .{
                     100_000_000, 10_000_000, 1_000_000,
                     100_000,     10_000,     1_000,
                     100,         10,         1,
                 };
                 const nsec: u32 = @intCast(ts.nsec);
+                const dst = writer.unusedCapacitySlice();
 
                 var i: usize = 0;
-                var rem = part.opt;
-                while (rem >= 2) {
-                    buf[i..][0..2].* = utl.digits2_lut((nsec / DIV[i + 1]) % 100);
+                var nr_to_write = @min(part.opt, dst.len);
+                while (nr_to_write >= 2) {
+                    const n = (nsec / DIV[i + 1]) % 100;
+                    dst[i..][0..2].* = utl.digits2_lut(n);
                     i += 2;
-                    rem -= 2;
+                    nr_to_write -= 2;
                 }
-                if (rem == 1) {
-                    buf[i] = '0' | @as(u8, @intCast((nsec / DIV[i]) % 10));
+                if (nr_to_write == 1) {
+                    const n = (nsec / DIV[i]) % 10;
+                    dst[i] = '0' | @as(u8, @intCast(n));
                     i += 1;
                 }
-                break :blk buf[0..i];
+                writer.end += i;
             },
-        };
-        utl.writeStr(writer, str);
+        }
     }
     wd.format.last_str.writeBytes(writer, base);
 }
