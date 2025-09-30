@@ -257,28 +257,33 @@ pub fn main() !void {
                 @branchHint(.likely);
                 w.interval_now = w.interval;
 
-                if (w.wid == .CPU and !cpu_updated) {
-                    w_cpu.update(&cpu_state);
-                    cpu_updated = true;
-                }
-                if (w.wid == .MEM and !mem_updated) {
-                    w_mem.update(&mem_state);
-                    mem_updated = true;
-                }
-                if (w.wid == .NET and !net_updated) {
-                    if (net_state) |*ok| {
-                        w_net.update(ok);
-                        net_updated = true;
-                    }
-                }
-
                 var fw: io.Writer = .fixed(&bufs[i]);
                 switch (w.wid) {
                     .TIME => w_time.widget(&fw, w, base),
-                    .MEM => w_mem.widget(&fw, w, base, &mem_state),
-                    .CPU => w_cpu.widget(&fw, w, base, &cpu_state),
+                    .MEM => {
+                        if (!mem_updated) {
+                            w_mem.update(&mem_state);
+                            mem_updated = true;
+                        }
+                        w_mem.widget(&fw, w, base, &mem_state);
+                    },
+                    .CPU => {
+                        if (!cpu_updated) {
+                            w_cpu.update(&cpu_state);
+                            cpu_updated = true;
+                        }
+                        w_cpu.widget(&fw, w, base, &cpu_state);
+                    },
                     .DISK => w_dysk.widget(&fw, w, base),
-                    .NET => w_net.widget(&fw, w, base, &net_state),
+                    .NET => {
+                        if (!net_updated) {
+                            if (net_state) |*ok| {
+                                w_net.update(ok);
+                                net_updated = true;
+                            }
+                        }
+                        w_net.widget(&fw, w, base, &net_state);
+                    },
                     .BAT => w_bat.widget(&fw, w, base),
                     .READ => w_read.widget(&fw, w, base),
                 }
@@ -287,9 +292,7 @@ pub fn main() !void {
         }
 
         const dst = base[reg.front..reg.back];
-
-        dst[0] = ',';
-        dst[1] = '[';
+        dst[0..2].* = ",[".*;
 
         var pos: usize = 2;
         for (views) |view| {
