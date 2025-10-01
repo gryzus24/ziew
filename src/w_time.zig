@@ -10,7 +10,11 @@ const mem = std.mem;
 
 // == public ==================================================================
 
-pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) void {
+pub noinline fn widget(
+    writer: *io.Writer,
+    w: *const typ.Widget,
+    base: [*]const u8,
+) void {
     const wd = w.wid.TIME;
 
     var ts: linux.timespec = undefined;
@@ -30,25 +34,40 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
                 writer.end += nr_written;
             },
             .@"1", .@"2", .@"3", .@"4", .@"5", .@"6", .@"7", .@"8", .@"9" => {
-                const DIV: [9]u32 = .{
+                const DIVS: [9]u32 = comptime .{
                     100_000_000, 10_000_000, 1_000_000,
                     100_000,     10_000,     1_000,
                     100,         10,         1,
                 };
-                const nsec: u32 = @intCast(ts.nsec);
-                var n = @min(part.opt, writer.unusedCapacityLen());
+                const DIVIDEND_MAX = 1_000_000_000;
+                const MULT_SHFT: [9]utl.MultShft = comptime .{
+                    utl.DivConstant(DIVS[0], DIVIDEND_MAX),
+                    utl.DivConstant(DIVS[1], DIVIDEND_MAX),
+                    utl.DivConstant(DIVS[2], DIVIDEND_MAX),
+                    utl.DivConstant(DIVS[3], DIVIDEND_MAX),
+                    utl.DivConstant(DIVS[4], DIVIDEND_MAX),
+                    utl.DivConstant(DIVS[5], DIVIDEND_MAX),
+                    utl.DivConstant(DIVS[6], DIVIDEND_MAX),
+                    utl.DivConstant(DIVS[7], DIVIDEND_MAX),
+                    utl.DivConstant(DIVS[8], DIVIDEND_MAX),
+                };
+                var cur: u64 = @intCast(ts.nsec);
 
+                var n = @min(part.opt, writer.unusedCapacityLen());
                 const dst = writer.buffer[writer.end..];
+
                 var i: usize = 0;
                 while (n >= 2) {
-                    const t = (nsec / DIV[i + 1]) % 100;
-                    dst[i..][0..2].* = utl.digits2_lut(t);
+                    const ms = MULT_SHFT[i + 1];
+                    const q, cur = utl.multShiftDivMod(cur, ms, DIVS[i + 1]);
+                    dst[i..][0..2].* = utl.digits2_lut(q);
                     i += 2;
                     n -= 2;
                 }
                 if (n == 1) {
-                    const t = (nsec / DIV[i]) % 10;
-                    dst[i] = '0' | @as(u8, @intCast(t));
+                    const ms = MULT_SHFT[i];
+                    const q, _ = utl.multShiftDivMod(cur, ms, DIVS[i]);
+                    dst[i] = '0' | @as(u8, @intCast(q));
                     i += 1;
                 }
                 writer.end += i;
