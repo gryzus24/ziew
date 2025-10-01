@@ -154,8 +154,9 @@ fn getInet(
             var i: usize = 0;
             for (tuplets) |t| {
                 if (t > 99) {
-                    const b, const a = utl.digits2_lut(t % 100);
-                    inetbuf[i..][0..4].* = .{ '0' | @as(u8, @intCast(t / 100)), b, a, '.' };
+                    const q, const r = utl.cMultShiftDivMod(t, 100, 255);
+                    const b, const a = utl.digits2_lut(r);
+                    inetbuf[i..][0..4].* = .{ '0' | @as(u8, @intCast(q)), b, a, '.' };
                     i += 4;
                 } else if (t > 9) {
                     const b, const a = utl.digits2_lut(t);
