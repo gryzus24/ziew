@@ -222,21 +222,23 @@ pub const NumUnit = struct {
         switch (precision) {
             0 => {},
             1 => {
-                const n = (rp.frac() * 10) / (1 << F5608.FRAC_SHIFT);
+                const n = (rp.frac() * 10) >> F5608.FRAC_SHIFT;
                 i -= 2;
                 buf[i..][0..2].* = .{ '.', '0' | @as(u8, @intCast(n)) };
             },
             2 => {
-                const n = (rp.frac() * 100) / (1 << F5608.FRAC_SHIFT);
+                const n = (rp.frac() * 100) >> F5608.FRAC_SHIFT;
                 const b, const a = utl.digits2_lut(n);
                 i -= 3;
                 buf[i..][0..3].* = .{ '.', b, a };
             },
             else => {
-                const n = (rp.frac() * 1000) / (1 << F5608.FRAC_SHIFT);
-                const b, const a = utl.digits2_lut(n % 100);
+                const n_max = (F5608.FRAC_MASK * 1000) >> F5608.FRAC_SHIFT;
+                const n = (rp.frac() * 1000) >> F5608.FRAC_SHIFT;
+                const q, const r = utl.cMultShiftDivMod(n, 100, n_max);
+                const b, const a = utl.digits2_lut(r);
                 i -= 4;
-                buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(n / 100)), b, a };
+                buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(q)), b, a };
             },
             PRECISION_VALUE_AUTO => unreachable,
         }
@@ -253,18 +255,20 @@ pub const NumUnit = struct {
                 buf[i..][0..2].* = utl.digits2_lut(n);
             },
             3 => {
-                const b, const a = utl.digits2_lut(n % 100);
+                const q, const r = utl.cMultShiftDivMod(n, 100, 999);
+                const b, const a = utl.digits2_lut(r);
                 i -= 3;
-                buf[i..][0..3].* = .{ '0' | @as(u8, @intCast(n / 100)), b, a };
+                buf[i..][0..3].* = .{ '0' | @as(u8, @intCast(q)), b, a };
             },
             4 => {
-                const b, const a = utl.digits2_lut(n % 100);
-                const d, const c = utl.digits2_lut(n / 100);
+                const q, const r = utl.cMultShiftDivMod(n, 100, 9999);
+                const b, const a = utl.digits2_lut(r);
+                const d, const c = utl.digits2_lut(q);
                 i -= 4;
                 buf[i..][0..4].* = .{ d, c, b, a };
             },
             else => {
-                @branchHint(.unlikely);
+                @branchHint(.cold);
                 utl.unsafeU64toa(&buf, n);
             },
         }
