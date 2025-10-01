@@ -6,6 +6,7 @@ const mem = std.mem;
 
 pub const Hex = struct {
     use: u8,
+    _: u8 = 0,
     hex: [6]u8,
 
     pub const default: Hex = .{ .use = 0, .hex = @splat(0) };
@@ -55,21 +56,19 @@ pub fn acceptHex(str: []const u8) ?[6]u8 {
     return hex;
 }
 
-pub fn firstColorGEThreshold(value: u64, pairs: []const Active.Pair) Hex {
-    var i: isize = -1;
+pub inline fn firstColorGEThreshold(value: u64, pairs: []const Active.Pair) Hex {
+    var i: usize = 0;
     for (pairs) |pair| {
-        if (pair.thresh <= value) {
-            i += 1;
-        } else {
-            break;
-        }
+        if (pair.thresh > value) break;
+        i += 1;
     }
-    if (i == -1) return .default;
+    if (i != 0)
+        return pairs[i - 1].data;
 
-    return pairs[@as(usize, @intCast(i))].data;
+    return .default;
 }
 
-pub fn firstColorEQThreshold(value: u8, pairs: []const Active.Pair) Hex {
+pub inline fn firstColorEQThreshold(value: u8, pairs: []const Active.Pair) Hex {
     for (pairs) |pair| {
         if (pair.thresh == value) return pair.data;
     }
