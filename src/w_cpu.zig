@@ -215,29 +215,20 @@ const BRLBARS: [5][5][3]u8 = .{
     .{ "⡇".*, "⣇".*, "⣧".*, "⣷".*, "⣿".* },
 };
 
-fn brlBarIntensity(new: Cpu, old: Cpu) u32 {
-    const pct = new.delta(old).all;
-
-    if (pct.u == 0) return 0;
-    return switch (pct.whole()) {
-        0...25 => 1,
-        26...50 => 2,
-        51...75 => 3,
-        else => 4,
-    };
-}
-
 const BLKBARS: [9][3]u8 = .{
     "⠀".*, "▁".*, "▂".*, "▃".*, "▄".*, "▅".*, "▆".*, "▇".*, "█".*,
 };
 
-fn blkBarIntensity(new: Cpu, old: Cpu) u32 {
-    const pct = new.delta(old).all;
+fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
+    if (range <= 1) @compileError("range <= 1");
+    const step = comptime unt.F5608.init(100).div(range - 1).u;
+    const off = step - 1;
+    const u_max = (range - 1) * step;
 
-    if (pct.u == 0) return 0;
-    const part = comptime unt.F5608.init(100).div(8).u;
-    const ret = 1 + (pct.u - 1) / part;
-    return @intCast(ret);
+    const pct = new.delta(old).all;
+    const u = @min(pct.u, u_max);
+    const q, _ = utl.cMultShiftDivMod(u + off, step, u_max + off);
+    return @intCast(q);
 }
 
 // == public ==================================================================
@@ -347,9 +338,9 @@ pub noinline fn widget(
             var pos = writer.end;
             for (1..1 + new.nr_cpux_entries) |i| {
                 if (i & 1 == 1) {
-                    left = brlBarIntensity(new.entries[i], old.entries[i]);
+                    left = barIntensity(new.entries[i], old.entries[i], BRLBARS.len);
                 } else {
-                    right = brlBarIntensity(new.entries[i], old.entries[i]);
+                    right = barIntensity(new.entries[i], old.entries[i], BRLBARS[0].len);
                     buffer[pos..][0..3].* = BRLBARS[left][right];
                     pos += 3;
                 }
@@ -371,7 +362,7 @@ pub noinline fn widget(
             var pos = writer.end;
             for (1..1 + new.nr_cpux_entries) |i| {
                 buffer[pos..][0..3].* =
-                    BLKBARS[blkBarIntensity(new.entries[i], old.entries[i])];
+                    BLKBARS[barIntensity(new.entries[i], old.entries[i], BLKBARS.len)];
                 pos += 3;
             }
             writer.end = pos;
