@@ -443,7 +443,7 @@ fn parseLine(tmp: *m.Region, line: []const u8) !ParseLineResult {
                 }
             },
             .color_active_pair => {
-                const sep = mem.indexOfScalar(u8, field, ':') orelse {
+                const sep = mem.indexOfScalarPos(u8, field, 0, ':') orelse {
                     return .fail("missing threshold", split);
                 };
                 const thresh = fmt.parseUnsigned(u8, field[0..sep], 10) catch |e| switch (e) {

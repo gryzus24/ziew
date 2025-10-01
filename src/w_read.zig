@@ -13,7 +13,7 @@ const mem = std.mem;
 
 const FILE_END_MARKERS = ascii.whitespace[1..] ++ .{'\x00'};
 comptime {
-    if (mem.indexOfScalar(u8, FILE_END_MARKERS, ' ') != null)
+    if (mem.indexOfScalarPos(u8, FILE_END_MARKERS, 0, ' ') != null)
         @compileError("0x20 in file end markers");
 }
 

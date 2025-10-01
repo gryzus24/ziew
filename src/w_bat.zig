@@ -110,7 +110,7 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
         const line = buf[last..nl];
         last = nl + 1;
 
-        const i = mem.indexOfScalar(u8, line, '=') orelse {
+        const i = mem.indexOfScalarPos(u8, line, 0, '=') orelse {
             log.fatal(&.{"BAT: crazy uevent"});
         };
         const key = line[0..i];
