@@ -340,10 +340,14 @@ pub noinline fn widget(
     if (state.*) |*ok| {
         const new, const old = ok.getNewOldPtrs();
 
+        const Hash = @Vector(linux.IFNAMESIZE, u8);
+        const cfg_ifname: Hash = wd.ifr.ifrn.name;
+
         var it = new.list.first;
         while (it) |node| : (it = node.next) {
             const iface: *IFace = @fieldParentPtr("node", node);
-            if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.name)) {
+            const ifname: Hash = iface.name;
+            if (@reduce(.And, ifname == cfg_ifname)) {
                 new_if = iface;
                 break;
             }
@@ -351,7 +355,8 @@ pub noinline fn widget(
         it = old.list.first;
         while (it) |node| : (it = node.next) {
             const iface: *IFace = @fieldParentPtr("node", node);
-            if (mem.eql(u8, &wd.ifr.ifrn.name, &iface.name)) {
+            const ifname: Hash = iface.name;
+            if (@reduce(.And, ifname == cfg_ifname)) {
                 old_if = iface;
                 break;
             }
