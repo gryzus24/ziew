@@ -19,7 +19,7 @@ const ColorHandler = struct {
                 .@"%used" => unt.Percent(self.used_kb, self.total_kb),
                 .@"%free" => unt.Percent(self.free_kb, self.total_kb),
                 .@"%available" => unt.Percent(self.avail_kb, self.total_kb),
-            }.n.roundAndTruncate(),
+            }.n.roundU24AndTruncate(),
             ac.pairs.get(base),
         );
     }

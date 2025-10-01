@@ -71,7 +71,7 @@ const Bat = struct {
                     .@"%fullnow" => unt.Percent(self.now, self.full),
                     .@"%fulldesign" => unt.Percent(self.now, self.full_design),
                     .state => unreachable,
-                }.n.roundAndTruncate(),
+                }.n.roundU24AndTruncate(),
                 ac.pairs.get(base),
             );
         }

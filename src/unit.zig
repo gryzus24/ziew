@@ -59,32 +59,32 @@ pub const F5608 = struct {
         return .{ .u = self.u / n };
     }
 
-    pub fn round(self: @This(), precision: u8) F5608 {
-        if (precision < ROUND_STEPS.len) {
-            const step = ROUND_STEPS[precision];
-            return .{ .u = (self.u + step - 1) / step * step };
-        }
-        return self;
+    pub inline fn roundU24(self: @This(), precision: u8) F5608 {
+        const i = @min(precision, ROUND_STEPS.len - 1);
+        const step, const ms = ROUND_STEP_MULT_SHFT[i];
+        const q, _ = utl.multShiftDivMod(self.u + step - 1, ms, step);
+        return .{ .u = q * step };
     }
 
-    pub fn roundAndTruncate(self: @This()) u64 {
-        return self.round(0).whole();
+    pub inline fn roundU24AndTruncate(self: @This()) u64 {
+        return self.roundU24(0).whole();
     }
 
     pub const FRAC_SHIFT = 8;
     pub const FRAC_MASK: u64 = (1 << FRAC_SHIFT) - 1;
 
-    const ROUND_STEPS: [3]u64 = .{
-        ((1 << FRAC_SHIFT) + 1) / 2,
-        ((1 << FRAC_SHIFT) + 19) / 20,
-        ((1 << FRAC_SHIFT) + 199) / 200,
+    const ROUND_STEPS: [4]u32 = .{
+        1 + FRAC_MASK / 2,
+        1 + FRAC_MASK / 20,
+        1 + FRAC_MASK / 200,
+        1 + FRAC_MASK / 2000,
     };
-    comptime {
-        for (ROUND_STEPS) |e| {
-            if (e <= 1)
-                @compileError("ROUNDING_STEP too low to make an adjustment");
-        }
-    }
+    const ROUND_STEP_MULT_SHFT: [4]struct { u32, utl.MultShft } = .{
+        .{ ROUND_STEPS[0], utl.DivConstant(ROUND_STEPS[0], ~@as(u32, 0)) },
+        .{ ROUND_STEPS[1], utl.DivConstant(ROUND_STEPS[1], ~@as(u32, 0)) },
+        .{ ROUND_STEPS[2], utl.DivConstant(ROUND_STEPS[2], ~@as(u32, 0)) },
+        .{ ROUND_STEPS[3], utl.DivConstant(ROUND_STEPS[3], ~@as(u32, 0)) },
+    };
 };
 
 pub const NumUnit = struct {
@@ -141,7 +141,7 @@ pub const NumUnit = struct {
         // Do we have space for the fractional part?
         if (digit_space > nr_digits) {
             const p = digit_space - nr_digits;
-            const rp = self.n.round(p);
+            const rp = self.n.roundU24(p);
             const rp_nr_digits = utl.nrDigits(rp.whole());
 
             if (nr_digits == rp_nr_digits) {
@@ -153,13 +153,13 @@ pub const NumUnit = struct {
             // hit zero. Otherwise, there is no need to worry about inserting
             // padding here as enough `digit_space` results in `round` returning
             // itself making the `nr_digits == rp_nr_digits` check always true.
-            return .{ self.n.round(p - 1), @intFromBool(p == 1), p - 1, rp_nr_digits };
+            return .{ self.n.roundU24(p - 1), @intFromBool(p == 1), p - 1, rp_nr_digits };
         }
 
         // I guess we do not, let's round and not forget about the one cell
         // of padding filling the preemptively allocated space for a '.' in
         // the fractional part.
-        const r0 = self.n.round(0);
+        const r0 = self.n.roundU24(0);
         const r0_nr_digits = utl.nrDigits(r0.whole());
         const pad = @intFromBool(r0_nr_digits == digit_space);
         return .{ r0, pad, 0, r0_nr_digits };
@@ -203,7 +203,7 @@ pub const NumUnit = struct {
         if (precision == PRECISION_VALUE_AUTO) {
             rp, pad, precision, nr_digits = self.autoRoundPadPrecision(width);
         } else {
-            rp = self.n.round(precision);
+            rp = self.n.roundU24(precision);
             nr_digits = utl.nrDigits(rp.whole());
             pad = width -| nr_digits;
         }

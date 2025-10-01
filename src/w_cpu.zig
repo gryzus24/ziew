@@ -264,10 +264,10 @@ pub const CpuState = struct {
 
         return color.firstColorGEThreshold(
             switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(ac.opt))) {
-                .@"%all" => self.usage_pct.all.roundAndTruncate(),
-                .@"%user" => self.usage_pct.user.roundAndTruncate(),
-                .@"%sys" => self.usage_pct.sys.roundAndTruncate(),
-                .@"%iowait" => self.usage_pct.iowait.roundAndTruncate(),
+                .@"%all" => self.usage_pct.all.roundU24AndTruncate(),
+                .@"%user" => self.usage_pct.user.roundU24AndTruncate(),
+                .@"%sys" => self.usage_pct.sys.roundU24AndTruncate(),
+                .@"%iowait" => self.usage_pct.iowait.roundU24AndTruncate(),
                 .forks => new.forks - old.forks,
                 .running => new.running,
                 .blocked => new.blocked,

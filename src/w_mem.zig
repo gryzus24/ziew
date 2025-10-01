@@ -110,7 +110,7 @@ pub const MemState = struct {
                     .@"%used" => self.used(),
                 },
                 self.total(),
-            ).n.roundAndTruncate(),
+            ).n.roundU24AndTruncate(),
             ac.pairs.get(base),
         );
     }
