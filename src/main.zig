@@ -202,7 +202,9 @@ fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
     return min;
 }
 
-pub fn main() !void {
+pub fn main() void {
+    errdefer |e| log.fatal(&.{ "main: ", @errorName(e) });
+
     var reg: m.Region = .init(&m.g_bss, "main");
 
     const args = readArgs();
