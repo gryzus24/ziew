@@ -42,10 +42,8 @@ const Cpu = struct {
         const diff = a - b;
         const diff_total = @reduce(.Add, diff);
 
-        if (DELTA_ZERO_CHECK and diff_total == 0) {
-            @branchHint(.cold);
+        if (DELTA_ZERO_CHECK and diff_total == 0)
             return .zero;
-        }
 
         // Doing vector multiplication isn't worth it as some
         // callers are interested only in the `.all` value.

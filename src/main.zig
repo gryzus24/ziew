@@ -111,7 +111,6 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
 }
 
 fn loadConfig(reg: *m.Region, config_path: ?[*:0]const u8) []typ.Widget {
-    @branchHint(.cold);
     const path = config_path orelse getConfigPath(reg) catch |e| switch (e) {
         error.NoPath => {
             log.warn(&.{"unknown config file path: using defaults..."});
