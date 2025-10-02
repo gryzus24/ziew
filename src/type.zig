@@ -218,16 +218,22 @@ pub const Widget = struct {
             const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
             pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
-                if (arg.len >= 16) log.fatal(&.{"BAT: battery name too long"});
+                const prefix = "/sys/class/power_supply/";
+                const suffix = "/uevent\x00";
+                const avail = @min(PATH_SIZE - prefix.len - suffix.len, 15);
+                comptime std.debug.assert(avail == 15);
+
+                if (arg.len > avail)
+                    log.fatal(&.{"BAT: battery name too long"});
 
                 const ret = try reg.frontAlloc(@This());
                 ret.format = .zero;
                 var fw: io.Writer = .fixed(&ret.path);
-                utl.writeStr(&fw, "/sys/class/power_supply/");
+                utl.writeStr(&fw, prefix);
                 ret.ps_off = @intCast(fw.end);
                 ret.ps_len = @intCast(arg.len);
                 utl.writeStr(&fw, arg);
-                utl.writeStr(&fw, "/uevent\x00");
+                utl.writeStr(&fw, suffix);
                 return ret;
             }
 
