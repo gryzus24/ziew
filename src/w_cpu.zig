@@ -234,9 +234,8 @@ fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
 // == public ==================================================================
 
 pub const CpuState = struct {
-    left: Stat,
-    right: Stat,
-    left_newest: bool,
+    stats: [2]Stat,
+    curr: usize,
 
     usage_pct: Cpu.Delta,
     usage_abs: Cpu.Delta,
@@ -245,12 +244,11 @@ pub const CpuState = struct {
 
     pub fn init(reg: *m.Region) !CpuState {
         const nr_cpus = utl.nrPossibleCpus();
-        const left: Stat = try .initZero(reg, nr_cpus);
-        const right: Stat = try .initZero(reg, nr_cpus);
+        const a: Stat = try .initZero(reg, nr_cpus);
+        const b: Stat = try .initZero(reg, nr_cpus);
         return .{
-            .left = left,
-            .right = right,
-            .left_newest = false,
+            .stats = .{ a, b },
+            .curr = 0,
             .usage_pct = .zero,
             .usage_abs = .zero,
             .proc_stat = fs.cwd().openFileZ("/proc/stat", .{}) catch |e| {
@@ -260,7 +258,7 @@ pub const CpuState = struct {
     }
 
     pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        const new, const old = self.getNewOldPtrs();
+        const new, const old = self.getCurrPrev();
 
         return color.firstColorGEThreshold(
             switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(ac.opt))) {
@@ -276,16 +274,13 @@ pub const CpuState = struct {
         );
     }
 
-    fn getNewOldPtrs(self: *const @This()) struct { *Stat, *Stat } {
-        return if (self.left_newest)
-            .{ @constCast(&self.left), @constCast(&self.right) }
-        else
-            .{ @constCast(&self.right), @constCast(&self.left) };
+    fn getCurrPrev(self: *const @This()) struct { *Stat, *Stat } {
+        const i = self.curr;
+        return .{ @constCast(&self.stats[i]), @constCast(&self.stats[i ^ 1]) };
     }
 
-    fn newStateFlip(self: *@This()) struct { *Stat, *Stat } {
-        self.left_newest = !self.left_newest;
-        return self.getNewOldPtrs();
+    fn swapCurrPrev(self: *@This()) void {
+        self.curr ^= 1;
     }
 };
 
@@ -298,7 +293,8 @@ pub fn update(state: *CpuState) void {
     if (nr_read == buf.len)
         log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
-    const new_stat, const old_stat = state.newStateFlip();
+    state.swapCurrPrev();
+    const new_stat, const old_stat = state.getCurrPrev();
 
     parseProcStat(buf[0..nr_read], new_stat);
 
@@ -315,7 +311,7 @@ pub noinline fn widget(
     state: *const CpuState,
 ) void {
     const wd = w.wid.CPU;
-    const new, const old = state.getNewOldPtrs();
+    const new, const old = state.getCurrPrev();
 
     const fg, const bg = w.check(state, base);
     utl.writeWidgetBeg(writer, fg, bg);
