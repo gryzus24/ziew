@@ -57,7 +57,7 @@ fn readFileUntil(file: fs.File, endmarkers: []const u8, buf: *[typ.WIDGET_BUF_MA
 // == public ==================================================================
 
 pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) void {
-    const wd = w.wid.READ;
+    const wd = w.data.READ;
 
     const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| {
         return writeBlockError(

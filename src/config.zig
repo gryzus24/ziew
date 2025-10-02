@@ -156,11 +156,7 @@ const FormatResult = union(enum) {
     }
 };
 
-fn acceptFormat(
-    reg: *m.Region,
-    str: []const u8,
-    wid: typ.Widget.Id.AcceptsFormat,
-) !FormatResult {
+fn acceptFormat(reg: *m.Region, str: []const u8, wid: typ.Widget.Id) !FormatResult {
     var parts: []typ.Format.Part = &.{};
     const parts_off = reg.frontSave(typ.Format.Part);
 
@@ -363,7 +359,7 @@ const ParseWant = enum {
 
 const ParseLineResult = union(enum) {
     widget: struct {
-        wid: typ.Widget.Id,
+        id: typ.Widget.Id,
         interval: ?typ.DeciSec = null,
         arg: ?Split = null,
         format: ?Split = null,
@@ -399,7 +395,7 @@ fn parseLine(tmp: *m.Region, line: []const u8) !ParseLineResult {
         switch (want) {
             .identifier => {
                 if (typ.strWid(field)) |wid| {
-                    result = .{ .widget = .{ .wid = wid } };
+                    result = .{ .widget = .{ .id = wid } };
                     want = .interval;
                 } else if (strColorIdentifier(field)) |ok| {
                     result = .{ .color = .{ .type = ok } };
@@ -553,57 +549,54 @@ pub fn parse(
         switch (try parseLine(&tmp, line)) {
             .widget => |wi| {
                 current = try reg.backPushVec(&widgets);
-                current.* = .initDefault(wi.wid);
+                current.* = .initDefault(wi.id, undefined);
                 if (wi.interval) |ok| {
                     current.interval = ok;
                 } else {
                     return .fail("widget requires interval", line, line_nr, .zero);
                 }
-                if (current.wid.acceptsArg()) {
+                if (current.id.acceptsArg()) {
                     if (wi.arg) |ok| {
                         const arg = line[ok.beg..ok.end];
-                        switch (current.wid.castTo(typ.Widget.Id.AcceptsArg)) {
-                            .TIME => current.wid.TIME = try .init(reg, arg),
-                            .DISK => current.wid.DISK = try .init(reg, arg),
-                            .NET => current.wid.NET = try .init(reg, arg),
-                            .BAT => current.wid.BAT = try .init(reg, arg),
-                            .READ => current.wid.READ = try .init(reg, arg),
+                        switch (current.id.castTo(typ.Widget.Id.AcceptsArg)) {
+                            .TIME => current.data = .{ .TIME = try .init(reg, arg) },
+                            .DISK => current.data = .{ .DISK = try .init(reg, arg) },
+                            .NET => current.data = .{ .NET = try .init(reg, arg) },
+                            .BAT => current.data = .{ .BAT = try .init(reg, arg) },
+                            .READ => current.data = .{ .READ = try .init(reg, arg) },
                         }
                     } else {
                         return .fail("widget requires arg parameter", line, line_nr, .zero);
                     }
                 }
-                if (current.wid.acceptsFormat()) {
-                    if (wi.format) |ok| {
-                        const format = line[ok.beg..ok.end];
-                        const wid = current.wid.castTo(typ.Widget.Id.AcceptsFormat);
-                        const ref = switch (wid) {
-                            .TIME => &current.wid.TIME.format,
-                            .MEM => blk: {
-                                current.wid.MEM = try .init(reg);
-                                break :blk &current.wid.MEM.format;
-                            },
-                            .CPU => blk: {
-                                current.wid.CPU = try .init(reg);
-                                break :blk &current.wid.CPU.format;
-                            },
-                            .DISK => &current.wid.DISK.format,
-                            .NET => &current.wid.NET.format,
-                            .BAT => &current.wid.BAT.format,
-                            .READ => &current.wid.READ.format,
-                        };
-                        ref.* = switch (try acceptFormat(reg, format, wid)) {
-                            .ok => |f| f,
-                            .err => |e| {
-                                return .fail(e.note, line, line_nr, .{
-                                    .beg = ok.beg + e.field.beg,
-                                    .end = ok.beg + e.field.end,
-                                });
-                            },
-                        };
-                    } else {
-                        return .fail("widget requires format parameter", line, line_nr, .zero);
-                    }
+                if (wi.format) |ok| {
+                    const format = line[ok.beg..ok.end];
+                    const ref = switch (current.id) {
+                        .TIME => &current.data.TIME.format,
+                        .MEM => blk: {
+                            current.data = .{ .MEM = try .init(reg) };
+                            break :blk &current.data.MEM.format;
+                        },
+                        .CPU => blk: {
+                            current.data = .{ .CPU = try .init(reg) };
+                            break :blk &current.data.CPU.format;
+                        },
+                        .DISK => &current.data.DISK.format,
+                        .NET => &current.data.NET.format,
+                        .BAT => &current.data.BAT.format,
+                        .READ => &current.data.READ.format,
+                    };
+                    ref.* = switch (try acceptFormat(reg, format, current.id)) {
+                        .ok => |f| f,
+                        .err => |e| {
+                            return .fail(e.note, line, line_nr, .{
+                                .beg = ok.beg + e.field.beg,
+                                .end = ok.beg + e.field.end,
+                            });
+                        },
+                    };
+                } else {
+                    return .fail("widget requires format parameter", line, line_nr, .zero);
                 }
             },
             .color => |co| {
@@ -625,7 +618,7 @@ pub fn parse(
                         .bg => current.bg = .{ .static = .init(hex) },
                     },
                     .active => |active| {
-                        if (current.wid.supportsDefaultColorOnly())
+                        if (current.id.supportsDefaultColorOnly())
                             return .fail(
                                 "bad hex: widget doesn't support thresh:#hex pairs",
                                 line,
@@ -633,7 +626,7 @@ pub fn parse(
                                 active.opt,
                             );
 
-                        const wid = current.wid.castTo(typ.Widget.Id.ActiveColorSupported);
+                        const wid = current.id.castTo(typ.Widget.Id.ActiveColorSupported);
                         const name = line[active.opt.beg..active.opt.end];
                         const opt = switch (strColorOpt(wid, name)) {
                             .opt => |o| o,

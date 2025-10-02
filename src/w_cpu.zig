@@ -308,7 +308,7 @@ pub noinline fn widget(
     base: [*]const u8,
     state: *const CpuState,
 ) void {
-    const wd = w.wid.CPU;
+    const wd = w.data.CPU;
     const new, const old = state.getCurrPrev();
 
     const fg, const bg = w.check(state, base);

@@ -158,7 +158,7 @@ pub noinline fn widget(
     base: [*]const u8,
     state: *const MemState,
 ) void {
-    const wd = w.wid.MEM;
+    const wd = w.data.MEM;
 
     const fg, const bg = w.check(state, base);
     utl.writeWidgetBeg(writer, fg, bg);

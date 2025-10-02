@@ -15,7 +15,7 @@ pub noinline fn widget(
     w: *const typ.Widget,
     base: [*]const u8,
 ) void {
-    const wd = w.wid.TIME;
+    const wd = w.data.TIME;
 
     var ts: linux.timespec = undefined;
     var tm: c.struct_tm = undefined;

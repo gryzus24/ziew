@@ -52,15 +52,17 @@ pub const Format = struct {
 };
 
 pub const Widget = struct {
-    wid: Id,
+    id: Id,
+    data: Data,
     interval: DeciSec,
     interval_now: DeciSec,
     fg: Color,
     bg: Color,
 
-    pub fn initDefault(wid: Id) @This() {
+    pub fn initDefault(id: Id, data: Data) @This() {
         return .{
-            .wid = wid,
+            .id = id,
+            .data = data,
             .interval = WIDGET_INTERVAL_DEFAULT,
             .interval_now = 0,
             .fg = .{ .static = .default },
@@ -68,38 +70,53 @@ pub const Widget = struct {
         };
     }
 
-    pub const Color = union(enum) {
-        active: color.Active,
-        static: color.Hex,
-    };
+    const NR_WIDGETS = @typeInfo(Id).@"enum".fields.len;
 
-    pub fn check(
-        self: @This(),
-        indirect: anytype,
-        base: [*]const u8,
-    ) struct { color.Hex, color.Hex } {
-        return .{
-            switch (self.fg) {
-                .active => |active| indirect.checkPairs(active, base),
-                .static => |static| static,
-            },
-            switch (self.bg) {
-                .active => |active| indirect.checkPairs(active, base),
-                .static => |static| static,
-            },
-        };
-    }
+    pub const Id = enum(u8) {
+        TIME,
+        MEM,
+        CPU,
+        DISK,
+        NET,
+        BAT,
+        READ,
 
-    pub const NoopIndirect = struct {
-        pub fn checkPairs(other: @This(), active: color.Active, base: [*]const u8) color.Hex {
-            _ = other;
-            _ = active;
-            _ = base;
-            return .default;
+        pub const AcceptsArg = MakeEnumSubset(
+            Id,
+            &.{ .TIME, .DISK, .NET, .BAT, .READ },
+        );
+
+        pub const ActiveColorSupported = MakeEnumSubset(
+            Id,
+            &.{ .MEM, .CPU, .DISK, .NET, .BAT },
+        );
+
+        pub const DefaultColorOnly = MakeEnumSubset(
+            Id,
+            &.{ .TIME, .READ },
+        );
+
+        pub fn castTo(self: @This(), comptime T: type) T {
+            return @enumFromInt(@intFromEnum(self));
+        }
+
+        pub fn acceptsArg(self: @This()) bool {
+            _ = meta.intToEnum(AcceptsArg, @intFromEnum(self)) catch return false;
+            return true;
+        }
+
+        pub fn supportsActiveColor(self: @This()) bool {
+            _ = meta.intToEnum(ActiveColorSupported, @intFromEnum(self)) catch return false;
+            return true;
+        }
+
+        pub fn supportsDefaultColorOnly(self: @This()) bool {
+            _ = meta.intToEnum(DefaultColorOnly, @intFromEnum(self)) catch return false;
+            return true;
         }
     };
 
-    pub const Id = union(Tag) {
+    pub const Data = union {
         TIME: *TimeData,
         MEM: *MemData,
         CPU: *CpuData,
@@ -121,10 +138,6 @@ pub const Widget = struct {
             assert(@sizeOf(BatData) <= DATA_SIZE_MAX);
             assert(@sizeOf(ReadData) <= DATA_SIZE_MAX);
         }
-
-        const Tag = enum { TIME, MEM, CPU, DISK, NET, BAT, READ };
-
-        const NR_WIDGETS = @typeInfo(Tag).@"enum".fields.len;
 
         pub const TimeData = struct {
             format: Format,
@@ -279,49 +292,36 @@ pub const Widget = struct {
                 return self.path[self.basename_off..][0..self.basename_len];
             }
         };
+    };
 
-        pub const AcceptsArg = MakeEnumSubset(
-            Tag,
-            &.{ .TIME, .DISK, .NET, .BAT, .READ },
-        );
+    pub const Color = union(enum) {
+        active: color.Active,
+        static: color.Hex,
+    };
 
-        pub const AcceptsFormat = MakeEnumSubset(
-            Tag,
-            &.{ .TIME, .MEM, .CPU, .DISK, .NET, .BAT, .READ },
-        );
+    pub fn check(
+        self: @This(),
+        indirect: anytype,
+        base: [*]const u8,
+    ) struct { color.Hex, color.Hex } {
+        return .{
+            switch (self.fg) {
+                .active => |active| indirect.checkPairs(active, base),
+                .static => |static| static,
+            },
+            switch (self.bg) {
+                .active => |active| indirect.checkPairs(active, base),
+                .static => |static| static,
+            },
+        };
+    }
 
-        pub const ActiveColorSupported = MakeEnumSubset(
-            Tag,
-            &.{ .MEM, .CPU, .DISK, .NET, .BAT },
-        );
-
-        pub const DefaultColorOnly = MakeEnumSubset(
-            Tag,
-            &.{ .TIME, .READ },
-        );
-
-        pub fn castTo(self: @This(), comptime T: type) T {
-            return @enumFromInt(@intFromEnum(self));
-        }
-
-        pub fn acceptsArg(self: @This()) bool {
-            _ = meta.intToEnum(AcceptsArg, @intFromEnum(self)) catch return false;
-            return true;
-        }
-
-        pub fn acceptsFormat(self: @This()) bool {
-            _ = meta.intToEnum(AcceptsFormat, @intFromEnum(self)) catch return false;
-            return true;
-        }
-
-        pub fn supportsActiveColor(self: @This()) bool {
-            _ = meta.intToEnum(ActiveColorSupported, @intFromEnum(self)) catch return false;
-            return true;
-        }
-
-        pub fn supportsDefaultColorOnly(self: @This()) bool {
-            _ = meta.intToEnum(DefaultColorOnly, @intFromEnum(self)) catch return false;
-            return true;
+    pub const NoopIndirect = struct {
+        pub fn checkPairs(other: @This(), active: color.Active, base: [*]const u8) color.Hex {
+            _ = other;
+            _ = active;
+            _ = base;
+            return .default;
         }
     };
 };
@@ -469,9 +469,9 @@ pub const ReadOpt = enum {
 };
 
 pub fn strWid(str: []const u8) ?Widget.Id {
-    inline for (@typeInfo(Widget.Id.Tag).@"enum".fields) |field| {
+    inline for (@typeInfo(Widget.Id).@"enum".fields) |field| {
         if (mem.eql(u8, str, field.name))
-            return @unionInit(Widget.Id, field.name, undefined);
+            return @enumFromInt(field.value);
     }
     return null;
 }
@@ -481,16 +481,16 @@ const WID_OPT_TYPE = &.{
 };
 
 comptime {
-    if (Widget.Id.NR_WIDGETS != WID_OPT_TYPE.len)
+    if (Widget.NR_WIDGETS != WID_OPT_TYPE.len)
         @compileError("Adjust WID_OPT_TYPE");
 }
 
 // == public constants ========================================================
 
 /// Names of options supported by widgets' formats keyed by
-/// @intFromEnum(Widget.Id.Tag).
-pub const WID__OPT_NAMES: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = blk: {
-    var w: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = undefined;
+/// @intFromEnum(Widget.Tag).
+pub const WID__OPT_NAMES: [Widget.NR_WIDGETS][]const [:0]const u8 = blk: {
+    var w: [Widget.NR_WIDGETS][]const [:0]const u8 = undefined;
     for (WID_OPT_TYPE, 0..) |T, i| {
         w[i] = meta.fieldNames(T);
     }
@@ -498,9 +498,9 @@ pub const WID__OPT_NAMES: [Widget.Id.NR_WIDGETS][]const [:0]const u8 = blk: {
 };
 
 /// Particular widgets' format option state of color support keyed by
-/// @intFromEnum(Widget.Id.Tag).
-pub const WID__OPTS_SUPPORTING_COLOR: [Widget.Id.NR_WIDGETS][]const bool = blk: {
-    var w: [Widget.Id.NR_WIDGETS][]const bool = undefined;
+/// @intFromEnum(Widget.Tag).
+pub const WID__OPTS_SUPPORTING_COLOR: [Widget.NR_WIDGETS][]const bool = blk: {
+    var w: [Widget.NR_WIDGETS][]const bool = undefined;
     for (WID_OPT_TYPE, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
         var supporting_color: [len]bool = @splat(false);

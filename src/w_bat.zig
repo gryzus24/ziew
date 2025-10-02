@@ -81,7 +81,7 @@ const Bat = struct {
 // == public ==================================================================
 
 pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) void {
-    const wd = w.wid.BAT;
+    const wd = w.data.BAT;
 
     const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| switch (e) {
         error.FileNotFound => {

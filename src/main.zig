@@ -225,7 +225,7 @@ pub fn main() void {
     var cpu_state_inited = false;
     var net_state_inited = false;
 
-    for (widgets) |*w| switch (w.wid) {
+    for (widgets) |*w| switch (w.id) {
         .CPU => {
             if (!cpu_state_inited) {
                 cpu_state = try .init(&reg);
@@ -275,7 +275,7 @@ pub fn main() void {
                 w.interval_now = w.interval;
 
                 var fw: io.Writer = .fixed(&bufs[i]);
-                switch (w.wid) {
+                switch (w.id) {
                     .TIME => w_time.widget(&fw, w, base),
                     .MEM => {
                         if (!updated.mem) {

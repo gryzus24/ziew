@@ -28,7 +28,7 @@ const ColorHandler = struct {
 // == public ==================================================================
 
 pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) void {
-    const wd = w.wid.DISK;
+    const wd = w.data.DISK;
 
     // TODO: use statvfs instead of this
     var sfs: c.struct_statfs = undefined;

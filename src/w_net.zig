@@ -246,8 +246,8 @@ pub const NetState = struct {
     pub fn init(reg: *m.Region, widgets: []const typ.Widget) ?NetState {
         const proc_net_dev_required = blk: {
             for (widgets) |*w| {
-                if (w.wid == .NET) {
-                    const wd = w.wid.NET;
+                if (w.id == .NET) {
+                    const wd = w.data.NET;
                     for (wd.format.parts.get(reg.head.ptr)) |*part| {
                         const opt: typ.NetOpt = @enumFromInt(part.opt);
                         if (opt.requiresProcNetDev()) break :blk true;
@@ -309,7 +309,7 @@ pub noinline fn widget(
     if (Static.sock == 0)
         Static.sock = openIoctlSocket();
 
-    const wd = w.wid.NET;
+    const wd = w.data.NET;
 
     var _inetbuf: [INET_BUF_SIZE]u8 = @splat(0);
     var _iffbuf: [IFF_BUF_MAX]u8 = @splat(0);
