@@ -29,8 +29,11 @@ inline fn KB_UNIT(kb: F5608) NumUnit {
 
 // == public ==================================================================
 
-pub const PRECISION_VALUE_AUTO: comptime_int = ~@as(u8, 0);
-pub const PRECISION_DIGITS_MAX: comptime_int = F5608.ROUND_STEPS.len;
+pub const PRECISION_VALUE_AUTO: comptime_int = ~@as(u3, 0);
+pub const PRECISION_DIGITS_MAX: comptime_int = 3;
+comptime {
+    std.debug.assert(PRECISION_VALUE_AUTO != PRECISION_DIGITS_MAX);
+}
 
 pub const F5608 = struct {
     u: u64,
@@ -59,8 +62,8 @@ pub const F5608 = struct {
         return .{ .u = self.u / n };
     }
 
-    pub inline fn roundU24(self: @This(), precision: u8) F5608 {
-        const i = @min(precision, ROUND_STEPS.len - 1);
+    pub inline fn roundU24(self: @This(), precision: u2) F5608 {
+        const i = precision;
         const step, const ms = ROUND_STEP_MULT_SHFT[i];
         const q, _ = utl.multShiftDivMod(self.u + step - 1, ms, step);
         return .{ .u = q * step };
@@ -104,18 +107,18 @@ pub const NumUnit = struct {
         si_tera = 't',
     };
 
-    pub const Alignment = enum { none, right, left };
-
-    pub const WriteOptions = struct {
+    pub const WriteOptions = packed struct(u8) {
         alignment: Alignment,
-        width: u8,
-        precision: u8,
+        width: u3,
+        precision: u3,
+
+        pub const Alignment = enum(u2) { none, right, left };
 
         pub fn setWidth(self: *@This(), w: u8) void {
             if (w == 0) {
                 self.width = 1;
             } else {
-                self.width = @min(w, 9);
+                self.width = @min(w, ~@as(u3, 0));
             }
         }
 
@@ -134,19 +137,20 @@ pub const NumUnit = struct {
         };
     };
 
-    fn autoRoundPadPrecision(self: @This(), width: u8) struct { F5608, u8, u8, u8 } {
+    fn autoRoundPadPrecision(self: @This(), width: u8) struct { F5608, u8, u2, u8 } {
         const nr_digits = utl.nrDigits(self.n.whole());
         const digit_space = width - 1;
 
         // Do we have space for the fractional part?
         if (digit_space > nr_digits) {
-            const p = digit_space - nr_digits;
+            const free = digit_space - nr_digits;
+            const p = @min(free, PRECISION_DIGITS_MAX);
             const rp = self.n.roundU24(p);
             const rp_nr_digits = utl.nrDigits(rp.whole());
 
             if (nr_digits == rp_nr_digits) {
                 @branchHint(.likely);
-                return .{ rp, p -| PRECISION_DIGITS_MAX, p, rp_nr_digits };
+                return .{ rp, free - p, p, rp_nr_digits };
             }
             // Got rounded up - take one digit off the fractional part and make
             // sure there is one space of padding inserted if precision digits
@@ -189,8 +193,8 @@ pub const NumUnit = struct {
         }
 
         const alignment = opts.alignment;
-        var width = opts.width;
-        var precision = opts.precision;
+        var width: u8 = opts.width;
+        var precision: u8 = opts.precision;
 
         if (self.u == .si_one) {
             width += 1;
@@ -203,7 +207,7 @@ pub const NumUnit = struct {
         if (precision == PRECISION_VALUE_AUTO) {
             rp, pad, precision, nr_digits = self.autoRoundPadPrecision(width);
         } else {
-            rp = self.n.roundU24(precision);
+            rp = self.n.roundU24(@intCast(precision));
             nr_digits = utl.nrDigits(rp.whole());
             pad = width -| nr_digits;
         }
@@ -232,7 +236,7 @@ pub const NumUnit = struct {
                 i -= 3;
                 buf[i..][0..3].* = .{ '.', b, a };
             },
-            else => {
+            PRECISION_DIGITS_MAX => {
                 const n_max = (F5608.FRAC_MASK * 1000) >> F5608.FRAC_SHIFT;
                 const n = (rp.frac() * 1000) >> F5608.FRAC_SHIFT;
                 const q, const r = utl.cMultShiftDivMod(n, 100, n_max);
@@ -240,7 +244,7 @@ pub const NumUnit = struct {
                 i -= 4;
                 buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(q)), b, a };
             },
-            PRECISION_VALUE_AUTO => unreachable,
+            else => unreachable,
         }
 
         const n = rp.whole();
