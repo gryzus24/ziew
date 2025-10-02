@@ -39,7 +39,7 @@ pub const F5608 = struct {
     u: u64,
 
     pub fn init(n: u64) F5608 {
-        return .{ .u = n << FRAC_SHIFT };
+        return .{ .u = @shlExact(n, FRAC_SHIFT) };
     }
 
     pub fn whole(self: @This()) u64 {
@@ -51,7 +51,7 @@ pub const F5608 = struct {
     }
 
     pub fn add(self: @This(), n: u64) F5608 {
-        return .{ .u = self.u + (n << FRAC_SHIFT) };
+        return .{ .u = self.u + @shlExact(n, FRAC_SHIFT) };
     }
 
     pub fn mul(self: @This(), n: u64) F5608 {

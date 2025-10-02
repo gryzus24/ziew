@@ -44,7 +44,7 @@ pub fn writeWidgetBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
         @compileError("typ.WIDGET_BUF_MAX < 64");
 
     const dst = writer.buffer[writer.end..];
-    switch (fg.use | (bg.use << 1)) {
+    switch (fg.use | @shlExact(bg.use, 1)) {
         0 => {
             const str = "{\"full_text\":\"";
             dst[0..16].* = (str ++ .{ undefined, undefined }).*;
