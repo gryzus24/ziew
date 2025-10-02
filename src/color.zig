@@ -5,8 +5,8 @@ const mem = std.mem;
 // == public ==================================================================
 
 pub const Hex = struct {
+    _priv: u8 = undefined,
     use: u8,
-    _: u8 = 0,
     hex: [6]u8,
 
     pub const default: Hex = .{ .use = 0, .hex = @splat(0) };
@@ -21,8 +21,23 @@ pub const Active = struct {
     pairs: m.MemSlice(Pair),
 
     pub const Pair = struct {
-        thresh: u8,
-        data: Hex,
+        inner: Hex,
+
+        pub fn init(_thresh: u8, hex: [6]u8) @This() {
+            var ret: Hex = .init(hex);
+            ret._priv = _thresh;
+            return .{ .inner = ret };
+        }
+
+        pub fn initDefault(_thresh: u8) @This() {
+            var ret: Hex = .default;
+            ret._priv = _thresh;
+            return .{ .inner = ret };
+        }
+
+        pub fn thresh(self: @This()) u8 {
+            return self.inner._priv;
+        }
     };
 };
 
@@ -59,18 +74,18 @@ pub fn acceptHex(str: []const u8) ?[6]u8 {
 pub inline fn firstColorGEThreshold(value: u64, pairs: []const Active.Pair) Hex {
     var i: usize = 0;
     for (pairs) |pair| {
-        if (pair.thresh > value) break;
+        if (pair.thresh() > value) break;
         i += 1;
     }
     if (i != 0)
-        return pairs[i - 1].data;
+        return pairs[i - 1].inner;
 
     return .default;
 }
 
 pub inline fn firstColorEQThreshold(value: u8, pairs: []const Active.Pair) Hex {
     for (pairs) |pair| {
-        if (pair.thresh == value) return pair.data;
+        if (pair.thresh() == value) return pair.inner;
     }
     return .default;
 }

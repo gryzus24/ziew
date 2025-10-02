@@ -456,10 +456,10 @@ fn parseLine(tmp: *m.Region, line: []const u8) !ParseLineResult {
                 const hex = field[sep + 1 ..];
                 if (color.acceptHex(hex)) |ok| {
                     const ptr = try tmp.frontPushVec(&result.color.data.?.active.pairs);
-                    ptr.* = .{ .thresh = thresh, .data = .init(ok) };
+                    ptr.* = .init(thresh, ok);
                 } else if (hex.len == 0 or mem.eql(u8, hex, "default")) {
                     const ptr = try tmp.frontPushVec(&result.color.data.?.active.pairs);
-                    ptr.* = .{ .thresh = thresh, .data = .default };
+                    ptr.* = .initDefault(thresh);
                 } else {
                     return .fail("bad hex", .{ .beg = split.beg + sep + 1, .end = split.end });
                 }
