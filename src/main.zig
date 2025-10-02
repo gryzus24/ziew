@@ -74,16 +74,28 @@ fn readArgs() Args {
 
 fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     @branchHint(.cold);
-    var buf: [256]u8 = undefined;
-
     const l: log.Log = .open();
     l.log("fatal: config: ");
     l.log(diag.note);
     l.log("\n");
 
-    var fw: io.Writer = .fixed(&buf);
-    fw.print("{:<7}{s}\n", .{ diag.line_nr, diag.line }) catch {};
-    l.log(fw.buffered());
+    var buf: [256]u8 = undefined;
+    var pos: usize = 0;
+
+    var n = utl.unsafeU64toa(&buf, diag.line_nr);
+    @memcpy(buf[pos..][0..n], buf[buf.len - n ..]);
+    pos += n;
+
+    n = 7 -| n;
+    @memset(buf[pos..][0..n], ' ');
+    pos += n;
+
+    n = @min(diag.line.len, buf.len - pos);
+    @memcpy(buf[pos..][0..n], diag.line[0..n]);
+    pos += n;
+
+    l.log(buf[0..pos]);
+    l.log("\n");
 
     const beg = @min(diag.field.beg, buf.len);
     const end = @min(diag.field.end, buf.len);
