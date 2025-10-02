@@ -47,7 +47,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                 OPTION[@FLAGS...]:[ALIGNMENT][WIDTH][.PRECISION]
 
               * OPTION    - widget specific option name,
-              * FLAGS     - option specific flag changing what/how value is
+              * FLAGS     - option specific flag changing what/how a value is
                             displayed.
                               * d - show a difference since last refresh
                                     instead of a total,
@@ -73,7 +73,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
     COLOR - hexadecimal RGB color value (e.g. #99aabb or #9ab, # is optional).
 
     Example
-      FG TIME #8a8
+      FG #8a8
 
 ### Conditional color line
 
@@ -87,8 +87,8 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                 for the default color.
 
     Example
-      BG CPU %all 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-      FG CPU %user 0:22a 10:default 60:aa2
+      BG %all 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
+      FG %user 0:22a 10:default 60:aa2
 
 *Color* lines must come after the *Widget* lines they apply to. You can define multiple widgets and place them in any order you want.
 
