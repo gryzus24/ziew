@@ -238,9 +238,8 @@ fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
 // == public ==================================================================
 
 pub const NetState = struct {
-    left: NetDev,
-    right: NetDev,
-    left_newest: bool = false,
+    netdevs: [2]NetDev,
+    curr: usize,
 
     proc_net_dev: fs.File,
 
@@ -258,27 +257,26 @@ pub const NetState = struct {
             break :blk false;
         };
         if (proc_net_dev_required) {
+            const a: NetDev = .{ .reg = reg };
+            const b: NetDev = .{ .reg = reg };
             return .{
+                .netdevs = .{ a, b },
+                .curr = 0,
                 .proc_net_dev = fs.cwd().openFileZ("/proc/net/dev", .{}) catch |e| {
                     log.fatal(&.{ "open: /proc/net/dev: ", @errorName(e) });
                 },
-                .left = .{ .reg = reg },
-                .right = .{ .reg = reg },
             };
         }
         return null;
     }
 
-    fn getNewOldPtrs(self: *const @This()) struct { *NetDev, *NetDev } {
-        return if (self.left_newest)
-            .{ @constCast(&self.left), @constCast(&self.right) }
-        else
-            .{ @constCast(&self.right), @constCast(&self.left) };
+    fn getCurrPrev(self: *const @This()) struct { *NetDev, *NetDev } {
+        const i = self.curr;
+        return .{ @constCast(&self.netdevs[i]), @constCast(&self.netdevs[i ^ 1]) };
     }
 
-    fn newStateFlip(self: *@This()) struct { *NetDev, *NetDev } {
-        self.left_newest = !self.left_newest;
-        return self.getNewOldPtrs();
+    fn swapCurrPrev(self: *@This()) void {
+        self.curr ^= 1;
     }
 };
 
@@ -290,7 +288,8 @@ pub fn update(state: *NetState) void {
     if (nr_read == buf.len)
         log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
-    const new, _ = state.newStateFlip();
+    state.swapCurrPrev();
+    const new, _ = state.getCurrPrev();
     new.freeAll();
 
     parseProcNetDev(buf[0..nr_read], new) catch |e| {
@@ -338,7 +337,7 @@ pub noinline fn widget(
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
     if (state.*) |*ok| {
-        const new, const old = ok.getNewOldPtrs();
+        const new, const old = ok.getCurrPrev();
 
         const Hash = @Vector(linux.IFNAMESIZE, u8);
         const cfg_ifname: Hash = wd.ifr.ifrn.name;
