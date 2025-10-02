@@ -238,7 +238,7 @@ pub fn digits2_lut(n: u64) [2]u8 {
     return "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899"[n * 2 ..][0..2].*;
 }
 
-pub fn unsafeU64toa(dst: []u8, n: u64) void {
+pub fn unsafeU64toa(dst: []u8, n: u64) usize {
     var i = dst.len;
     var t = n;
     while (t >= 100) : (t /= 100) {
@@ -252,6 +252,7 @@ pub fn unsafeU64toa(dst: []u8, n: u64) void {
         i -= 2;
         dst[i..][0..2].* = digits2_lut(t);
     }
+    return dst.len - i;
 }
 
 // This is so naive and untweaked yet it benches faster than

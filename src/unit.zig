@@ -273,7 +273,7 @@ pub const NumUnit = struct {
             },
             else => {
                 @branchHint(.cold);
-                utl.unsafeU64toa(&buf, n);
+                _ = utl.unsafeU64toa(&buf, n);
             },
         }
 
