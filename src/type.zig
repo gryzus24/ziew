@@ -111,13 +111,15 @@ pub const Widget = struct {
         const DATA_SIZE_MAX = 64;
 
         comptime {
-            if (@sizeOf(TimeData) > DATA_SIZE_MAX) unreachable;
-            if (@sizeOf(MemData) > DATA_SIZE_MAX) unreachable;
-            if (@sizeOf(CpuData) > DATA_SIZE_MAX) unreachable;
-            if (@sizeOf(DiskData) > DATA_SIZE_MAX) unreachable;
-            if (@sizeOf(NetData) > DATA_SIZE_MAX) unreachable;
-            if (@sizeOf(BatData) > DATA_SIZE_MAX) unreachable;
-            if (@sizeOf(ReadData) > DATA_SIZE_MAX) unreachable;
+            const assert = std.debug.assert;
+            assert(@sizeOf(TimeData) <= DATA_SIZE_MAX);
+            assert(@sizeOf(TimeData) <= DATA_SIZE_MAX);
+            assert(@sizeOf(MemData) <= DATA_SIZE_MAX);
+            assert(@sizeOf(CpuData) <= DATA_SIZE_MAX);
+            assert(@sizeOf(DiskData) <= DATA_SIZE_MAX);
+            assert(@sizeOf(NetData) <= DATA_SIZE_MAX);
+            assert(@sizeOf(BatData) <= DATA_SIZE_MAX);
+            assert(@sizeOf(ReadData) <= DATA_SIZE_MAX);
         }
 
         const Tag = enum { TIME, MEM, CPU, DISK, NET, BAT, READ };
