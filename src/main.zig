@@ -121,15 +121,24 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
 }
 
 fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
-    const path = config_path orelse getConfigPath(reg) catch |e| switch (e) {
-        error.NoPath => {
-            log.warn(&.{"unknown config file path: using defaults..."});
-            return cfg.defaultConfig(reg);
-        },
-        error.NoSpaceLeft => log.fatal(&.{"config path too long"}),
-    };
+    var path_sp: ?umem.Region.SavePoint = null;
+    var path: [*:0]const u8 = undefined;
 
-    const file = fs.cwd().openFileZ(path, .{}) catch |e| switch (e) {
+    if (config_path) |ok| {
+        path = ok;
+    } else {
+        path_sp, path = getConfigPath(reg) catch |e| switch (e) {
+            error.NoPath => {
+                log.warn(&.{"unknown config file path: using defaults..."});
+                return cfg.defaultConfig(reg);
+            },
+            error.NoSpaceLeft => log.fatal(&.{"config path too long"}),
+        };
+    }
+    const file_or_err = fs.cwd().openFileZ(path, .{});
+    if (path_sp) |ok| reg.restore(ok);
+
+    const file = file_or_err catch |e| switch (e) {
         error.FileNotFound => {
             log.warn(&.{ "config: file not found: ", mem.sliceTo(path, 0) });
             log.warn(&.{"using defaults..."});
@@ -159,7 +168,9 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
     return widgets;
 }
 
-fn getConfigPath(reg: *umem.Region) error{ NoSpaceLeft, NoPath }![*:0]const u8 {
+fn getConfigPath(
+    reg: *umem.Region,
+) error{ NoSpaceLeft, NoPath }!struct { umem.Region.SavePoint, [*:0]const u8 } {
     const sp = reg.save(u8, .front);
     var n: usize = 0;
     if (posix.getenvZ("XDG_CONFIG_HOME")) |ok| {
@@ -172,7 +183,7 @@ fn getConfigPath(reg: *umem.Region) error{ NoSpaceLeft, NoPath }![*:0]const u8 {
         log.warn(&.{"neither $HOME nor $XDG_CONFIG_HOME set!"});
         return error.NoPath;
     }
-    return reg.slice(u8, sp, n)[0 .. n - 1 :0];
+    return .{ sp, reg.slice(u8, sp, n)[0 .. n - 1 :0] };
 }
 
 fn sa_handler(signum: c_int) callconv(.c) void {
