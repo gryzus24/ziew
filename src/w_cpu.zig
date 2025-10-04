@@ -1,15 +1,16 @@
 const std = @import("std");
 const color = @import("color.zig");
-const log = @import("log.zig");
-const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
-const utl = @import("util.zig");
-const fmt = std.fmt;
+
+const div = @import("util/div.zig");
+const log = @import("util/log.zig");
+const m = @import("util/mem.zig");
+const misc = @import("util/misc.zig");
+const su = @import("util/str.zig");
+
 const fs = std.fs;
 const io = std.io;
-const math = std.math;
-const mem = std.mem;
 
 const DELTA_ZERO_CHECK = false;
 
@@ -105,7 +106,7 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
     while (true) {
         var fields: [8]u64 = undefined;
         for (0..fields.len) |fi| {
-            fields[fi] = utl.atou64ForwardUntil(buf, &i, ' ');
+            fields[fi] = su.atou64ForwardUntil(buf, &i, ' ');
             i += 1;
         }
         // zig fmt: off
@@ -130,29 +131,29 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         cpu += 1;
     }
     i += "intr ".len;
-    new.intr = utl.atou64ForwardUntil(buf, &i, ' ');
+    new.intr = su.atou64ForwardUntil(buf, &i, ' ');
 
     i = buf.len - 1 - " 0 0 0 0 0 0 0 0 0 0 0\n".len;
     while (buf[i] != 'q') : (i -= 1) {}
     // i at: softir[q] 123456 2345 ...
 
     var j = i + "q ".len;
-    new.softirq = utl.atou64ForwardUntil(buf, &j, ' ');
+    new.softirq = su.atou64ForwardUntil(buf, &j, ' ');
     i -= "\nsoftirq".len;
 
-    new.blocked = @intCast(utl.atou64BackwardUntil(buf, &i, ' '));
+    new.blocked = @intCast(su.atou64BackwardUntil(buf, &i, ' '));
     i -= "\nprocs_blocked ".len;
 
-    new.running = @intCast(utl.atou64BackwardUntil(buf, &i, ' '));
+    new.running = @intCast(su.atou64BackwardUntil(buf, &i, ' '));
     i -= "\nprocs_running ".len;
 
-    new.forks = utl.atou64BackwardUntil(buf, &i, ' ');
+    new.forks = su.atou64BackwardUntil(buf, &i, ' ');
     i -= "btime X\nprocesses ".len;
 
     while (buf[i] != '\n') : (i -= 1) {}
     i -= 1;
 
-    new.ctxt = utl.atou64BackwardUntil(buf, &i, ' ');
+    new.ctxt = su.atou64BackwardUntil(buf, &i, ' ');
 
     // Value of `Stat.nr_cpux_entries` may change - CPUs might go online/offline.
     new.nr_cpux_entries = cpu;
@@ -185,7 +186,7 @@ test "/proc/stat parser" {
     ;
     var tmem: [4096]u8 align(16) = undefined;
     var reg: m.Region = .init(&tmem, "cputest");
-    var s: Stat = try .initZero(&reg, utl.nrPossibleCpus());
+    var s: Stat = try .initZero(&reg, misc.nrPossibleCpus());
     parseProcStat(buf, &s);
     try t.expect(s.entries[0].user == 46232 + 14);
     try t.expect(s.entries[0].sys == 14383 + 2994 + 1212 + 0);
@@ -225,7 +226,7 @@ fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
 
     const pct = new.delta(old).all;
     const u = @min(pct.u, u_max);
-    const q, _ = utl.cMultShiftDivMod(u + off, step, u_max + off);
+    const q, _ = div.cMultShiftDivMod(u + off, step, u_max + off);
     return @intCast(q);
 }
 
@@ -241,7 +242,7 @@ pub const CpuState = struct {
     proc_stat: fs.File,
 
     pub fn init(reg: *m.Region) !CpuState {
-        const nr_cpus = utl.nrPossibleCpus();
+        const nr_cpus = misc.nrPossibleCpus();
         const a: Stat = try .initZero(reg, nr_cpus);
         const b: Stat = try .initZero(reg, nr_cpus);
         return .{
@@ -312,7 +313,7 @@ pub noinline fn widget(
     const new, const old = state.getCurrPrev();
 
     const fg, const bg = w.check(state, base);
-    utl.writeWidgetBeg(writer, fg, bg);
+    typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
@@ -373,12 +374,12 @@ pub noinline fn widget(
             .user       => .{ .n = state.usage_abs.user,   .u = .percent },
             .sys        => .{ .n = state.usage_abs.sys,    .u = .percent },
             .iowait     => .{ .n = state.usage_abs.iowait, .u = .percent },
-            .intr       => unt.UnitSI(utl.calc(new.intr, old.intr, d)),
-            .ctxt       => unt.UnitSI(utl.calc(new.ctxt, old.ctxt, d)),
-            .forks      => unt.UnitSI(utl.calc(new.forks, old.forks, d)),
+            .intr       => unt.UnitSI(misc.calc(new.intr, old.intr, d)),
+            .ctxt       => unt.UnitSI(misc.calc(new.ctxt, old.ctxt, d)),
+            .forks      => unt.UnitSI(misc.calc(new.forks, old.forks, d)),
             .running    => unt.UnitSI(new.running),
             .blocked    => unt.UnitSI(new.blocked),
-            .softirq    => unt.UnitSI(utl.calc(new.softirq, old.softirq, d)),
+            .softirq    => unt.UnitSI(misc.calc(new.softirq, old.softirq, d)),
             .brlbars    => unreachable,
             .blkbars    => unreachable,
             // zig fmt: on

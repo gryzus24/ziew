@@ -1,7 +1,8 @@
 const std = @import("std");
 const color = @import("color.zig");
-const log = @import("log.zig");
-const m = @import("memory.zig");
+const log = @import("util/log.zig");
+const m = @import("util/mem.zig");
+const su = @import("util/str.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 const w_bat = @import("w_bat.zig");
@@ -11,14 +12,9 @@ const w_mem = @import("w_mem.zig");
 const w_net = @import("w_net.zig");
 const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
-const ascii = std.ascii;
 const fmt = std.fmt;
-const fs = std.fs;
 const io = std.io;
-const math = std.math;
 const mem = std.mem;
-const meta = std.meta;
-const posix = std.posix;
 
 // == private =================================================================
 
@@ -705,8 +701,8 @@ pub fn parse(
     return .{ .ok = widgets_front };
 }
 
-fn testParse(comptime s: []const u8, reg: *m.Region, scratch: []align(16) u8) !ParseResult {
-    var ior: io.Reader = .fixed(s);
+fn testParse(comptime str: []const u8, reg: *m.Region, scratch: []align(16) u8) !ParseResult {
+    var ior: io.Reader = .fixed(str);
     return try parse(reg, &ior, scratch);
 }
 

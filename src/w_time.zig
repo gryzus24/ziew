@@ -1,9 +1,12 @@
 const std = @import("std");
+const c = @import("c.zig").c;
 const color = @import("color.zig");
-const m = @import("memory.zig");
 const typ = @import("type.zig");
-const utl = @import("util.zig");
-const c = utl.c;
+
+const div = @import("util/div.zig");
+const iou = @import("util/io.zig");
+const su = @import("util/str.zig");
+
 const io = std.io;
 const linux = std.os.linux;
 const mem = std.mem;
@@ -23,11 +26,11 @@ pub noinline fn widget(
     _ = linux.clock_gettime(.REALTIME, &ts);
     _ = c.localtime_r(&ts.sec, &tm);
 
-    utl.writeWidgetBeg(writer, w.fg.static, w.bg.static);
+    typ.writeWidgetBeg(writer, w.fg.static, w.bg.static);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
         switch (@as(typ.TimeOpt, @enumFromInt(part.opt))) {
-            .arg => utl.writeStr(writer, mem.sliceTo(wd.getStrf(), 0)),
+            .arg => iou.writeStr(writer, mem.sliceTo(wd.getStrf(), 0)),
             .time => {
                 const dst = writer.buffer[writer.end..];
                 const nr_written = c.strftime(dst.ptr, dst.len, wd.getStrf(), &tm);
@@ -40,16 +43,16 @@ pub noinline fn widget(
                     100,         10,         1,
                 };
                 const DIVIDEND_MAX = 1_000_000_000;
-                const MULT_SHFT: [9]utl.MultShft = comptime .{
-                    utl.DivConstant(DIVS[0], DIVIDEND_MAX),
-                    utl.DivConstant(DIVS[1], DIVIDEND_MAX),
-                    utl.DivConstant(DIVS[2], DIVIDEND_MAX),
-                    utl.DivConstant(DIVS[3], DIVIDEND_MAX),
-                    utl.DivConstant(DIVS[4], DIVIDEND_MAX),
-                    utl.DivConstant(DIVS[5], DIVIDEND_MAX),
-                    utl.DivConstant(DIVS[6], DIVIDEND_MAX),
-                    utl.DivConstant(DIVS[7], DIVIDEND_MAX),
-                    utl.DivConstant(DIVS[8], DIVIDEND_MAX),
+                const MULT_SHFT: [9]div.MultShft = comptime .{
+                    div.DivConstant(DIVS[0], DIVIDEND_MAX),
+                    div.DivConstant(DIVS[1], DIVIDEND_MAX),
+                    div.DivConstant(DIVS[2], DIVIDEND_MAX),
+                    div.DivConstant(DIVS[3], DIVIDEND_MAX),
+                    div.DivConstant(DIVS[4], DIVIDEND_MAX),
+                    div.DivConstant(DIVS[5], DIVIDEND_MAX),
+                    div.DivConstant(DIVS[6], DIVIDEND_MAX),
+                    div.DivConstant(DIVS[7], DIVIDEND_MAX),
+                    div.DivConstant(DIVS[8], DIVIDEND_MAX),
                 };
                 var cur: u64 = @intCast(ts.nsec);
 
@@ -59,14 +62,14 @@ pub noinline fn widget(
                 var i: usize = 0;
                 while (n >= 2) {
                     const ms = MULT_SHFT[i + 1];
-                    const q, cur = utl.multShiftDivMod(cur, ms, DIVS[i + 1]);
-                    dst[i..][0..2].* = utl.digits2_lut(q);
+                    const q, cur = div.multShiftDivMod(cur, ms, DIVS[i + 1]);
+                    dst[i..][0..2].* = su.digits2_lut(q);
                     i += 2;
                     n -= 2;
                 }
                 if (n == 1) {
                     const ms = MULT_SHFT[i];
-                    const q, _ = utl.multShiftDivMod(cur, ms, DIVS[i]);
+                    const q, _ = div.multShiftDivMod(cur, ms, DIVS[i]);
                     dst[i] = '0' | @as(u8, @intCast(q));
                     i += 1;
                 }

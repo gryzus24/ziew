@@ -1,9 +1,13 @@
 const std = @import("std");
+const c = @import("c.zig").c;
 const cfg = @import("config.zig");
-const log = @import("log.zig");
-const m = @import("memory.zig");
 const typ = @import("type.zig");
-const utl = @import("util.zig");
+
+const iou = @import("util/io.zig");
+const log = @import("util/log.zig");
+const m = @import("util/mem.zig");
+const su = @import("util/str.zig");
+
 const w_bat = @import("w_bat.zig");
 const w_cpu = @import("w_cpu.zig");
 const w_dysk = @import("w_dysk.zig");
@@ -11,10 +15,8 @@ const w_mem = @import("w_mem.zig");
 const w_net = @import("w_net.zig");
 const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
-const c = utl.c;
-const fmt = std.fmt;
+
 const fs = std.fs;
-const heap = std.heap;
 const io = std.io;
 const linux = std.os.linux;
 const math = std.math;
@@ -28,12 +30,12 @@ const Args = struct {
 };
 
 fn showHelpAndExit() noreturn {
-    utl.fdWrite(2, "usage: ziew [c <config file>] [h] [v]\n");
+    iou.fdWrite(2, "usage: ziew [c <config file>] [h] [v]\n");
     linux.exit(0);
 }
 
 fn showVersionAndExit() noreturn {
-    utl.fdWrite(2, "ziew 0.0.11\n");
+    iou.fdWrite(2, "ziew 0.0.11\n");
     linux.exit(0);
 }
 
@@ -55,7 +57,7 @@ fn readArgs() Args {
                 'h' => showHelpAndExit(),
                 'v' => showVersionAndExit(),
                 else => {
-                    utl.fdWrite(2, "unknown option\n");
+                    iou.fdWrite(2, "unknown option\n");
                     showHelpAndExit();
                 },
             }
@@ -66,7 +68,7 @@ fn readArgs() Args {
         }
     }
     if (get_config_path) {
-        utl.fdWrite(2, "required argument: c <path>\n");
+        iou.fdWrite(2, "required argument: c <path>\n");
         showHelpAndExit();
     }
     return args;
@@ -82,7 +84,7 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     var buf: [256]u8 = undefined;
     var pos: usize = 0;
 
-    var n = utl.unsafeU64toa(&buf, diag.line_nr);
+    var n = su.unsafeU64toa(&buf, diag.line_nr);
     @memcpy(buf[pos..][0..n], buf[buf.len - n ..]);
     pos += n;
 
@@ -252,7 +254,7 @@ pub fn main() void {
 
     const base = reg.head.ptr;
 
-    utl.fdWrite(1, "{\"version\":1}\n[[]");
+    iou.fdWrite(1, "{\"version\":1}\n[[]");
     while (true) {
         if (g_refresh_all) {
             @branchHint(.unlikely);
@@ -302,7 +304,7 @@ pub fn main() void {
                     .BAT => w_bat.widget(&fw, w, base),
                     .READ => w_read.widget(&fw, w, base),
                 }
-                views[i] = utl.writeWidgetEnd(&fw);
+                views[i] = typ.writeWidgetEnd(&fw);
             }
         }
 
@@ -327,7 +329,7 @@ pub fn main() void {
         }
         dst[pos - 1] = ']'; // get rid of the trailing comma
 
-        utl.fdWrite(1, dst[0..pos]);
+        iou.fdWrite(1, dst[0..pos]);
 
         var req = sleep_ts;
         while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {

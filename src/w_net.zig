@@ -1,12 +1,16 @@
 const std = @import("std");
+const c = @import("c.zig").c;
 const color = @import("color.zig");
-const log = @import("log.zig");
-const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
-const utl = @import("util.zig");
-const c = utl.c;
-const fmt = std.fmt;
+
+const div = @import("util/div.zig");
+const iou = @import("util/io.zig");
+const log = @import("util/log.zig");
+const m = @import("util/mem.zig");
+const su = @import("util/str.zig");
+const utl = @import("util/misc.zig");
+
 const fs = std.fs;
 const io = std.io;
 const linux = std.os.linux;
@@ -154,12 +158,12 @@ fn getInet(
             var i: usize = 0;
             for (tuplets) |t| {
                 if (t > 99) {
-                    const q, const r = utl.cMultShiftDivMod(t, 100, 255);
-                    const b, const a = utl.digits2_lut(r);
+                    const q, const r = div.cMultShiftDivMod(t, 100, 255);
+                    const b, const a = su.digits2_lut(r);
                     inetbuf[i..][0..4].* = .{ '0' | @as(u8, @intCast(q)), b, a, '.' };
                     i += 4;
                 } else if (t > 9) {
-                    const b, const a = utl.digits2_lut(t);
+                    const b, const a = su.digits2_lut(t);
                     inetbuf[i..][0..3].* = .{ b, a, '.' };
                     i += 3;
                 } else {
@@ -210,7 +214,7 @@ fn getFlags(
 }
 
 fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
-    var nls: utl.IndexIterator(u8, '\n') = .init(buf);
+    var nls: su.IndexIterator(u8, '\n') = .init(buf);
 
     var last: usize = undefined;
     last = nls.next() orelse unreachable;
@@ -229,7 +233,7 @@ fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
 
         for (0..IFace.NR_FIELDS) |fi| {
             while (line[j] == ' ') : (j += 1) {}
-            new_if.fields[fi] = utl.atou64ForwardUntilOrEOF(line, &j, ' ');
+            new_if.fields[fi] = su.atou64ForwardUntilOrEOF(line, &j, ' ');
             j += 1;
         }
     }
@@ -365,7 +369,7 @@ pub noinline fn widget(
     const ch: ColorHandler = .{ .up = up };
 
     const fg, const bg = w.check(ch, base);
-    utl.writeWidgetBeg(writer, fg, bg);
+    typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
@@ -379,7 +383,7 @@ pub noinline fn widget(
                 .state => if (up) "up" else "down",
                 // zig fmt: on
             };
-            utl.writeStr(writer, str);
+            iou.writeStr(writer, str);
             continue;
         }
         var nu: unt.NumUnit = undefined;

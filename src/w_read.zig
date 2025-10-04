@@ -1,9 +1,11 @@
 const std = @import("std");
 const color = @import("color.zig");
-const log = @import("log.zig");
-const m = @import("memory.zig");
 const typ = @import("type.zig");
-const utl = @import("util.zig");
+
+const iou = @import("util/io.zig");
+const log = @import("util/log.zig");
+const m = @import("util/mem.zig");
+
 const ascii = std.ascii;
 const fs = std.fs;
 const io = std.io;
@@ -24,10 +26,10 @@ fn writeBlockError(
     prefix: []const u8,
     msg: []const u8,
 ) void {
-    utl.writeWidgetBeg(writer, fg, bg);
-    utl.writeStr(writer, prefix);
-    utl.writeStr(writer, ": ");
-    utl.writeStr(writer, msg);
+    typ.writeWidgetBeg(writer, fg, bg);
+    iou.writeStr(writer, prefix);
+    iou.writeStr(writer, ": ");
+    iou.writeStr(writer, msg);
 }
 
 fn acceptColor(str: []const u8, pos: *usize) color.Hex {
@@ -88,10 +90,10 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
         }
     }
 
-    utl.writeWidgetBeg(writer, fg, bg);
+    typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
-        utl.writeStr(
+        iou.writeStr(
             writer,
             switch (@as(typ.ReadOpt, @enumFromInt(part.opt))) {
                 // zig fmt: off

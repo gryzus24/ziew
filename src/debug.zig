@@ -1,13 +1,13 @@
 const std = @import("std");
 const color = @import("color.zig");
-const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
-const utl = @import("util.zig");
+
+const iou = @import("util/io.zig");
+const m = @import("util/mem.zig");
+
 const debug = std.debug;
-const fmt = std.fmt;
 const fs = std.fs;
-const io = std.io;
 const linux = std.os.linux;
 
 pub fn debugFixedPoint() !void {
@@ -21,16 +21,16 @@ pub fn debugFixedPoint() !void {
 
         try stderr.print("{d:5} ", .{i});
         nu.write(stderr, .{ .precision = 0 }, false);
-        utl.writeStr(stderr, " ");
+        iou.writeStr(stderr, " ");
         nu.write(stderr, .{ .precision = 1 }, false);
-        utl.writeStr(stderr, " ");
+        iou.writeStr(stderr, " ");
         nu.write(stderr, .{ .precision = 2 }, false);
-        utl.writeStr(stderr, " ");
+        iou.writeStr(stderr, " ");
         nu.write(stderr, .{ .precision = 3 }, false);
-        utl.writeStr(stderr, "  ");
+        iou.writeStr(stderr, "  ");
 
         try stderr.print("{any:.5}", .{@as(f64, @floatFromInt(i)) / (1 << 8)});
-        utl.writeStr(stderr, "\n");
+        iou.writeStr(stderr, "\n");
         try stderr.flush();
     }
 }
@@ -45,7 +45,7 @@ pub fn debugNumUnit() !void {
     const width_max = 8;
     const precision_max = 3;
 
-    utl.writeStr(stderr, "\n");
+    iou.writeStr(stderr, "\n");
     for (values, values_width) |val, valw| {
         const nu = unt.SizeKb(val);
 
@@ -63,16 +63,16 @@ pub fn debugNumUnit() !void {
                 o.setWidth(w);
                 o.setPrecision(p);
 
-                utl.writeStr(stderr, "|");
+                iou.writeStr(stderr, "|");
                 nu.write(stderr, o, false);
-                utl.writeStr(stderr, "|");
+                iou.writeStr(stderr, "|");
 
                 for (0..(width_max - @max(w, valw))) |_| {
-                    utl.writeStr(stderr, " ");
+                    iou.writeStr(stderr, " ");
                 }
-                utl.writeStr(stderr, "\t");
+                iou.writeStr(stderr, "\t");
             }
-            utl.writeStr(stderr, "\n");
+            iou.writeStr(stderr, "\n");
         }
         try stderr.flush();
     }

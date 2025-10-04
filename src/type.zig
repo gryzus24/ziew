@@ -1,10 +1,11 @@
-const cfg = @import("config.zig");
-const color = @import("color.zig");
-const log = @import("log.zig");
-const m = @import("memory.zig");
 const std = @import("std");
+const color = @import("color.zig");
+
+const iou = @import("util/io.zig");
+const log = @import("util/log.zig");
+const m = @import("util/mem.zig");
 const unt = @import("unit.zig");
-const utl = @import("util.zig");
+
 const w_bat = @import("w_bat.zig");
 const w_cpu = @import("w_cpu.zig");
 const w_dysk = @import("w_dysk.zig");
@@ -12,6 +13,7 @@ const w_mem = @import("w_mem.zig");
 const w_net = @import("w_net.zig");
 const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
+
 const builtin = std.builtin;
 const enums = std.enums;
 const fs = std.fs;
@@ -242,11 +244,11 @@ pub const Widget = struct {
                 const ret = try reg.frontAlloc(@This());
                 ret.format = .zero;
                 var fw: io.Writer = .fixed(&ret.path);
-                utl.writeStr(&fw, prefix);
+                iou.writeStr(&fw, prefix);
                 ret.ps_off = @intCast(fw.end);
                 ret.ps_len = @intCast(arg.len);
-                utl.writeStr(&fw, arg);
-                utl.writeStr(&fw, suffix);
+                iou.writeStr(&fw, arg);
+                iou.writeStr(&fw, suffix);
                 return ret;
             }
 
@@ -274,8 +276,8 @@ pub const Widget = struct {
                 const ret = try reg.frontAlloc(@This());
                 ret.format = .zero;
                 var fw: io.Writer = .fixed(&ret.path);
-                utl.writeStr(&fw, arg);
-                utl.writeStr(&fw, "\x00");
+                iou.writeStr(&fw, arg);
+                iou.writeStr(&fw, "\x00");
                 const basename = fs.path.basename(fw.buffered());
                 ret.basename_off = @intCast(
                     mem.indexOf(u8, &ret.path, basename) orelse unreachable,
@@ -485,7 +487,7 @@ comptime {
         @compileError("Adjust WID_OPT_TYPE");
 }
 
-// == public constants ========================================================
+// == public ==================================================================
 
 /// Names of options supported by widgets' formats keyed by
 /// @intFromEnum(Widget.Tag).
@@ -521,6 +523,64 @@ pub const WIDGET_INTERVAL_MAX = 1 << 31;
 
 /// Individual widget maximum buffer size.
 pub const WIDGET_BUF_MAX = 128;
+
+pub fn writeWidgetBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
+    if (WIDGET_BUF_MAX < 64)
+        @compileError("typ.WIDGET_BUF_MAX < 64");
+
+    const dst = writer.buffer[writer.end..];
+    switch (fg.use | @shlExact(bg.use, 1)) {
+        0 => {
+            const s = "{\"full_text\":\"";
+            dst[0..16].* = (s ++ .{ undefined, undefined }).*;
+            writer.end += s.len;
+        },
+        1 => {
+            const s =
+                \\{"color":"#XXXXXX","full_text":"
+            ;
+            dst[0..32].* = s.*;
+            dst[11..17].* = fg.hex;
+            writer.end += s.len;
+        },
+        2 => {
+            const s =
+                \\{"background":"#XXXXXX","full_text":"
+            ;
+            dst[0..37].* = s.*;
+            dst[16..22].* = bg.hex;
+            writer.end += s.len;
+        },
+        3 => {
+            const s =
+                \\{"color":"#XXXXXX","background":"#XXXXXX","full_text":"
+            ;
+            dst[0..55].* = s.*;
+            dst[11..17].* = fg.hex;
+            dst[34..40].* = bg.hex;
+            writer.end += s.len;
+        },
+        else => unreachable,
+    }
+}
+
+pub fn writeWidgetEnd(writer: *io.Writer) []const u8 {
+    const endstr = "\"},";
+    const cap = writer.unusedCapacityLen();
+    const buffer = writer.buffer;
+    const end = writer.end;
+
+    if (endstr.len <= cap) {
+        @branchHint(.likely);
+        buffer[end..][0..3].* = endstr.*;
+        writer.end = end + 3;
+        return buffer[0 .. end + 3];
+    }
+
+    buffer[buffer.len - 6 ..][0..6].* = ("…" ++ endstr).*;
+    writer.end = buffer.len;
+    return buffer;
+}
 
 // == private =================================================================
 

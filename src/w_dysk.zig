@@ -1,10 +1,11 @@
 const std = @import("std");
+const c = @import("c.zig").c;
 const color = @import("color.zig");
-const m = @import("memory.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
-const utl = @import("util.zig");
-const c = utl.c;
+
+const iou = @import("util/io.zig");
+
 const io = std.io;
 
 const ColorHandler = struct {
@@ -35,9 +36,9 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
     if (c.statfs(wd.getMountpoint(), &sfs) != 0) {
         const noop: typ.Widget.NoopIndirect = .{};
         const fg, const bg = w.check(noop, base);
-        utl.writeWidgetBeg(writer, fg, bg);
-        utl.writeStr(writer, wd.getMountpoint());
-        utl.writeStr(writer, ": <not mounted>");
+        typ.writeWidgetBeg(writer, fg, bg);
+        iou.writeStr(writer, wd.getMountpoint());
+        iou.writeStr(writer, ": <not mounted>");
         return;
     }
 
@@ -75,13 +76,13 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
     };
 
     const fg, const bg = w.check(ch, base);
-    utl.writeWidgetBeg(writer, fg, bg);
+    typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
         const diskopt: typ.DiskOpt = @enumFromInt(part.opt);
         if (diskopt == .arg) {
-            utl.writeStr(writer, wd.getMountpoint());
+            iou.writeStr(writer, wd.getMountpoint());
             continue;
         }
         const nu = switch (diskopt) {

@@ -1,6 +1,9 @@
 const std = @import("std");
-const utl = @import("util.zig");
-const fmt = std.fmt;
+
+const divu = @import("util/div.zig");
+const misc = @import("util/misc.zig");
+const su = @import("util/str.zig");
+
 const io = std.io;
 
 // == private =================================================================
@@ -65,7 +68,7 @@ pub const F5608 = struct {
     pub inline fn roundU24(self: @This(), precision: u2) F5608 {
         const i = precision;
         const step, const ms = ROUND_STEP_MULT_SHFT[i];
-        const q, _ = utl.multShiftDivMod(self.u + step - 1, ms, step);
+        const q, _ = divu.multShiftDivMod(self.u + step - 1, ms, step);
         return .{ .u = q * step };
     }
 
@@ -82,11 +85,11 @@ pub const F5608 = struct {
         1 + FRAC_MASK / 200,
         1 + FRAC_MASK / 2000,
     };
-    const ROUND_STEP_MULT_SHFT: [4]struct { u32, utl.MultShft } = .{
-        .{ ROUND_STEPS[0], utl.DivConstant(ROUND_STEPS[0], ~@as(u32, 0)) },
-        .{ ROUND_STEPS[1], utl.DivConstant(ROUND_STEPS[1], ~@as(u32, 0)) },
-        .{ ROUND_STEPS[2], utl.DivConstant(ROUND_STEPS[2], ~@as(u32, 0)) },
-        .{ ROUND_STEPS[3], utl.DivConstant(ROUND_STEPS[3], ~@as(u32, 0)) },
+    const ROUND_STEP_MULT_SHFT: [4]struct { u32, divu.MultShft } = .{
+        .{ ROUND_STEPS[0], divu.DivConstant(ROUND_STEPS[0], ~@as(u32, 0)) },
+        .{ ROUND_STEPS[1], divu.DivConstant(ROUND_STEPS[1], ~@as(u32, 0)) },
+        .{ ROUND_STEPS[2], divu.DivConstant(ROUND_STEPS[2], ~@as(u32, 0)) },
+        .{ ROUND_STEPS[3], divu.DivConstant(ROUND_STEPS[3], ~@as(u32, 0)) },
     };
 };
 
@@ -138,7 +141,7 @@ pub const NumUnit = struct {
     };
 
     fn autoRoundPadPrecision(self: @This(), width: u8) struct { F5608, u8, u2, u8 } {
-        const nr_digits = utl.nrDigits(self.n.whole());
+        const nr_digits = misc.nrDigits(self.n.whole());
         const digit_space = width - 1;
 
         // Do we have space for the fractional part?
@@ -146,7 +149,7 @@ pub const NumUnit = struct {
             const free = digit_space - nr_digits;
             const p = @min(free, PRECISION_DIGITS_MAX);
             const rp = self.n.roundU24(p);
-            const rp_nr_digits = utl.nrDigits(rp.whole());
+            const rp_nr_digits = misc.nrDigits(rp.whole());
 
             if (nr_digits == rp_nr_digits) {
                 @branchHint(.likely);
@@ -164,7 +167,7 @@ pub const NumUnit = struct {
         // of padding filling the preemptively allocated space for a '.' in
         // the fractional part.
         const r0 = self.n.roundU24(0);
-        const r0_nr_digits = utl.nrDigits(r0.whole());
+        const r0_nr_digits = misc.nrDigits(r0.whole());
         const pad = @intFromBool(r0_nr_digits == digit_space);
         return .{ r0, pad, 0, r0_nr_digits };
     }
@@ -208,7 +211,7 @@ pub const NumUnit = struct {
             rp, pad, precision, nr_digits = self.autoRoundPadPrecision(width);
         } else {
             rp = self.n.roundU24(@intCast(precision));
-            nr_digits = utl.nrDigits(rp.whole());
+            nr_digits = misc.nrDigits(rp.whole());
             pad = width -| nr_digits;
         }
 
@@ -232,15 +235,15 @@ pub const NumUnit = struct {
             },
             2 => {
                 const n = (rp.frac() * 100) >> F5608.FRAC_SHIFT;
-                const b, const a = utl.digits2_lut(n);
+                const b, const a = su.digits2_lut(n);
                 i -= 3;
                 buf[i..][0..3].* = .{ '.', b, a };
             },
             PRECISION_DIGITS_MAX => {
                 const n_max = (F5608.FRAC_MASK * 1000) >> F5608.FRAC_SHIFT;
                 const n = (rp.frac() * 1000) >> F5608.FRAC_SHIFT;
-                const q, const r = utl.cMultShiftDivMod(n, 100, n_max);
-                const b, const a = utl.digits2_lut(r);
+                const q, const r = divu.cMultShiftDivMod(n, 100, n_max);
+                const b, const a = su.digits2_lut(r);
                 i -= 4;
                 buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(q)), b, a };
             },
@@ -256,24 +259,24 @@ pub const NumUnit = struct {
             },
             2 => {
                 i -= 2;
-                buf[i..][0..2].* = utl.digits2_lut(n);
+                buf[i..][0..2].* = su.digits2_lut(n);
             },
             3 => {
-                const q, const r = utl.cMultShiftDivMod(n, 100, 999);
-                const b, const a = utl.digits2_lut(r);
+                const q, const r = divu.cMultShiftDivMod(n, 100, 999);
+                const b, const a = su.digits2_lut(r);
                 i -= 3;
                 buf[i..][0..3].* = .{ '0' | @as(u8, @intCast(q)), b, a };
             },
             4 => {
-                const q, const r = utl.cMultShiftDivMod(n, 100, 9999);
-                const b, const a = utl.digits2_lut(r);
-                const d, const c = utl.digits2_lut(q);
+                const q, const r = divu.cMultShiftDivMod(n, 100, 9999);
+                const b, const a = su.digits2_lut(r);
+                const d, const c = su.digits2_lut(q);
                 i -= 4;
                 buf[i..][0..4].* = .{ d, c, b, a };
             },
             else => {
                 @branchHint(.cold);
-                _ = utl.unsafeU64toa(&buf, n);
+                _ = su.unsafeU64toa(&buf, n);
             },
         }
 

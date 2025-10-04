@@ -1,5 +1,5 @@
 const std = @import("std");
-const utl = @import("util.zig");
+const iou = @import("io.zig");
 const fs = std.fs;
 const linux = std.os.linux;
 
@@ -12,13 +12,13 @@ pub const Log = struct {
         const path = "/tmp/ziew.log";
         const file = fs.cwd().createFileZ(path, .{ .truncate = false }) catch |e| switch (e) {
             error.AccessDenied => {
-                utl.fdWrite(2, "open: " ++ path ++ ": probably sticky, only author can modify\n");
+                iou.fdWrite(2, "open: " ++ path ++ ": probably sticky, only author can modify\n");
                 return .nofile;
             },
             else => {
-                utl.fdWrite(2, "open: " ++ path ++ ": ");
-                utl.fdWrite(2, @errorName(e));
-                utl.fdWrite(2, "\n");
+                iou.fdWrite(2, "open: " ++ path ++ ": ");
+                iou.fdWrite(2, @errorName(e));
+                iou.fdWrite(2, "\n");
                 linux.exit(1);
             },
         };
@@ -26,10 +26,10 @@ pub const Log = struct {
         return .{ .fd = file.handle };
     }
 
-    pub fn log(self: @This(), s: []const u8) void {
-        utl.fdWrite(2, s);
+    pub fn log(self: @This(), str: []const u8) void {
+        iou.fdWrite(2, str);
         if (self.fd != -1)
-            utl.fdWrite(self.fd, s);
+            iou.fdWrite(self.fd, str);
     }
 
     pub fn close(self: @This()) void {

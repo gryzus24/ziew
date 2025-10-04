@@ -1,13 +1,13 @@
 const std = @import("std");
 const color = @import("color.zig");
-const log = @import("log.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
-const utl = @import("util.zig");
-const fmt = std.fmt;
+
+const log = @import("util/log.zig");
+const su = @import("util/str.zig");
+
 const fs = std.fs;
 const io = std.io;
-const mem = std.mem;
 
 // == private =================================================================
 
@@ -23,7 +23,7 @@ fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
     for (0..7) |fi| {
         while (buf[i] != '\n') : (i += 1) {}
         // Will break on systems with over 953 GB of RAM.
-        new.fields[fi] = utl.atou32V9Back(buf[0 .. i - "kb\n".len]);
+        new.fields[fi] = su.atou32V9Back(buf[0 .. i - "kb\n".len]);
 
         if (fi == 4) {
             // Skipping 11 fields is tight for kernels
@@ -161,7 +161,7 @@ pub noinline fn widget(
     const wd = w.data.MEM;
 
     const fg, const bg = w.check(state, base);
-    utl.writeWidgetBeg(writer, fg, bg);
+    typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
         const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {

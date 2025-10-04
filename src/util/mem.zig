@@ -1,14 +1,12 @@
 const std = @import("std");
 const fs = std.fs;
 const io = std.io;
-const linux = std.os.linux;
 const mem = std.mem;
 const meta = std.meta;
-const posix = std.posix;
 
 // == private =================================================================
 
-fn printAlloc(reg: *Region, s: []const u8, comptime T: type, nmemb: usize, pad: usize) void {
+fn printAlloc(reg: *Region, str: []const u8, comptime T: type, nmemb: usize, pad: usize) void {
     const front, const back = reg.spaceUsed();
     const total_size = @sizeOf(T) * nmemb + pad;
 
@@ -17,7 +15,7 @@ fn printAlloc(reg: *Region, s: []const u8, comptime T: type, nmemb: usize, pad: 
 
     stderr.print(
         "{s:<8} F={:<4} B={:<4} T={:<5} | ({s}) PAD={} N={:<4} SZ={:<4} TSZ={:<4} {}\n",
-        .{ reg.name, front, back, front + back, s, pad, nmemb, @sizeOf(T), total_size, T },
+        .{ reg.name, front, back, front + back, str, pad, nmemb, @sizeOf(T), total_size, T },
     ) catch {};
 }
 

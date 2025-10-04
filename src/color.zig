@@ -1,6 +1,5 @@
 const std = @import("std");
-const m = @import("memory.zig");
-const mem = std.mem;
+const m = @import("util/mem.zig");
 
 // == public ==================================================================
 
