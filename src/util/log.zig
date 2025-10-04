@@ -12,13 +12,13 @@ pub const Log = struct {
         const path = "/tmp/ziew.log";
         const file = fs.cwd().createFileZ(path, .{ .truncate = false }) catch |e| switch (e) {
             error.AccessDenied => {
-                iou.fdWrite(2, "open: " ++ path ++ ": probably sticky, only author can modify\n");
+                _ = iou.sys_write(2, "open: " ++ path ++ ": probably sticky, only author can modify\n");
                 return .nofile;
             },
             else => {
-                iou.fdWrite(2, "open: " ++ path ++ ": ");
-                iou.fdWrite(2, @errorName(e));
-                iou.fdWrite(2, "\n");
+                _ = iou.sys_write(2, "open: " ++ path ++ ": ");
+                _ = iou.sys_write(2, @errorName(e));
+                _ = iou.sys_write(2, "\n");
                 linux.exit(1);
             },
         };
@@ -27,9 +27,9 @@ pub const Log = struct {
     }
 
     pub fn log(self: @This(), str: []const u8) void {
-        iou.fdWrite(2, str);
+        _ = iou.sys_write(2, str);
         if (self.fd != -1)
-            iou.fdWrite(self.fd, str);
+            _ = iou.sys_write(self.fd, str);
     }
 
     pub fn close(self: @This()) void {

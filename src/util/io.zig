@@ -4,15 +4,15 @@ const io = std.io;
 const linux = std.os.linux;
 const posix = std.posix;
 
-pub inline fn fdWrite(fd: linux.fd_t, str: []const u8) void {
-    _ = linux.write(fd, str.ptr, str.len);
+pub inline fn sys_write(fd: linux.fd_t, str: []const u8) isize {
+    return @bitCast(linux.write(fd, str.ptr, str.len));
 }
 
-pub inline fn fdWriteV(fd: linux.fd_t, vs: anytype) void {
+pub inline fn sys_writev(fd: linux.fd_t, vs: anytype) isize {
     const len = @typeInfo(@TypeOf(vs)).@"struct".fields.len;
     var iovs: [len]posix.iovec_const = undefined;
     inline for (vs, 0..) |s, i| iovs[i] = .{ .base = s.ptr, .len = s.len };
-    _ = linux.writev(fd, &iovs, iovs.len);
+    return @bitCast(linux.writev(fd, &iovs, iovs.len));
 }
 
 pub inline fn writeStr(writer: *io.Writer, str: []const u8) void {

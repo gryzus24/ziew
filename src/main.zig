@@ -30,12 +30,12 @@ const Args = struct {
 };
 
 fn showHelpAndExit() noreturn {
-    iou.fdWrite(2, "usage: ziew [c <config file>] [h] [v]\n");
+    _ = iou.sys_write(2, "usage: ziew [c <config file>] [h] [v]\n");
     linux.exit(0);
 }
 
 fn showVersionAndExit() noreturn {
-    iou.fdWrite(2, "ziew 0.0.11\n");
+    _ = iou.sys_write(2, "ziew 0.0.11\n");
     linux.exit(0);
 }
 
@@ -57,7 +57,7 @@ fn readArgs() Args {
                 'h' => showHelpAndExit(),
                 'v' => showVersionAndExit(),
                 else => {
-                    iou.fdWrite(2, "unknown option\n");
+                    _ = iou.sys_write(2, "unknown option\n");
                     showHelpAndExit();
                 },
             }
@@ -68,7 +68,7 @@ fn readArgs() Args {
         }
     }
     if (get_config_path) {
-        iou.fdWrite(2, "required argument: c <path>\n");
+        _ = iou.sys_write(2, "required argument: c <path>\n");
         showHelpAndExit();
     }
     return args;
@@ -254,7 +254,7 @@ pub fn main() void {
 
     const base = reg.head.ptr;
 
-    iou.fdWrite(1, "{\"version\":1}\n[[]");
+    _ = iou.sys_write(1, "{\"version\":1}\n[[]");
     while (true) {
         if (g_refresh_all) {
             @branchHint(.unlikely);
@@ -329,7 +329,7 @@ pub fn main() void {
         }
         dst[pos - 1] = ']'; // get rid of the trailing comma
 
-        iou.fdWrite(1, dst[0..pos]);
+        _ = iou.sys_write(1, dst[0..pos]);
 
         var req = sleep_ts;
         while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {
