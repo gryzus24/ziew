@@ -51,7 +51,7 @@ pub const Buffer = struct {
     }
 };
 
-pub const FileBuffer = struct {
+pub const BufferedFile = struct {
     fd: std.os.linux.fd_t,
     buffer: Buffer,
 
@@ -68,7 +68,7 @@ pub const FileBuffer = struct {
     }
 
     fn fileRead(b: *Buffer, n: usize) error{ReadError}!usize {
-        const self: *FileBuffer = @fieldParentPtr("buffer", b);
+        const self: *BufferedFile = @fieldParentPtr("buffer", b);
         const max = @min(b.buf.len - b.end, n);
         const nr_read = posix.read(self.fd, b.buf[b.end..][0..max]) catch {
             return error.ReadError;
@@ -114,9 +114,10 @@ pub const LineReader = struct {
 
     pub fn readLine(self: *@This()) Termination![]const u8 {
         if (self.eof) return error.EOF;
-        // `pos` tends toward `end` - `end` tends toward zero.
         const b = self.buffer;
-        while (true) {
+        retry: while (true) {
+            // - `pos` tends toward `end`.
+            // - `end` tends toward `buf.len`, and tapers off at the end...
             if (self.nit.next()) |nl| {
                 const line = b.buf[self.pos..nl];
                 self.pos = nl + 1;
@@ -127,28 +128,28 @@ pub const LineReader = struct {
                 if (self.pos == 0) return error.NoNewline;
                 // Unfortunately we can't catch the:
                 // `buf.len` == data available, `pos == 0`, and no newline
-                // at buffer's end.
+                // at buffer's end, not that it matters...
                 if (b.rebase) |rebase| {
                     const nr_free = rebase(b, self.pos);
-                    if (try b.read(b, nr_free) == 0) {
-                        @branchHint(.unlikely);
-                        // We've got perfect buffer size and there
-                        // is no delimiter at buffer's end.
-                        self.eof = true;
-                        break;
-                    } else {
-                        self.pos = 0;
+                    std.debug.assert(nr_free > 0);
+                    self.pos = 0;
+
+                    if (try b.read(b, nr_free) > 0) {
+                        @branchHint(.likely);
                         self.nit = .init(b.buffered());
+                        continue :retry;
                     }
+                    // We've got perfect buffer size and there
+                    // is no newline at buffer's end.
                 }
-            } else {
-                // We got it all.
-                if (self.pos == b.end) return error.EOF;
-                // Someone forgot to put a newline at buffer's end...
+            } else if (self.pos == b.end) {
+                // We got it all cleanly.
                 self.eof = true;
-                break;
+                return error.EOF;
             }
+            // Someone forgot to put a newline at buffer's end...
+            self.eof = true;
+            return b.buf[self.pos..b.end];
         }
-        return b.buf[self.pos..b.end];
     }
 };

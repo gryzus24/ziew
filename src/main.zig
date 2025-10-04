@@ -151,10 +151,12 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
     var linebuf: [256]u8 = undefined;
     var scratch: [256]u8 align(16) = undefined;
 
-    var reader = file.reader(&linebuf);
+    var bf: uio.BufferedFile = .init(file.handle, &linebuf);
 
-    const ret = cfg.parse(reg, &reader.interface, &scratch) catch |e| switch (e) {
+    const ret = cfg.parse(reg, &bf.buffer, &scratch) catch |e| switch (e) {
         error.NoSpaceLeft => log.fatal(&.{"config: out of memory"}),
+        error.NoNewline => log.fatal(&.{"config: line too long"}),
+        error.ReadError => log.fatal(&.{"config: file read error"}),
     };
     const widgets = switch (ret) {
         .ok => |w| w,

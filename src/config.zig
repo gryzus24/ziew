@@ -4,6 +4,7 @@ const log = @import("log.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
+const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");
 
@@ -488,9 +489,9 @@ pub fn defaultConfig(reg: *umem.Region) []typ.Widget {
         \\TIME 20 arg "%A %d.%m ~ %H:%M:%S" format "{time}"
         \\FG bb9
     ;
-    var reader: io.Reader = .fixed(config);
+    var buffer: uio.Buffer = .fixed(config);
     var scratch: [128]u8 align(16) = undefined;
-    const ret = parse(reg, &reader, &scratch) catch unreachable;
+    const ret = parse(reg, &buffer, &scratch) catch unreachable;
     return ret.ok;
 }
 
@@ -522,20 +523,26 @@ pub const ParseResult = union(enum) {
     }
 };
 
+pub const ParseError = error{
+    NoSpaceLeft,
+    NoNewline,
+    ReadError,
+};
+
 pub fn parse(
     reg: *umem.Region,
-    reader: *io.Reader,
+    buffer: *uio.Buffer,
     scratch: []align(16) u8,
-) error{NoSpaceLeft}!ParseResult {
+) ParseError!ParseResult {
     var widgets: []typ.Widget = &.{};
     var current: *typ.Widget = undefined;
 
     var line_nr: usize = 0;
+    var reader: uio.LineReader = .init(buffer);
     while (true) {
-        const line_ = reader.takeDelimiterExclusive('\n') catch |e| switch (e) {
-            error.ReadFailed => log.fatal(&.{"config: read failed"}),
-            error.EndOfStream => break,
-            error.StreamTooLong => log.fatal(&.{"config: line too long"}),
+        const line_ = reader.readLine() catch |e| switch (e) {
+            error.EOF => break,
+            else => |err| return err,
         };
         line_nr += 1;
 
@@ -705,8 +712,8 @@ pub fn parse(
 }
 
 fn testParse(comptime str: []const u8, reg: *umem.Region, scratch: []align(16) u8) !ParseResult {
-    var ior: io.Reader = .fixed(str);
-    return try parse(reg, &ior, scratch);
+    var buffer: uio.Buffer = .fixed(str);
+    return try parse(reg, &buffer, scratch);
 }
 
 fn testDiag(r: ParseResult, note: []const u8, line_nr: usize, field: Split) !void {
@@ -723,8 +730,7 @@ test parse {
     var reg: umem.Region = .init(&buf, "cfgtest");
     var scratch: [256]u8 align(16) = undefined;
 
-    var ior: io.Reader = .fixed("\n");
-    var r = try parse(&reg, &ior, &scratch);
+    var r = try testParse("\n", &reg, &scratch);
     try t.expect(r.ok.len == 0);
 
     r = try testParse("C\n", &reg, &scratch);
