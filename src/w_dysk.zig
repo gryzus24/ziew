@@ -4,7 +4,7 @@ const color = @import("color.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
-const iou = @import("util/io.zig");
+const uio = @import("util/io.zig");
 
 const io = std.io;
 
@@ -37,8 +37,8 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
         const noop: typ.Widget.NoopIndirect = .{};
         const fg, const bg = w.check(noop, base);
         typ.writeWidgetBeg(writer, fg, bg);
-        iou.writeStr(writer, wd.getMountpoint());
-        iou.writeStr(writer, ": <not mounted>");
+        uio.writeStr(writer, wd.getMountpoint());
+        uio.writeStr(writer, ": <not mounted>");
         return;
     }
 
@@ -82,7 +82,7 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
 
         const diskopt: typ.DiskOpt = @enumFromInt(part.opt);
         if (diskopt == .arg) {
-            iou.writeStr(writer, wd.getMountpoint());
+            uio.writeStr(writer, wd.getMountpoint());
             continue;
         }
         const nu = switch (diskopt) {

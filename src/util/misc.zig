@@ -1,32 +1,23 @@
 const std = @import("std");
-const log = @import("log.zig");
-const su = @import("str.zig");
+const ustr = @import("str.zig");
 const fs = std.fs;
 
 pub const NR_POSSIBLE_CPUS_MAX = 64;
 
 pub fn nrPossibleCpus() u32 {
     const path = "/sys/devices/system/cpu/possible";
-    const file = fs.cwd().openFileZ(path, .{}) catch |e| switch (e) {
-        error.FileNotFound => return NR_POSSIBLE_CPUS_MAX,
-        else => log.fatal(&.{ "open: ", path, ": ", @errorName(e) }),
-    };
+    const file = fs.cwd().openFileZ(path, .{}) catch return 0;
     defer file.close();
 
     var buf: [16]u8 = undefined;
-    const nr_read = file.read(&buf) catch |e| {
-        log.fatal(&.{ "read: ", @errorName(e) });
-    };
-    if (nr_read < 2) log.fatal(&.{"read: empty cpu/possible"});
+    const nr_read = file.read(&buf) catch return 0;
+    if (nr_read < 2) return 0;
 
-    var i: usize = nr_read - 2;
-    while (i > 0) : (i -= 1) {
-        if (buf[i] == '-') {
-            i += 1;
-            break;
-        }
-    }
-    const r: u32 = @intCast(su.atou64ForwardUntil(&buf, &i, '\n') + 1);
+    var i = nr_read - 2;
+    while (i > 0 and buf[i] != '-') : (i -= 1) {}
+    if (i > 0) i += 1;
+
+    const r: u32 = @intCast(ustr.atou64ForwardUntil(&buf, &i, '\n') + 1);
     return @min(r, NR_POSSIBLE_CPUS_MAX);
 }
 

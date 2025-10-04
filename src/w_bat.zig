@@ -3,9 +3,9 @@ const color = @import("color.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
-const iou = @import("util/io.zig");
-const log = @import("util/log.zig");
-const su = @import("util/str.zig");
+const uio = @import("util/io.zig");
+const log = @import("log.zig");
+const ustr = @import("util/str.zig");
 
 const fs = std.fs;
 const io = std.io;
@@ -88,8 +88,8 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
             const noop: typ.Widget.NoopIndirect = .{};
             const fg, const bg = w.check(noop, base);
             typ.writeWidgetBeg(writer, fg, bg);
-            iou.writeStr(writer, wd.getPsName());
-            iou.writeStr(writer, ": <not found>");
+            uio.writeStr(writer, wd.getPsName());
+            uio.writeStr(writer, ": <not found>");
             return;
         },
         else => log.fatal(&.{ "BAT: check: ", @errorName(e) }),
@@ -104,7 +104,7 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
 
     var bat: Bat = .{};
 
-    var nls: su.IndexIterator(u8, '\n') = .init(buf[0..nr_read]);
+    var nls: ustr.IndexIterator(u8, '\n') = .init(buf[0..nr_read]);
     var last: usize = 0;
     while (nls.next()) |nl| {
         const line = buf[last..nl];
@@ -122,11 +122,11 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
         if (mem.eql(u8, cmp, "STATUS")) {
             bat.setState(val);
         } else if (mem.eql(u8, cmp, "ENERGY_FULL_DESIGN") or mem.eql(u8, cmp, "CHARGE_FULL_DESIGN")) {
-            bat.setFullDesign(su.unsafeAtou64(val));
+            bat.setFullDesign(ustr.unsafeAtou64(val));
         } else if (mem.eql(u8, cmp, "ENERGY_FULL") or mem.eql(u8, cmp, "CHARGE_FULL")) {
-            bat.setFull(su.unsafeAtou64(val));
+            bat.setFull(ustr.unsafeAtou64(val));
         } else if (mem.eql(u8, cmp, "ENERGY_NOW") or mem.eql(u8, cmp, "CHARGE_NOW")) {
-            bat.setNow(su.unsafeAtou64(val));
+            bat.setNow(ustr.unsafeAtou64(val));
         } else {
             continue;
         }
@@ -140,11 +140,11 @@ pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const 
 
         const batopt: typ.BatOpt = @enumFromInt(part.opt);
         if (batopt == .arg) {
-            iou.writeStr(writer, wd.getPsName());
+            uio.writeStr(writer, wd.getPsName());
             continue;
         }
         if (batopt == .state) {
-            iou.writeStr(writer, bat.state);
+            uio.writeStr(writer, bat.state);
             continue;
         }
         const nu = switch (batopt) {

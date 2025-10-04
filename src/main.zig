@@ -1,12 +1,12 @@
 const std = @import("std");
 const c = @import("c.zig").c;
 const cfg = @import("config.zig");
+const log = @import("log.zig");
 const typ = @import("type.zig");
 
-const iou = @import("util/io.zig");
-const log = @import("util/log.zig");
-const m = @import("util/mem.zig");
-const su = @import("util/str.zig");
+const uio = @import("util/io.zig");
+const umem = @import("util/mem.zig");
+const ustr = @import("util/str.zig");
 
 const w_bat = @import("w_bat.zig");
 const w_cpu = @import("w_cpu.zig");
@@ -25,17 +25,25 @@ const os = std.os;
 const posix = std.posix;
 const time = std.time;
 
+// This is all dynamic memory available to the program.
+// Four 4K pages minus some fiddle with BSS, DATA, and alignment,
+// packing everything tightly to avoid internal fragmentation.
+var g_bss: [0x4000 - 1024 - 40 - 0x40]u8 align(64) = undefined;
+
+// USR1 signal latch.
+var g_refresh_all = false;
+
 const Args = struct {
     config_path: ?[*:0]const u8 = null,
 };
 
 fn showHelpAndExit() noreturn {
-    _ = iou.sys_write(2, "usage: ziew [c <config file>] [h] [v]\n");
+    _ = uio.sys_write(2, "usage: ziew [c <config file>] [h] [v]\n");
     linux.exit(0);
 }
 
 fn showVersionAndExit() noreturn {
-    _ = iou.sys_write(2, "ziew 0.0.11\n");
+    _ = uio.sys_write(2, "ziew 0.0.11\n");
     linux.exit(0);
 }
 
@@ -57,7 +65,7 @@ fn readArgs() Args {
                 'h' => showHelpAndExit(),
                 'v' => showVersionAndExit(),
                 else => {
-                    _ = iou.sys_write(2, "unknown option\n");
+                    _ = uio.sys_write(2, "unknown option\n");
                     showHelpAndExit();
                 },
             }
@@ -68,7 +76,7 @@ fn readArgs() Args {
         }
     }
     if (get_config_path) {
-        _ = iou.sys_write(2, "required argument: c <path>\n");
+        _ = uio.sys_write(2, "required argument: c <path>\n");
         showHelpAndExit();
     }
     return args;
@@ -84,7 +92,7 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     var buf: [256]u8 = undefined;
     var pos: usize = 0;
 
-    var n = su.unsafeU64toa(&buf, diag.line_nr);
+    var n = ustr.unsafeU64toa(&buf, diag.line_nr);
     @memcpy(buf[pos..][0..n], buf[buf.len - n ..]);
     pos += n;
 
@@ -112,7 +120,7 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     linux.exit(1);
 }
 
-fn loadConfig(reg: *m.Region, config_path: ?[*:0]const u8) []typ.Widget {
+fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
     const path = config_path orelse getConfigPath(reg) catch |e| switch (e) {
         error.NoPath => {
             log.warn(&.{"unknown config file path: using defaults..."});
@@ -151,7 +159,7 @@ fn loadConfig(reg: *m.Region, config_path: ?[*:0]const u8) []typ.Widget {
     return widgets;
 }
 
-fn getConfigPath(reg: *m.Region) error{ NoSpaceLeft, NoPath }![*:0]const u8 {
+fn getConfigPath(reg: *umem.Region) error{ NoSpaceLeft, NoPath }![*:0]const u8 {
     var n: usize = 0;
     const base = reg.frontSave(u8);
     if (posix.getenvZ("XDG_CONFIG_HOME")) |ok| {
@@ -167,7 +175,6 @@ fn getConfigPath(reg: *m.Region) error{ NoSpaceLeft, NoPath }![*:0]const u8 {
     return reg.slice(u8, base, n)[0 .. n - 1 :0];
 }
 
-var g_refresh_all = false;
 fn sa_handler(signum: c_int) callconv(.c) void {
     if (signum == linux.SIG.USR1) g_refresh_all = true;
 }
@@ -206,7 +213,7 @@ fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
 pub fn main() void {
     errdefer |e| log.fatal(&.{ "main: ", @errorName(e) });
 
-    var reg: m.Region = .init(&m.g_bss, "main");
+    var reg: umem.Region = .init(&g_bss, "main");
 
     const args = readArgs();
     const widgets = loadConfig(&reg, args.config_path);
@@ -254,7 +261,7 @@ pub fn main() void {
 
     const base = reg.head.ptr;
 
-    _ = iou.sys_write(1, "{\"version\":1}\n[[]");
+    _ = uio.sys_write(1, "{\"version\":1}\n[[]");
     while (true) {
         if (g_refresh_all) {
             @branchHint(.unlikely);
@@ -329,7 +336,7 @@ pub fn main() void {
         }
         dst[pos - 1] = ']'; // get rid of the trailing comma
 
-        _ = iou.sys_write(1, dst[0..pos]);
+        _ = uio.sys_write(1, dst[0..pos]);
 
         var req = sleep_ts;
         while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {

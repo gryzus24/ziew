@@ -3,8 +3,8 @@ const color = @import("color.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
-const log = @import("util/log.zig");
-const su = @import("util/str.zig");
+const log = @import("log.zig");
+const ustr = @import("util/str.zig");
 
 const fs = std.fs;
 const io = std.io;
@@ -23,7 +23,7 @@ fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
     for (0..7) |fi| {
         while (buf[i] != '\n') : (i += 1) {}
         // Will break on systems with over 953 GB of RAM.
-        new.fields[fi] = su.atou32V9Back(buf[0 .. i - "kb\n".len]);
+        new.fields[fi] = ustr.atou32V9Back(buf[0 .. i - "kb\n".len]);
 
         if (fi == 4) {
             // Skipping 11 fields is tight for kernels

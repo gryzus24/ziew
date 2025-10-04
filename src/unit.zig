@@ -1,8 +1,8 @@
 const std = @import("std");
 
-const divu = @import("util/div.zig");
 const misc = @import("util/misc.zig");
-const su = @import("util/str.zig");
+const udiv = @import("util/div.zig");
+const ustr = @import("util/str.zig");
 
 const io = std.io;
 
@@ -68,7 +68,7 @@ pub const F5608 = struct {
     pub inline fn roundU24(self: @This(), precision: u2) F5608 {
         const i = precision;
         const step, const ms = ROUND_STEP_MULT_SHFT[i];
-        const q, _ = divu.multShiftDivMod(self.u + step - 1, ms, step);
+        const q, _ = udiv.multShiftDivMod(self.u + step - 1, ms, step);
         return .{ .u = q * step };
     }
 
@@ -85,11 +85,11 @@ pub const F5608 = struct {
         1 + FRAC_MASK / 200,
         1 + FRAC_MASK / 2000,
     };
-    const ROUND_STEP_MULT_SHFT: [4]struct { u32, divu.MultShft } = .{
-        .{ ROUND_STEPS[0], divu.DivConstant(ROUND_STEPS[0], ~@as(u32, 0)) },
-        .{ ROUND_STEPS[1], divu.DivConstant(ROUND_STEPS[1], ~@as(u32, 0)) },
-        .{ ROUND_STEPS[2], divu.DivConstant(ROUND_STEPS[2], ~@as(u32, 0)) },
-        .{ ROUND_STEPS[3], divu.DivConstant(ROUND_STEPS[3], ~@as(u32, 0)) },
+    const ROUND_STEP_MULT_SHFT: [4]struct { u32, udiv.MultShft } = .{
+        .{ ROUND_STEPS[0], udiv.DivConstant(ROUND_STEPS[0], ~@as(u32, 0)) },
+        .{ ROUND_STEPS[1], udiv.DivConstant(ROUND_STEPS[1], ~@as(u32, 0)) },
+        .{ ROUND_STEPS[2], udiv.DivConstant(ROUND_STEPS[2], ~@as(u32, 0)) },
+        .{ ROUND_STEPS[3], udiv.DivConstant(ROUND_STEPS[3], ~@as(u32, 0)) },
     };
 };
 
@@ -156,9 +156,9 @@ pub const NumUnit = struct {
                 return .{ rp, free - p, p, rp_nr_digits };
             }
             // Got rounded up - take one digit off the fractional part and make
-            // sure there is one space of padding inserted if precision digits
+            // ustr.e there is one space of padding inserted if precision digits
             // hit zero. Otherwise, there is no need to worry about inserting
-            // padding here as enough `digit_space` results in `round` returning
+            // padding here as enough `digit_space` reustr.ts in `round` returning
             // itself making the `nr_digits == rp_nr_digits` check always true.
             return .{ self.n.roundU24(p - 1), @intFromBool(p == 1), p - 1, rp_nr_digits };
         }
@@ -235,15 +235,15 @@ pub const NumUnit = struct {
             },
             2 => {
                 const n = (rp.frac() * 100) >> F5608.FRAC_SHIFT;
-                const b, const a = su.digits2_lut(n);
+                const b, const a = ustr.digits2_lut(n);
                 i -= 3;
                 buf[i..][0..3].* = .{ '.', b, a };
             },
             PRECISION_DIGITS_MAX => {
                 const n_max = (F5608.FRAC_MASK * 1000) >> F5608.FRAC_SHIFT;
                 const n = (rp.frac() * 1000) >> F5608.FRAC_SHIFT;
-                const q, const r = divu.cMultShiftDivMod(n, 100, n_max);
-                const b, const a = su.digits2_lut(r);
+                const q, const r = udiv.cMultShiftDivMod(n, 100, n_max);
+                const b, const a = ustr.digits2_lut(r);
                 i -= 4;
                 buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(q)), b, a };
             },
@@ -259,24 +259,24 @@ pub const NumUnit = struct {
             },
             2 => {
                 i -= 2;
-                buf[i..][0..2].* = su.digits2_lut(n);
+                buf[i..][0..2].* = ustr.digits2_lut(n);
             },
             3 => {
-                const q, const r = divu.cMultShiftDivMod(n, 100, 999);
-                const b, const a = su.digits2_lut(r);
+                const q, const r = udiv.cMultShiftDivMod(n, 100, 999);
+                const b, const a = ustr.digits2_lut(r);
                 i -= 3;
                 buf[i..][0..3].* = .{ '0' | @as(u8, @intCast(q)), b, a };
             },
             4 => {
-                const q, const r = divu.cMultShiftDivMod(n, 100, 9999);
-                const b, const a = su.digits2_lut(r);
-                const d, const c = su.digits2_lut(q);
+                const q, const r = udiv.cMultShiftDivMod(n, 100, 9999);
+                const b, const a = ustr.digits2_lut(r);
+                const d, const c = ustr.digits2_lut(q);
                 i -= 4;
                 buf[i..][0..4].* = .{ d, c, b, a };
             },
             else => {
                 @branchHint(.cold);
-                _ = su.unsafeU64toa(&buf, n);
+                _ = ustr.unsafeU64toa(&buf, n);
             },
         }
 

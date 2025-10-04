@@ -1,5 +1,5 @@
 const std = @import("std");
-const su = @import("str.zig");
+const ustr = @import("str.zig");
 const io = std.io;
 const linux = std.os.linux;
 const posix = std.posix;
@@ -89,7 +89,7 @@ pub const FileBuffer = struct {
 };
 
 pub const LineReader = struct {
-    nit: su.IndexIterator(u8, '\n'),
+    nit: ustr.IndexIterator(u8, '\n'),
     buffer: *Buffer,
     pos: usize,
     eof: bool,

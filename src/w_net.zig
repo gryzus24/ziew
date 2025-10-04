@@ -1,15 +1,15 @@
 const std = @import("std");
 const c = @import("c.zig").c;
 const color = @import("color.zig");
+const log = @import("log.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
-const div = @import("util/div.zig");
-const iou = @import("util/io.zig");
-const log = @import("util/log.zig");
-const m = @import("util/mem.zig");
-const su = @import("util/str.zig");
-const utl = @import("util/misc.zig");
+const misc = @import("util/misc.zig");
+const udiv = @import("util/div.zig");
+const uio = @import("util/io.zig");
+const umem = @import("util/mem.zig");
+const ustr = @import("util/str.zig");
 
 const fs = std.fs;
 const io = std.io;
@@ -106,7 +106,7 @@ const IFace = struct {
 };
 
 const NetDev = struct {
-    reg: *m.Region,
+    reg: *umem.Region,
     list: IFaceList = .{},
     free: IFaceList = .{},
 
@@ -158,12 +158,12 @@ fn getInet(
             var i: usize = 0;
             for (tuplets) |t| {
                 if (t > 99) {
-                    const q, const r = div.cMultShiftDivMod(t, 100, 255);
-                    const b, const a = su.digits2_lut(r);
+                    const q, const r = udiv.cMultShiftDivMod(t, 100, 255);
+                    const b, const a = ustr.digits2_lut(r);
                     inetbuf[i..][0..4].* = .{ '0' | @as(u8, @intCast(q)), b, a, '.' };
                     i += 4;
                 } else if (t > 9) {
-                    const b, const a = su.digits2_lut(t);
+                    const b, const a = ustr.digits2_lut(t);
                     inetbuf[i..][0..3].* = .{ b, a, '.' };
                     i += 3;
                 } else {
@@ -214,7 +214,7 @@ fn getFlags(
 }
 
 fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
-    var nls: su.IndexIterator(u8, '\n') = .init(buf);
+    var nls: ustr.IndexIterator(u8, '\n') = .init(buf);
 
     var last: usize = undefined;
     last = nls.next() orelse unreachable;
@@ -233,7 +233,7 @@ fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
 
         for (0..IFace.NR_FIELDS) |fi| {
             while (line[j] == ' ') : (j += 1) {}
-            new_if.fields[fi] = su.atou64ForwardUntilOrEOF(line, &j, ' ');
+            new_if.fields[fi] = ustr.atou64ForwardUntilOrEOF(line, &j, ' ');
             j += 1;
         }
     }
@@ -247,7 +247,7 @@ pub const NetState = struct {
 
     proc_net_dev: fs.File,
 
-    pub fn init(reg: *m.Region, widgets: []const typ.Widget) ?NetState {
+    pub fn init(reg: *umem.Region, widgets: []const typ.Widget) ?NetState {
         const proc_net_dev_required = blk: {
             for (widgets) |*w| {
                 if (w.id == .NET) {
@@ -383,7 +383,7 @@ pub noinline fn widget(
                 .state => if (up) "up" else "down",
                 // zig fmt: on
             };
-            iou.writeStr(writer, str);
+            uio.writeStr(writer, str);
             continue;
         }
         var nu: unt.NumUnit = undefined;
@@ -401,15 +401,15 @@ pub noinline fn widget(
             const d = part.diff;
             nu = switch (opt.castTo(typ.NetOpt.ProcNetDevRequired)) {
                 // zig fmt: off
-                .rx_bytes => unt.SizeBytes(utl.calc(new.bytes(.rx), old.bytes(.rx), d)),
-                .rx_pkts  => unt.UnitSI(utl.calc(new.packets(.rx), old.packets(.rx), d)),
-                .rx_errs  => unt.UnitSI(utl.calc(new.errs(.rx), old.errs(.rx), d)),
-                .rx_drop  => unt.UnitSI(utl.calc(new.drop(.rx), old.drop(.rx), d)),
-                .rx_multicast => unt.UnitSI(utl.calc(new.rx_multicast(), old.rx_multicast(), d)),
-                .tx_bytes => unt.SizeBytes(utl.calc(new.bytes(.tx), old.bytes(.tx), d)),
-                .tx_pkts  => unt.UnitSI(utl.calc(new.packets(.tx), old.packets(.tx), d)),
-                .tx_errs  => unt.UnitSI(utl.calc(new.errs(.tx), old.errs(.tx), d)),
-                .tx_drop  => unt.UnitSI(utl.calc(new.drop(.tx), old.drop(.tx), d)),
+                .rx_bytes => unt.SizeBytes(misc.calc(new.bytes(.rx), old.bytes(.rx), d)),
+                .rx_pkts  => unt.UnitSI(misc.calc(new.packets(.rx), old.packets(.rx), d)),
+                .rx_errs  => unt.UnitSI(misc.calc(new.errs(.rx), old.errs(.rx), d)),
+                .rx_drop  => unt.UnitSI(misc.calc(new.drop(.rx), old.drop(.rx), d)),
+                .rx_multicast => unt.UnitSI(misc.calc(new.rx_multicast(), old.rx_multicast(), d)),
+                .tx_bytes => unt.SizeBytes(misc.calc(new.bytes(.tx), old.bytes(.tx), d)),
+                .tx_pkts  => unt.UnitSI(misc.calc(new.packets(.tx), old.packets(.tx), d)),
+                .tx_errs  => unt.UnitSI(misc.calc(new.errs(.tx), old.errs(.tx), d)),
+                .tx_drop  => unt.UnitSI(misc.calc(new.drop(.tx), old.drop(.tx), d)),
                 // zig fmt: on
             };
         }

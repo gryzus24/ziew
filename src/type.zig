@@ -1,9 +1,9 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 
-const iou = @import("util/io.zig");
-const log = @import("util/log.zig");
-const m = @import("util/mem.zig");
+const uio = @import("util/io.zig");
+const umem = @import("util/mem.zig");
 const unt = @import("unit.zig");
 
 const w_bat = @import("w_bat.zig");
@@ -29,13 +29,13 @@ const meta = std.meta;
 pub const DeciSec = u32;
 
 pub const Format = struct {
-    parts: m.MemSlice(Part),
-    last_str: m.MemSlice(u8),
+    parts: umem.MemSlice(Part),
+    last_str: umem.MemSlice(u8),
 
     pub const zero: Format = .{ .parts = .zero, .last_str = .zero };
 
     pub const Part = struct {
-        str: m.MemSlice(u8),
+        str: umem.MemSlice(u8),
         opt: u8,
         diff: bool,
         quiet: bool,
@@ -147,7 +147,7 @@ pub const Widget = struct {
 
             const STRF_SIZE = DATA_SIZE_MAX - @sizeOf(Format);
 
-            pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
                 if (arg.len >= STRF_SIZE)
                     log.fatal(&.{"TIME: strftime format too long"});
 
@@ -166,7 +166,7 @@ pub const Widget = struct {
         pub const MemData = struct {
             format: Format,
 
-            pub fn init(reg: *m.Region) !*@This() {
+            pub fn init(reg: *umem.Region) !*@This() {
                 const ret = try reg.frontAlloc(@This());
                 ret.* = .{ .format = .zero };
                 return ret;
@@ -176,7 +176,7 @@ pub const Widget = struct {
         pub const CpuData = struct {
             format: Format,
 
-            pub fn init(reg: *m.Region) !*@This() {
+            pub fn init(reg: *umem.Region) !*@This() {
                 const ret = try reg.frontAlloc(@This());
                 ret.* = .{ .format = .zero };
                 return ret;
@@ -190,7 +190,7 @@ pub const Widget = struct {
 
             const MOUNTPOINT_SIZE = DATA_SIZE_MAX - 1 - @sizeOf(Format);
 
-            pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
                 if (arg.len >= MOUNTPOINT_SIZE)
                     log.fatal(&.{"DISK: mountpoint path too long"});
 
@@ -211,7 +211,7 @@ pub const Widget = struct {
             format: Format,
             ifr: linux.ifreq,
 
-            pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
                 var ifr: linux.ifreq = undefined;
                 if (arg.len >= ifr.ifrn.name.len)
                     log.fatal(&.{ "NET: interface name too long: ", arg });
@@ -232,7 +232,7 @@ pub const Widget = struct {
 
             const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
-            pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
                 const prefix = "/sys/class/power_supply/";
                 const suffix = "/uevent\x00";
                 const avail = @min(PATH_SIZE - prefix.len - suffix.len, 15);
@@ -244,11 +244,11 @@ pub const Widget = struct {
                 const ret = try reg.frontAlloc(@This());
                 ret.format = .zero;
                 var fw: io.Writer = .fixed(&ret.path);
-                iou.writeStr(&fw, prefix);
+                uio.writeStr(&fw, prefix);
                 ret.ps_off = @intCast(fw.end);
                 ret.ps_len = @intCast(arg.len);
-                iou.writeStr(&fw, arg);
-                iou.writeStr(&fw, suffix);
+                uio.writeStr(&fw, arg);
+                uio.writeStr(&fw, suffix);
                 return ret;
             }
 
@@ -269,15 +269,15 @@ pub const Widget = struct {
 
             const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
-            pub fn init(reg: *m.Region, arg: []const u8) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
                 if (arg.len >= PATH_SIZE)
                     log.fatal(&.{"READ: path too long"});
 
                 const ret = try reg.frontAlloc(@This());
                 ret.format = .zero;
                 var fw: io.Writer = .fixed(&ret.path);
-                iou.writeStr(&fw, arg);
-                iou.writeStr(&fw, "\x00");
+                uio.writeStr(&fw, arg);
+                uio.writeStr(&fw, "\x00");
                 const basename = fs.path.basename(fw.buffered());
                 ret.basename_off = @intCast(
                     mem.indexOf(u8, &ret.path, basename) orelse unreachable,

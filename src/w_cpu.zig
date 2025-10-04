@@ -1,13 +1,13 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
-const div = @import("util/div.zig");
-const log = @import("util/log.zig");
-const m = @import("util/mem.zig");
 const misc = @import("util/misc.zig");
-const su = @import("util/str.zig");
+const udiv = @import("util/div.zig");
+const umem = @import("util/mem.zig");
+const ustr = @import("util/str.zig");
 
 const fs = std.fs;
 const io = std.io;
@@ -81,7 +81,7 @@ const Stat = struct {
     entries: [*]Cpu,
     nr_cpux_entries: usize,
 
-    pub fn initZero(reg: *m.Region, nr_possible_cpus: u32) !@This() {
+    pub fn initZero(reg: *umem.Region, nr_possible_cpus: u32) !@This() {
         // First entry is the cumulative stat of every CPU.
         const entries = try reg.frontAllocMany(Cpu, nr_possible_cpus + 1);
         for (0..entries.len) |i| entries[i] = .zero;
@@ -106,7 +106,7 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
     while (true) {
         var fields: [8]u64 = undefined;
         for (0..fields.len) |fi| {
-            fields[fi] = su.atou64ForwardUntil(buf, &i, ' ');
+            fields[fi] = ustr.atou64ForwardUntil(buf, &i, ' ');
             i += 1;
         }
         // zig fmt: off
@@ -131,29 +131,29 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         cpu += 1;
     }
     i += "intr ".len;
-    new.intr = su.atou64ForwardUntil(buf, &i, ' ');
+    new.intr = ustr.atou64ForwardUntil(buf, &i, ' ');
 
     i = buf.len - 1 - " 0 0 0 0 0 0 0 0 0 0 0\n".len;
     while (buf[i] != 'q') : (i -= 1) {}
     // i at: softir[q] 123456 2345 ...
 
     var j = i + "q ".len;
-    new.softirq = su.atou64ForwardUntil(buf, &j, ' ');
+    new.softirq = ustr.atou64ForwardUntil(buf, &j, ' ');
     i -= "\nsoftirq".len;
 
-    new.blocked = @intCast(su.atou64BackwardUntil(buf, &i, ' '));
+    new.blocked = @intCast(ustr.atou64BackwardUntil(buf, &i, ' '));
     i -= "\nprocs_blocked ".len;
 
-    new.running = @intCast(su.atou64BackwardUntil(buf, &i, ' '));
+    new.running = @intCast(ustr.atou64BackwardUntil(buf, &i, ' '));
     i -= "\nprocs_running ".len;
 
-    new.forks = su.atou64BackwardUntil(buf, &i, ' ');
+    new.forks = ustr.atou64BackwardUntil(buf, &i, ' ');
     i -= "btime X\nprocesses ".len;
 
     while (buf[i] != '\n') : (i -= 1) {}
     i -= 1;
 
-    new.ctxt = su.atou64BackwardUntil(buf, &i, ' ');
+    new.ctxt = ustr.atou64BackwardUntil(buf, &i, ' ');
 
     // Value of `Stat.nr_cpux_entries` may change - CPUs might go online/offline.
     new.nr_cpux_entries = cpu;
@@ -185,7 +185,7 @@ test "/proc/stat parser" {
         \\softirq 4426117 1410160 300541 4 137919 8958 0 465908 1604918 6 497706
     ;
     var tmem: [4096]u8 align(16) = undefined;
-    var reg: m.Region = .init(&tmem, "cputest");
+    var reg: umem.Region = .init(&tmem, "cputest");
     var s: Stat = try .initZero(&reg, misc.nrPossibleCpus());
     parseProcStat(buf, &s);
     try t.expect(s.entries[0].user == 46232 + 14);
@@ -226,7 +226,7 @@ fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
 
     const pct = new.delta(old).all;
     const u = @min(pct.u, u_max);
-    const q, _ = div.cMultShiftDivMod(u + off, step, u_max + off);
+    const q, _ = udiv.cMultShiftDivMod(u + off, step, u_max + off);
     return @intCast(q);
 }
 
@@ -241,7 +241,7 @@ pub const CpuState = struct {
 
     proc_stat: fs.File,
 
-    pub fn init(reg: *m.Region) !CpuState {
+    pub fn init(reg: *umem.Region) !CpuState {
         const nr_cpus = misc.nrPossibleCpus();
         const a: Stat = try .initZero(reg, nr_cpus);
         const b: Stat = try .initZero(reg, nr_cpus);

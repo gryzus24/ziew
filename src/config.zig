@@ -1,10 +1,12 @@
 const std = @import("std");
 const color = @import("color.zig");
-const log = @import("util/log.zig");
-const m = @import("util/mem.zig");
-const su = @import("util/str.zig");
+const log = @import("log.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
+
+const umem = @import("util/mem.zig");
+const ustr = @import("util/str.zig");
+
 const w_bat = @import("w_bat.zig");
 const w_cpu = @import("w_cpu.zig");
 const w_dysk = @import("w_dysk.zig");
@@ -12,6 +14,7 @@ const w_mem = @import("w_mem.zig");
 const w_net = @import("w_net.zig");
 const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
+
 const fmt = std.fmt;
 const io = std.io;
 const mem = std.mem;
@@ -152,7 +155,7 @@ const FormatResult = union(enum) {
     }
 };
 
-fn acceptFormat(reg: *m.Region, str: []const u8, wid: typ.Widget.Id) !FormatResult {
+fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatResult {
     var parts: []typ.Format.Part = &.{};
     const parts_off = reg.frontSave(typ.Format.Part);
 
@@ -275,7 +278,7 @@ fn acceptFormat(reg: *m.Region, str: []const u8, wid: typ.Widget.Id) !FormatResu
         part.str = .{ .off = @intCast(off), .len = @intCast(s.len) };
     }
 
-    var last_str: m.MemSlice(u8) = .zero;
+    var last_str: umem.MemSlice(u8) = .zero;
     if (fields.next()) |f| {
         const s = switch (f) {
             .ok => |ok| str[ok.part.beg..ok.part.end],
@@ -380,7 +383,7 @@ const ParseLineResult = union(enum) {
     }
 };
 
-fn parseLine(tmp: *m.Region, line: []const u8) !ParseLineResult {
+fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
     var result: ParseLineResult = undefined;
 
     var want: ParseWant = .identifier;
@@ -467,7 +470,7 @@ fn parseLine(tmp: *m.Region, line: []const u8) !ParseLineResult {
 
 // == public ==================================================================
 
-pub fn defaultConfig(reg: *m.Region) []typ.Widget {
+pub fn defaultConfig(reg: *umem.Region) []typ.Widget {
     const config =
         \\NET 20 arg enp5s0 format "{arg} {inet}"
         \\FG state 0:a44 1:4a4
@@ -520,7 +523,7 @@ pub const ParseResult = union(enum) {
 };
 
 pub fn parse(
-    reg: *m.Region,
+    reg: *umem.Region,
     reader: *io.Reader,
     scratch: []align(16) u8,
 ) error{NoSpaceLeft}!ParseResult {
@@ -540,7 +543,7 @@ pub fn parse(
         if (line.len == 0) continue;
         if (line[0] == '#') continue;
 
-        var tmp: m.Region = .init(scratch, "cfg_tmp");
+        var tmp: umem.Region = .init(scratch, "cfg_tmp");
 
         switch (try parseLine(&tmp, line)) {
             .widget => |wi| {
@@ -701,7 +704,7 @@ pub fn parse(
     return .{ .ok = widgets_front };
 }
 
-fn testParse(comptime str: []const u8, reg: *m.Region, scratch: []align(16) u8) !ParseResult {
+fn testParse(comptime str: []const u8, reg: *umem.Region, scratch: []align(16) u8) !ParseResult {
     var ior: io.Reader = .fixed(str);
     return try parse(reg, &ior, scratch);
 }
@@ -717,7 +720,7 @@ fn testDiag(r: ParseResult, note: []const u8, line_nr: usize, field: Split) !voi
 test parse {
     const t = std.testing;
     var buf: [0x2000]u8 align(64) = undefined;
-    var reg: m.Region = .init(&buf, "cfgtest");
+    var reg: umem.Region = .init(&buf, "cfgtest");
     var scratch: [256]u8 align(16) = undefined;
 
     var ior: io.Reader = .fixed("\n");

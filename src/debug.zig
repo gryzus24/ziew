@@ -3,8 +3,8 @@ const color = @import("color.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
-const iou = @import("util/io.zig");
-const m = @import("util/mem.zig");
+const uio = @import("util/io.zig");
+const umem = @import("util/mem.zig");
 
 const debug = std.debug;
 const fs = std.fs;
@@ -21,16 +21,16 @@ pub fn debugFixedPoint() !void {
 
         try stderr.print("{d:5} ", .{i});
         nu.write(stderr, .{ .precision = 0 }, false);
-        iou.writeStr(stderr, " ");
+        uio.writeStr(stderr, " ");
         nu.write(stderr, .{ .precision = 1 }, false);
-        iou.writeStr(stderr, " ");
+        uio.writeStr(stderr, " ");
         nu.write(stderr, .{ .precision = 2 }, false);
-        iou.writeStr(stderr, " ");
+        uio.writeStr(stderr, " ");
         nu.write(stderr, .{ .precision = 3 }, false);
-        iou.writeStr(stderr, "  ");
+        uio.writeStr(stderr, "  ");
 
         try stderr.print("{any:.5}", .{@as(f64, @floatFromInt(i)) / (1 << 8)});
-        iou.writeStr(stderr, "\n");
+        uio.writeStr(stderr, "\n");
         try stderr.flush();
     }
 }
@@ -45,7 +45,7 @@ pub fn debugNumUnit() !void {
     const width_max = 8;
     const precision_max = 3;
 
-    iou.writeStr(stderr, "\n");
+    uio.writeStr(stderr, "\n");
     for (values, values_width) |val, valw| {
         const nu = unt.SizeKb(val);
 
@@ -63,16 +63,16 @@ pub fn debugNumUnit() !void {
                 o.setWidth(w);
                 o.setPrecision(p);
 
-                iou.writeStr(stderr, "|");
+                uio.writeStr(stderr, "|");
                 nu.write(stderr, o, false);
-                iou.writeStr(stderr, "|");
+                uio.writeStr(stderr, "|");
 
                 for (0..(width_max - @max(w, valw))) |_| {
-                    iou.writeStr(stderr, " ");
+                    uio.writeStr(stderr, " ");
                 }
-                iou.writeStr(stderr, "\t");
+                uio.writeStr(stderr, "\t");
             }
-            iou.writeStr(stderr, "\n");
+            uio.writeStr(stderr, "\n");
         }
         try stderr.flush();
     }
@@ -159,7 +159,7 @@ pub fn debugWidgets(widgets: []const typ.Widget) !void {
     }
 }
 
-pub fn debugMemoryUsed(reg: *m.Region) !void {
+pub fn debugMemoryUsed(reg: *umem.Region) !void {
     const print = debug.print;
     const front, const back = reg.spaceUsed();
     print("REGION MEMORY USED\n", .{});

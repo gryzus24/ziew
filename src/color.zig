@@ -1,5 +1,5 @@
 const std = @import("std");
-const m = @import("util/mem.zig");
+const umem = @import("util/mem.zig");
 
 // == public ==================================================================
 
@@ -17,7 +17,7 @@ pub const Hex = struct {
 
 pub const Active = struct {
     opt: u8,
-    pairs: m.MemSlice(Pair),
+    pairs: umem.MemSlice(Pair),
 
     pub const Pair = struct {
         inner: Hex,
