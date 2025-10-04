@@ -6,8 +6,6 @@ const unt = @import("unit.zig");
 
 const uio = @import("util/io.zig");
 
-const io = std.io;
-
 const ColorHandler = struct {
     used_kb: u64,
     free_kb: u64,
@@ -28,7 +26,7 @@ const ColorHandler = struct {
 
 // == public ==================================================================
 
-pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) void {
+pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.data.DISK;
 
     // TODO: use statvfs instead of this

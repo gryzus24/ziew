@@ -1,6 +1,6 @@
 const std = @import("std");
+const uio = @import("io.zig");
 const fs = std.fs;
-const io = std.io;
 const mem = std.mem;
 const meta = std.meta;
 
@@ -196,7 +196,7 @@ pub fn MemSlice(T: type) type {
 
         pub inline fn writeBytes(
             self: @This(),
-            writer: *io.Writer,
+            writer: *uio.Writer,
             base: [*]const u8,
         ) void {
             // Make sure to compute the bounds check before the `dst` pointer

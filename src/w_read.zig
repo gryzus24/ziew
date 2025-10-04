@@ -7,7 +7,6 @@ const uio = @import("util/io.zig");
 
 const ascii = std.ascii;
 const fs = std.fs;
-const io = std.io;
 const mem = std.mem;
 
 // == private =================================================================
@@ -19,7 +18,7 @@ comptime {
 }
 
 fn writeBlockError(
-    writer: *io.Writer,
+    writer: *uio.Writer,
     fg: color.Hex,
     bg: color.Hex,
     prefix: []const u8,
@@ -57,7 +56,7 @@ fn readFileUntil(file: fs.File, endmarkers: []const u8, buf: *[typ.WIDGET_BUF_MA
 
 // == public ==================================================================
 
-pub noinline fn widget(writer: *io.Writer, w: *const typ.Widget, base: [*]const u8) void {
+pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.data.READ;
 
     const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| {

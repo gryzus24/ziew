@@ -17,7 +17,6 @@ const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
 
 const fs = std.fs;
-const io = std.io;
 const linux = std.os.linux;
 const math = std.math;
 const mem = std.mem;
@@ -296,7 +295,7 @@ pub fn main() void {
                 @branchHint(.likely);
                 w.interval_now = w.interval;
 
-                var fw: io.Writer = .fixed(&bufs[i]);
+                var fw: uio.Writer = .fixed(&bufs[i]);
                 switch (w.id) {
                     .TIME => w_time.widget(&fw, w, base),
                     .MEM => {

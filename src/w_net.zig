@@ -12,7 +12,6 @@ const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");
 
 const fs = std.fs;
-const io = std.io;
 const linux = std.os.linux;
 const mem = std.mem;
 
@@ -302,7 +301,7 @@ pub fn update(state: *NetState) void {
 }
 
 pub noinline fn widget(
-    writer: *io.Writer,
+    writer: *uio.Writer,
     w: *const typ.Widget,
     base: [*]const u8,
     state: *const ?NetState,

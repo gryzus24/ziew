@@ -6,11 +6,11 @@ const unt = @import("unit.zig");
 
 const misc = @import("util/misc.zig");
 const udiv = @import("util/div.zig");
+const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");
 
 const fs = std.fs;
-const io = std.io;
 
 const DELTA_ZERO_CHECK = false;
 
@@ -304,7 +304,7 @@ pub fn update(state: *CpuState) void {
 }
 
 pub noinline fn widget(
-    writer: *io.Writer,
+    writer: *uio.Writer,
     w: *const typ.Widget,
     base: [*]const u8,
     state: *const CpuState,

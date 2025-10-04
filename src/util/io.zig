@@ -1,6 +1,5 @@
 const std = @import("std");
 const ustr = @import("str.zig");
-const io = std.io;
 const linux = std.os.linux;
 const posix = std.posix;
 
@@ -15,12 +14,30 @@ pub inline fn sys_writev(fd: linux.fd_t, vs: anytype) isize {
     return @bitCast(linux.writev(fd, &iovs, iovs.len));
 }
 
-pub inline fn writeStr(writer: *io.Writer, str: []const u8) void {
+pub inline fn writeStr(writer: *Writer, str: []const u8) void {
     const n = @min(str.len, writer.unusedCapacityLen());
     const dst = writer.buffer[writer.end..];
     for (0..n) |i| dst[i] = str[i];
     writer.end += n;
 }
+
+// Simpler, vtable-less Writer shim.
+pub const Writer = struct {
+    buffer: []u8,
+    end: usize,
+
+    pub fn fixed(buffer: []u8) @This() {
+        return .{ .buffer = buffer, .end = 0 };
+    }
+
+    pub fn buffered(self: *@This()) []u8 {
+        return self.buffer[0..self.end];
+    }
+
+    pub fn unusedCapacityLen(self: *const @This()) usize {
+        return self.buffer.len - self.end;
+    }
+};
 
 pub const Buffer = struct {
     read: ReadFunc,

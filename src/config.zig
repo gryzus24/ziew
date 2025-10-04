@@ -17,7 +17,6 @@ const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
 
 const fmt = std.fmt;
-const io = std.io;
 const mem = std.mem;
 
 // == private =================================================================

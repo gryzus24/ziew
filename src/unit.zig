@@ -2,9 +2,8 @@ const std = @import("std");
 
 const misc = @import("util/misc.zig");
 const udiv = @import("util/div.zig");
+const uio = @import("util/io.zig");
 const ustr = @import("util/str.zig");
-
-const io = std.io;
 
 // == private =================================================================
 
@@ -174,7 +173,7 @@ pub const NumUnit = struct {
 
     pub fn write(
         self: @This(),
-        writer: *io.Writer,
+        writer: *uio.Writer,
         opts: WriteOptions,
         quiet: bool,
     ) void {

@@ -1,13 +1,13 @@
 const std = @import("std");
 const color = @import("color.zig");
+const log = @import("log.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
-const log = @import("log.zig");
+const uio = @import("util/io.zig");
 const ustr = @import("util/str.zig");
 
 const fs = std.fs;
-const io = std.io;
 
 // == private =================================================================
 
@@ -153,7 +153,7 @@ pub fn update(state: *MemState) void {
 }
 
 pub noinline fn widget(
-    writer: *io.Writer,
+    writer: *uio.Writer,
     w: *const typ.Widget,
     base: [*]const u8,
     state: *const MemState,

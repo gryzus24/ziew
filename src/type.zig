@@ -17,7 +17,6 @@ const w_time = @import("w_time.zig");
 const builtin = std.builtin;
 const enums = std.enums;
 const fs = std.fs;
-const io = std.io;
 const linux = std.os.linux;
 const math = std.math;
 const mem = std.mem;
@@ -243,7 +242,7 @@ pub const Widget = struct {
 
                 const ret = try reg.frontAlloc(@This());
                 ret.format = .zero;
-                var fw: io.Writer = .fixed(&ret.path);
+                var fw: uio.Writer = .fixed(&ret.path);
                 uio.writeStr(&fw, prefix);
                 ret.ps_off = @intCast(fw.end);
                 ret.ps_len = @intCast(arg.len);
@@ -275,7 +274,7 @@ pub const Widget = struct {
 
                 const ret = try reg.frontAlloc(@This());
                 ret.format = .zero;
-                var fw: io.Writer = .fixed(&ret.path);
+                var fw: uio.Writer = .fixed(&ret.path);
                 uio.writeStr(&fw, arg);
                 uio.writeStr(&fw, "\x00");
                 const basename = fs.path.basename(fw.buffered());
@@ -524,7 +523,7 @@ pub const WIDGET_INTERVAL_MAX = 1 << 31;
 /// Individual widget maximum buffer size.
 pub const WIDGET_BUF_MAX = 128;
 
-pub fn writeWidgetBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
+pub fn writeWidgetBeg(writer: *uio.Writer, fg: color.Hex, bg: color.Hex) void {
     if (WIDGET_BUF_MAX < 64)
         @compileError("typ.WIDGET_BUF_MAX < 64");
 
@@ -564,7 +563,7 @@ pub fn writeWidgetBeg(writer: *io.Writer, fg: color.Hex, bg: color.Hex) void {
     }
 }
 
-pub fn writeWidgetEnd(writer: *io.Writer) []const u8 {
+pub fn writeWidgetEnd(writer: *uio.Writer) []const u8 {
     const endstr = "\"},";
     const cap = writer.unusedCapacityLen();
     const buffer = writer.buffer;

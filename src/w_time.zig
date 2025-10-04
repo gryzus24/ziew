@@ -7,14 +7,13 @@ const udiv = @import("util/div.zig");
 const uio = @import("util/io.zig");
 const ustr = @import("util/str.zig");
 
-const io = std.io;
 const linux = std.os.linux;
 const mem = std.mem;
 
 // == public ==================================================================
 
 pub noinline fn widget(
-    writer: *io.Writer,
+    writer: *uio.Writer,
     w: *const typ.Widget,
     base: [*]const u8,
 ) void {
