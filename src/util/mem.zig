@@ -58,7 +58,12 @@ pub const Region = struct {
     /// Region's name - for debugging purposes.
     name: []const u8,
 
-    pub const SavePoint = usize;
+    pub const SavePoint = struct {
+        where: Where,
+        off: usize,
+
+        pub const Where = enum(u8) { front, back };
+    };
     pub const AllocError = error{NoSpaceLeft};
 
     pub fn init(bytes: []align(16) u8, name: []const u8) Region {
@@ -111,22 +116,6 @@ pub const Region = struct {
         return @ptrCast(try self.backAllocMany(T, 1));
     }
 
-    pub inline fn frontSave(self: @This(), comptime T: type) SavePoint {
-        return mem.alignForward(usize, self.front, @alignOf(T));
-    }
-
-    pub inline fn frontRestore(self: *@This(), sp: SavePoint) void {
-        self.front = sp;
-    }
-
-    pub inline fn backSave(self: @This(), comptime T: type) SavePoint {
-        return mem.alignBackward(usize, self.back, @alignOf(T));
-    }
-
-    pub inline fn backRestore(self: *@This(), sp: SavePoint) void {
-        self.back = sp;
-    }
-
     pub inline fn frontWriteStr(self: *@This(), str: []const u8) AllocError![]const u8 {
         const retptr = try self.frontAllocMany(u8, str.len);
         @memcpy(retptr, str);
@@ -160,15 +149,32 @@ pub const Region = struct {
         return &retptr[retptr.len - 1];
     }
 
-    pub inline fn slice(self: @This(), comptime T: type, start: SavePoint, n: usize) []T {
-        return mem.bytesAsSlice(T, self.head[start..][0 .. @sizeOf(T) * n]);
+    pub inline fn save(self: @This(), comptime T: type, where: SavePoint.Where) SavePoint {
+        return .{
+            .where = where,
+            .off = switch (where) {
+                .front => mem.alignForward(usize, self.front, @alignOf(T)),
+                .back => mem.alignBackward(usize, self.back, @alignOf(T)),
+            },
+        };
+    }
+
+    pub inline fn restore(self: *@This(), sp: SavePoint) void {
+        switch (sp.where) {
+            .front => self.front = sp.off,
+            .back => self.back = sp.off,
+        }
+    }
+
+    pub inline fn slice(self: @This(), comptime T: type, beg: SavePoint, len: usize) []T {
+        return mem.bytesAsSlice(T, self.head[beg.off..][0 .. @sizeOf(T) * len]);
     }
 
     pub inline fn spaceLeft(self: @This(), comptime T: type) usize {
-        const f = self.frontSave(T);
-        const b = self.backSave(T);
-        if (f > b) return 0;
-        return b - f;
+        const f = self.save(T, .front);
+        const b = self.save(T, .back);
+        if (f.off > b.off) return 0;
+        return b.off - f.off;
     }
 
     pub inline fn spaceUsed(self: @This()) struct { usize, usize } {

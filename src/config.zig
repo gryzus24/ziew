@@ -157,7 +157,7 @@ const FormatResult = union(enum) {
 
 fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatResult {
     var parts: []typ.Format.Part = &.{};
-    const parts_off = reg.frontSave(typ.Format.Part);
+    const parts_sp = reg.save(typ.Format.Part, .front);
 
     var fields: FormatSplitter = .init(str);
     while (fields.next()) |f| {
@@ -273,9 +273,9 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             .ok => |ok| str[ok.part.beg..ok.part.end],
             .err => unreachable,
         };
-        const off = reg.frontSave(u8);
+        const sp = reg.save(u8, .front);
         if (s.len > 0) _ = try reg.frontWriteStr(s);
-        part.str = .{ .off = @intCast(off), .len = @intCast(s.len) };
+        part.str = .{ .off = @intCast(sp.off), .len = @intCast(s.len) };
     }
 
     var last_str: umem.MemSlice(u8) = .zero;
@@ -284,14 +284,14 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             .ok => |ok| str[ok.part.beg..ok.part.end],
             .err => unreachable,
         };
-        const off = reg.frontSave(u8);
+        const sp = reg.save(u8, .front);
         if (s.len > 0) _ = try reg.frontWriteStr(s);
-        last_str = .{ .off = @intCast(off), .len = @intCast(s.len) };
+        last_str = .{ .off = @intCast(sp.off), .len = @intCast(s.len) };
     }
 
     return .{
         .ok = .{
-            .parts = .{ .off = @intCast(parts_off), .len = @intCast(parts.len) },
+            .parts = .{ .off = @intCast(parts_sp.off), .len = @intCast(parts.len) },
             .last_str = last_str,
         },
     };
@@ -657,7 +657,7 @@ pub fn parse(
                             );
                         }
                         const T = color.Active.Pair;
-                        const off = reg.frontSave(T);
+                        const sp = reg.save(T, .front);
                         const ptr = try reg.frontAllocMany(T, active.pairs.len);
                         @memcpy(ptr, active.pairs);
 
@@ -667,7 +667,7 @@ pub fn parse(
                                     .active = .{
                                         .opt = opt,
                                         .pairs = .{
-                                            .off = @intCast(off),
+                                            .off = @intCast(sp.off),
                                             .len = @intCast(active.pairs.len),
                                         },
                                     },
@@ -678,7 +678,7 @@ pub fn parse(
                                     .active = .{
                                         .opt = opt,
                                         .pairs = .{
-                                            .off = @intCast(off),
+                                            .off = @intCast(sp.off),
                                             .len = @intCast(active.pairs.len),
                                         },
                                     },

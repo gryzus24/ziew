@@ -160,8 +160,8 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
 }
 
 fn getConfigPath(reg: *umem.Region) error{ NoSpaceLeft, NoPath }![*:0]const u8 {
+    const sp = reg.save(u8, .front);
     var n: usize = 0;
-    const base = reg.frontSave(u8);
     if (posix.getenvZ("XDG_CONFIG_HOME")) |ok| {
         n += (try reg.frontWriteStr(ok)).len;
         n += (try reg.frontWriteStr("/ziew/config\x00")).len;
@@ -172,7 +172,7 @@ fn getConfigPath(reg: *umem.Region) error{ NoSpaceLeft, NoPath }![*:0]const u8 {
         log.warn(&.{"neither $HOME nor $XDG_CONFIG_HOME set!"});
         return error.NoPath;
     }
-    return reg.slice(u8, base, n)[0 .. n - 1 :0];
+    return reg.slice(u8, sp, n)[0 .. n - 1 :0];
 }
 
 fn sa_handler(signum: c_int) callconv(.c) void {
