@@ -546,7 +546,7 @@ pub fn parse(
         };
         line_nr += 1;
 
-        const line = mem.trim(u8, line_, " \t");
+        const line = ustr.trimWhitespace(line_);
         if (line.len == 0) continue;
         if (line[0] == '#') continue;
 
