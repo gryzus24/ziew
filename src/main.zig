@@ -32,6 +32,8 @@ var g_bss: [0x4000 - 1024 - 40 - 0x40]u8 align(64) = undefined;
 // USR1 signal latch.
 var g_refresh_all = false;
 
+const WRITE_FAIL_CHECK = true;
+
 const Args = struct {
     config_path: ?[*:0]const u8 = null,
 };
@@ -274,7 +276,7 @@ pub fn main() void {
     const base = reg.head.ptr;
 
     _ = uio.sys_write(1, "{\"version\":1}\n[[]");
-    while (true) {
+    refresh: while (true) {
         if (g_refresh_all) {
             @branchHint(.unlikely);
             for (widgets) |*w| w.interval_now = 0;
@@ -348,12 +350,28 @@ pub fn main() void {
         }
         dst[pos - 1] = ']'; // get rid of the trailing comma
 
-        _ = uio.sys_write(1, dst[0..pos]);
-
+        while (true) {
+            const ret = uio.sys_write(1, dst[0..pos]);
+            if (ret <= 0) {
+                @branchHint(.cold);
+                if (ret == -c.EINTR) {
+                    if (g_refresh_all) continue :refresh;
+                    continue;
+                }
+                if (WRITE_FAIL_CHECK) {
+                    const e: [2]u8 = .{
+                        @intCast(ret & 0xff),
+                        @intCast((ret >> 8) & 0xff),
+                    };
+                    log.fatal(&.{ "main: write: ", &e });
+                }
+            }
+            break;
+        }
         var req = sleep_ts;
         while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {
             -c.EFAULT => unreachable,
-            -c.EINTR => if (g_refresh_all) break,
+            -c.EINTR => if (g_refresh_all) continue :refresh,
             -c.EINVAL => unreachable,
             else => break,
         };
