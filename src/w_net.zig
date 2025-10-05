@@ -104,12 +104,10 @@ const IFace = struct {
     }
 };
 
-const NetDev = struct {
+const Interfaces = struct {
     reg: *umem.Region,
-    list: IFaceList = .{},
-    free: IFaceList = .{},
-
-    const IFaceList = std.SinglyLinkedList;
+    list: std.SinglyLinkedList = .{},
+    free: std.SinglyLinkedList = .{},
 
     pub fn allocIf(self: *@This()) !*IFace {
         var new: *IFace = undefined;
@@ -196,7 +194,7 @@ fn getFlags(
 
             var n: usize = 0;
             inline for (IFF_BIT_NAMES_ALPHA_ITER) |i| {
-                if (flags & (1 << i) > 0) {
+                if (flags & (1 << i) != 0) {
                     const s = IFF_BIT_NAMES[i];
                     @memcpy(iffbuf[n..][0..s.len], s);
                     n += s.len;
@@ -212,7 +210,7 @@ fn getFlags(
     };
 }
 
-fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
+fn parseProcNetDev(buf: []const u8, ifs: *Interfaces) !void {
     var nls: ustr.IndexIterator(u8, '\n') = .init(buf);
 
     var last: usize = undefined;
@@ -226,7 +224,7 @@ fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
         while (line[i] == ' ') : (i += 1) {}
         var j = i;
         while (line[j] != ':') : (j += 1) {}
-        var new_if = try netdev.allocIf();
+        var new_if = try ifs.allocIf();
         new_if.setName(line[i..j]);
         j += 1;
 
@@ -241,58 +239,61 @@ fn parseProcNetDev(buf: []const u8, netdev: *NetDev) !void {
 // == public ==================================================================
 
 pub const NetState = struct {
-    netdevs: [2]NetDev,
-    curr: usize,
+    sock: linux.fd_t,
+    netdev: ?NetDev,
 
-    proc_net_dev: fs.File,
+    const NetDev = struct {
+        ifs: [2]Interfaces,
+        curr: usize,
+        file: fs.File,
 
-    pub fn init(reg: *umem.Region, widgets: []const typ.Widget) ?NetState {
-        const proc_net_dev_required = blk: {
-            for (widgets) |*w| {
-                if (w.id == .NET) {
-                    const wd = w.data.NET;
-                    for (wd.format.parts.get(reg.head.ptr)) |*part| {
-                        const opt: typ.NetOpt = @enumFromInt(part.opt);
-                        if (opt.requiresProcNetDev()) break :blk true;
-                    }
-                }
-            }
+        fn getCurrPrev(self: *const @This()) struct { *Interfaces, *Interfaces } {
+            const i = self.curr;
+            return .{ @constCast(&self.ifs[i]), @constCast(&self.ifs[i ^ 1]) };
+        }
+
+        fn swapCurrPrev(self: *@This()) void {
+            self.curr ^= 1;
+        }
+    };
+
+    pub const empty: NetState = .{ .sock = 0, .netdev = null };
+
+    pub fn init(reg: *umem.Region, widgets: []const typ.Widget) NetState {
+        var state: NetState = .{
+            .sock = openIoctlSocket(),
+            .netdev = null,
+        };
+        const wants_netdev = blk: {
+            for (widgets) |*w|
+                if (w.id == .NET and w.data.NET.opts.netdev_mask != 0)
+                    break :blk true;
             break :blk false;
         };
-        if (proc_net_dev_required) {
-            const a: NetDev = .{ .reg = reg };
-            const b: NetDev = .{ .reg = reg };
-            return .{
-                .netdevs = .{ a, b },
+        if (wants_netdev) {
+            const a: Interfaces = .{ .reg = reg };
+            const b: Interfaces = .{ .reg = reg };
+            state.netdev = .{
+                .ifs = .{ a, b },
                 .curr = 0,
-                .proc_net_dev = fs.cwd().openFileZ("/proc/net/dev", .{}) catch |e| {
-                    log.fatal(&.{ "open: /proc/net/dev: ", @errorName(e) });
-                },
+                .file = fs.cwd().openFileZ("/proc/net/dev", .{}) catch |e|
+                    log.fatal(&.{ "open: /proc/net/dev: ", @errorName(e) }),
             };
         }
-        return null;
-    }
-
-    fn getCurrPrev(self: *const @This()) struct { *NetDev, *NetDev } {
-        const i = self.curr;
-        return .{ @constCast(&self.netdevs[i]), @constCast(&self.netdevs[i ^ 1]) };
-    }
-
-    fn swapCurrPrev(self: *@This()) void {
-        self.curr ^= 1;
+        return state;
     }
 };
 
-pub fn update(state: *NetState) void {
+pub fn update(netdev: *NetState.NetDev) void {
     var buf: [4096]u8 = undefined;
-    const nr_read = state.proc_net_dev.pread(&buf, 0) catch |e| {
+    const nr_read = netdev.file.pread(&buf, 0) catch |e| {
         log.fatal(&.{ "NET: pread: ", @errorName(e) });
     };
     if (nr_read == buf.len)
         log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
-    state.swapCurrPrev();
-    const new, _ = state.getCurrPrev();
+    netdev.swapCurrPrev();
+    const new, _ = netdev.getCurrPrev();
     new.freeAll();
 
     parseProcNetDev(buf[0..nr_read], new) catch |e| {
@@ -304,14 +305,8 @@ pub noinline fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     base: [*]const u8,
-    state: *const ?NetState,
+    state: *const NetState,
 ) void {
-    const Static = struct {
-        var sock: linux.fd_t = 0;
-    };
-    if (Static.sock == 0)
-        Static.sock = openIoctlSocket();
-
     const wd = w.data.NET;
 
     var inetbuf: [INET_BUF_SIZE]u8 = @splat(0);
@@ -321,14 +316,16 @@ pub noinline fn widget(
     var flags: []const u8 = undefined;
     var up = false;
 
-    if (wd.opts.inet)
-        inet = getInet(Static.sock, &wd.ifr, &inetbuf);
-    if (wd.opts.flags or wd.opts.state or w.fg == .active or w.bg == .active)
-        flags = getFlags(Static.sock, &wd.ifr, &iffbuf, &up);
+    const enabled = wd.opts.enabled;
+    if (enabled.inet)
+        inet = getInet(state.sock, &wd.ifr, &inetbuf);
+    if (enabled.flags or enabled.state or w.fg == .active or w.bg == .active)
+        flags = getFlags(state.sock, &wd.ifr, &iffbuf, &up);
 
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
-    if (state.*) |*ok| {
+    var mismatched_ifs: bool = undefined;
+    if (state.netdev) |*ok| {
         const new, const old = ok.getCurrPrev();
 
         const Hash = @Vector(linux.IFNAMESIZE, u8);
@@ -352,6 +349,7 @@ pub noinline fn widget(
                 break;
             }
         }
+        mismatched_ifs = new_if == null or old_if == null;
     }
 
     const ch: ColorHandler = .{ .up = up };
@@ -362,8 +360,8 @@ pub noinline fn widget(
         part.str.writeBytes(writer, base);
 
         const opt: typ.NetOpt = @enumFromInt(part.opt);
-        if (opt.requiresSocket()) {
-            const str = switch (opt.castTo(typ.NetOpt.SocketRequired)) {
+        if (wd.opts.bitOf(part.opt) & wd.opts.str_mask != 0) {
+            const str = switch (opt.castTo(typ.NetOpt.StringWriting)) {
                 // zig fmt: off
                 .arg   => mem.sliceTo(&wd.ifr.ifrn.name, 0),
                 .inet  => inet,
@@ -374,11 +372,11 @@ pub noinline fn widget(
             uio.writeStr(writer, str);
             continue;
         }
-        var nu: unt.NumUnit = undefined;
 
-        // new interfaces could have been added or removed in the meantime,
-        // always report zero for them instead of some bogus difference.
-        if (new_if == null or old_if == null) {
+        var nu: unt.NumUnit = undefined;
+        if (mismatched_ifs) {
+            // New interfaces could have been added or removed in the meantime,
+            // always report zero for them instead of some bogus difference.
             nu = if (opt == .rx_bytes or opt == .tx_bytes)
                 unt.SizeKb(0)
             else
@@ -387,7 +385,7 @@ pub noinline fn widget(
             const new = new_if.?;
             const old = old_if.?;
             const d = part.diff;
-            nu = switch (opt.castTo(typ.NetOpt.ProcNetDevRequired)) {
+            nu = switch (opt.castTo(typ.NetOpt.NetDevRequired)) {
                 // zig fmt: off
                 .rx_bytes => unt.SizeBytes(misc.calc(new.bytes(.rx), old.bytes(.rx), d)),
                 .rx_pkts  => unt.UnitSI(misc.calc(new.packets(.rx), old.packets(.rx), d)),

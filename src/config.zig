@@ -16,6 +16,7 @@ const w_net = @import("w_net.zig");
 const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
 
+const enums = std.enums;
 const fmt = std.fmt;
 const mem = std.mem;
 
@@ -561,7 +562,7 @@ pub fn parse(
                     return .fail("widget requires interval", line, line_nr, .zero);
                 }
                 const arg = blk: {
-                    if (current.id.requiresArg()) {
+                    if (current.id.checkCastTo(typ.Widget.Id.RequiresArg)) |_| {
                         if (wi.arg) |ok| break :blk line[ok.beg..ok.end];
                         return .fail("widget requires arg parameter", line, line_nr, .zero);
                     }
@@ -611,15 +612,13 @@ pub fn parse(
                         .bg => current.bg = .{ .static = .init(hex) },
                     },
                     .active => |active| {
-                        if (current.id.supportsDefaultColorOnly())
+                        const wid = current.id.checkCastTo(typ.Widget.Id.ActiveColorSupported) orelse
                             return .fail(
                                 "bad hex: widget doesn't support thresh:#hex pairs",
                                 line,
                                 line_nr,
                                 active.opt,
                             );
-
-                        const wid = current.id.castTo(typ.Widget.Id.ActiveColorSupported);
                         const name = line[active.opt.beg..active.opt.end];
                         const opt = switch (strColorOpt(wid, name)) {
                             .opt => |o| o,

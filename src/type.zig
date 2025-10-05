@@ -90,28 +90,8 @@ pub const Widget = struct {
             &.{ .MEM, .CPU, .DISK, .NET, .BAT },
         );
 
-        pub const DefaultColorOnly = MakeEnumSubset(
-            Id,
-            &.{ .TIME, .READ },
-        );
-
-        pub fn castTo(self: @This(), comptime T: type) T {
-            return @enumFromInt(@intFromEnum(self));
-        }
-
-        pub fn requiresArg(self: @This()) bool {
-            _ = meta.intToEnum(RequiresArg, @intFromEnum(self)) catch return false;
-            return true;
-        }
-
-        pub fn supportsActiveColor(self: @This()) bool {
-            _ = meta.intToEnum(ActiveColorSupported, @intFromEnum(self)) catch return false;
-            return true;
-        }
-
-        pub fn supportsDefaultColorOnly(self: @This()) bool {
-            _ = meta.intToEnum(DefaultColorOnly, @intFromEnum(self)) catch return false;
-            return true;
+        pub fn checkCastTo(self: @This(), comptime T: type) ?T {
+            return enums.fromInt(T, @intFromEnum(self));
         }
     };
 
@@ -207,9 +187,18 @@ pub const Widget = struct {
         pub const NetData = struct {
             format: Format,
             ifr: linux.ifreq,
-            opts: OptFlags,
+            opts: struct {
+                enabled: OptFlags,
+                str_mask: u32,
+                netdev_mask: u32,
 
-            const OptFlags = PackedFlagsFromEnum(NetOpt, u32);
+                const OptFlags = PackedFlagsFromEnum(NetOpt, u32);
+
+                pub fn bitOf(self: @This(), opt: u8) u32 {
+                    _ = self;
+                    return @as(u32, 1) << @intCast(opt);
+                }
+            },
 
             pub fn init(
                 reg: *umem.Region,
@@ -225,10 +214,24 @@ pub const Widget = struct {
                 @memset(ret.ifr.ifrn.name[0..], 0);
                 @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
 
-                var flags: u32 = 0;
-                for (format.parts.get(base)) |*part|
-                    flags |= @as(u32, 1) << @intCast(part.opt);
-                ret.opts = @bitCast(flags);
+                var enabled: u32 = 0;
+                var str_mask: u32 = 0;
+                var netdev_mask: u32 = 0;
+                for (format.parts.get(base)) |*part| {
+                    const opt: NetOpt = @enumFromInt(part.opt);
+                    const bit = ret.opts.bitOf(part.opt);
+
+                    enabled |= bit;
+                    if (opt.checkCastTo(NetOpt.StringWriting)) |_|
+                        str_mask |= bit;
+                    if (opt.checkCastTo(NetOpt.NetDevRequired)) |_|
+                        netdev_mask |= bit;
+                }
+                ret.opts = .{
+                    .enabled = @bitCast(enabled),
+                    .str_mask = str_mask,
+                    .netdev_mask = netdev_mask,
+                };
                 return ret;
             }
         };
@@ -437,11 +440,13 @@ pub const NetOpt = enum {
     tx_errs,
     tx_drop,
 
-    // note that arg is a special case and it is a detail of the implementation
-    // of the widget that it happens to be in the SocketRequired enum subset.
-    // Thus a better name would be "StringProducing" or something like that.
-    pub const SocketRequired = MakeEnumSubset(@This(), &.{ .arg, .inet, .flags, .state });
-    pub const ProcNetDevRequired = MakeEnumSubset(@This(), &.{
+    pub const StringWriting = MakeEnumSubset(@This(), &.{
+        .arg,
+        .inet,
+        .flags,
+        .state,
+    });
+    pub const NetDevRequired = MakeEnumSubset(@This(), &.{
         .rx_bytes,
         .rx_pkts,
         .rx_errs,
@@ -452,21 +457,16 @@ pub const NetOpt = enum {
         .tx_errs,
         .tx_drop,
     });
-
-    pub const ColorSupported = MakeEnumSubset(@This(), &.{.state});
+    pub const ColorSupported = MakeEnumSubset(@This(), &.{
+        .state,
+    });
 
     pub fn castTo(self: @This(), comptime T: type) T {
         return @enumFromInt(@intFromEnum(self));
     }
 
-    pub fn requiresSocket(self: @This()) bool {
-        _ = meta.intToEnum(SocketRequired, @intFromEnum(self)) catch return false;
-        return true;
-    }
-
-    pub fn requiresProcNetDev(self: @This()) bool {
-        _ = meta.intToEnum(ProcNetDevRequired, @intFromEnum(self)) catch return false;
-        return true;
+    pub fn checkCastTo(self: @This(), comptime T: type) ?T {
+        return enums.fromInt(T, @intFromEnum(self));
     }
 };
 

@@ -242,7 +242,7 @@ pub fn main() void {
 
     var cpu_state: w_cpu.CpuState = undefined;
     var mem_state: w_mem.MemState = undefined;
-    var net_state: ?w_net.NetState = null;
+    var net_state: w_net.NetState = .empty;
 
     var mem_state_inited = false;
     var cpu_state_inited = false;
@@ -289,7 +289,7 @@ pub fn main() void {
             mem: bool = false,
             _: u29 = 0,
         };
-        var updated: Update = .{ .net = net_state == null };
+        var updated: Update = .{ .net = net_state.netdev == null };
 
         for (widgets, 0..) |*w, i| {
             w.interval_now -|= sleep_dsec;
@@ -317,7 +317,7 @@ pub fn main() void {
                     .DISK => w_dysk.widget(&fw, w, base),
                     .NET => {
                         if (!updated.net) {
-                            w_net.update(&net_state.?);
+                            w_net.update(&net_state.netdev.?);
                             updated.net = true;
                         }
                         w_net.widget(&fw, w, base, &net_state);
