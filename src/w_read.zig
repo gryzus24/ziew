@@ -71,9 +71,8 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     defer file.close();
 
     var buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
-    const content = readFileUntil(file, FILE_END_MARKERS, &buf) catch |e| {
+    const content = readFileUntil(file, FILE_END_MARKERS, &buf) catch |e|
         log.fatal(&.{ "READ: read: ", wd.getBasename(), @errorName(e) });
-    };
 
     var pos: usize = 0;
     var fg = w.fg.static;

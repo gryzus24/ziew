@@ -250,9 +250,8 @@ pub const CpuState = struct {
             .curr = 0,
             .usage_pct = .zero,
             .usage_abs = .zero,
-            .proc_stat = fs.cwd().openFileZ("/proc/stat", .{}) catch |e| {
-                log.fatal(&.{ "open: /proc/stat: ", @errorName(e) });
-            },
+            .proc_stat = fs.cwd().openFileZ("/proc/stat", .{}) catch |e|
+                log.fatal(&.{ "open: /proc/stat: ", @errorName(e) }),
         };
     }
 
@@ -286,9 +285,8 @@ pub const CpuState = struct {
 pub fn update(state: *CpuState) void {
     var buf: [2 * 4096]u8 = undefined;
 
-    const nr_read = state.proc_stat.pread(&buf, 0) catch |e| {
+    const nr_read = state.proc_stat.pread(&buf, 0) catch |e|
         log.fatal(&.{ "CPU: pread: ", @errorName(e) });
-    };
     if (nr_read == buf.len)
         log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 

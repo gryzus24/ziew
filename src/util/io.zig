@@ -87,9 +87,8 @@ pub const BufferedFile = struct {
     fn fileRead(b: *Buffer, n: usize) error{ReadError}!usize {
         const self: *BufferedFile = @fieldParentPtr("buffer", b);
         const max = @min(b.buf.len - b.end, n);
-        const nr_read = posix.read(self.fd, b.buf[b.end..][0..max]) catch {
+        const nr_read = posix.read(self.fd, b.buf[b.end..][0..max]) catch
             return error.ReadError;
-        };
         b.end += nr_read;
         return nr_read;
     }

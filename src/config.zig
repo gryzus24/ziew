@@ -439,9 +439,8 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
                 }
             },
             .color_active_pair => {
-                const sep = mem.indexOfScalarPos(u8, field, 0, ':') orelse {
+                const sep = mem.indexOfScalarPos(u8, field, 0, ':') orelse
                     return .fail("missing threshold", split);
-                };
                 const thresh = fmt.parseUnsigned(u8, field[0..sep], 10) catch |e| switch (e) {
                     error.Overflow,
                     error.InvalidCharacter,

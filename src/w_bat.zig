@@ -96,10 +96,10 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     defer file.close();
 
     var buf: [1024]u8 = undefined;
-    const nr_read = file.read(&buf) catch |e| {
+    const nr_read = file.read(&buf) catch |e|
         log.fatal(&.{ "BAT: read: ", @errorName(e) });
-    };
-    if (nr_read == 0) log.fatal(&.{"BAT: empty uevent"});
+    if (nr_read == 0)
+        log.fatal(&.{"BAT: empty uevent"});
 
     var bat: Bat = .{};
 

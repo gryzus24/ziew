@@ -286,9 +286,8 @@ pub const NetState = struct {
 
 pub fn update(netdev: *NetState.NetDev) void {
     var buf: [4096]u8 = undefined;
-    const nr_read = netdev.file.pread(&buf, 0) catch |e| {
+    const nr_read = netdev.file.pread(&buf, 0) catch |e|
         log.fatal(&.{ "NET: pread: ", @errorName(e) });
-    };
     if (nr_read == buf.len)
         log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
@@ -296,9 +295,8 @@ pub fn update(netdev: *NetState.NetDev) void {
     const new, _ = netdev.getCurrPrev();
     new.freeAll();
 
-    parseProcNetDev(buf[0..nr_read], new) catch |e| {
+    parseProcNetDev(buf[0..nr_read], new) catch |e|
         log.fatal(&.{ "NET: parse /proc/net/dev: ", @errorName(e) });
-    };
 }
 
 pub noinline fn widget(

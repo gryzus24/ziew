@@ -93,9 +93,8 @@ pub const MemState = struct {
 
     pub fn init() MemState {
         return .{
-            .proc_meminfo = fs.cwd().openFileZ("/proc/meminfo", .{}) catch |e| {
-                log.fatal(&.{ "open: /proc/meminfo: ", @errorName(e) });
-            },
+            .proc_meminfo = fs.cwd().openFileZ("/proc/meminfo", .{}) catch |e|
+                log.fatal(&.{ "open: /proc/meminfo: ", @errorName(e) }),
         };
     }
 
@@ -143,9 +142,8 @@ pub const MemState = struct {
 
 pub fn update(state: *MemState) void {
     var buf: [4096]u8 = undefined;
-    const nr_read = state.proc_meminfo.pread(&buf, 0) catch |e| {
+    const nr_read = state.proc_meminfo.pread(&buf, 0) catch |e|
         log.fatal(&.{ "MEM: pread: ", @errorName(e) });
-    };
     if (nr_read == buf.len)
         log.fatal(&.{"MEM: /proc/meminfo doesn't fit in 1 page"});
 
