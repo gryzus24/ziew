@@ -31,8 +31,6 @@ pub const Format = struct {
     parts: umem.MemSlice(Part),
     last_str: umem.MemSlice(u8),
 
-    pub const zero: Format = .{ .parts = .zero, .last_str = .zero };
-
     pub const Part = struct {
         str: umem.MemSlice(u8),
         opt: u8,
@@ -40,9 +38,9 @@ pub const Format = struct {
         quiet: bool,
         wopts: unt.NumUnit.WriteOptions,
 
-        pub fn initDefault(opt: u8) @This() {
+        pub fn initDefault(str: umem.MemSlice(u8), opt: u8) @This() {
             return .{
-                .str = .zero,
+                .str = str,
                 .opt = opt,
                 .diff = false,
                 .quiet = false,
@@ -82,7 +80,7 @@ pub const Widget = struct {
         BAT,
         READ,
 
-        pub const AcceptsArg = MakeEnumSubset(
+        pub const RequiresArg = MakeEnumSubset(
             Id,
             &.{ .TIME, .DISK, .NET, .BAT, .READ },
         );
@@ -101,8 +99,8 @@ pub const Widget = struct {
             return @enumFromInt(@intFromEnum(self));
         }
 
-        pub fn acceptsArg(self: @This()) bool {
-            _ = meta.intToEnum(AcceptsArg, @intFromEnum(self)) catch return false;
+        pub fn requiresArg(self: @This()) bool {
+            _ = meta.intToEnum(RequiresArg, @intFromEnum(self)) catch return false;
             return true;
         }
 
@@ -146,12 +144,12 @@ pub const Widget = struct {
 
             const STRF_SIZE = DATA_SIZE_MAX - @sizeOf(Format);
 
-            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
                 if (arg.len >= STRF_SIZE)
                     log.fatal(&.{"TIME: strftime format too long"});
 
                 const ret = try reg.frontAlloc(@This());
-                ret.format = .zero;
+                ret.format = format;
                 @memcpy(ret.strf[0..arg.len], arg);
                 ret.strf[arg.len] = 0;
                 return ret;
@@ -165,9 +163,9 @@ pub const Widget = struct {
         pub const MemData = struct {
             format: Format,
 
-            pub fn init(reg: *umem.Region) !*@This() {
+            pub fn init(reg: *umem.Region, format: Format) !*@This() {
                 const ret = try reg.frontAlloc(@This());
-                ret.* = .{ .format = .zero };
+                ret.format = format;
                 return ret;
             }
         };
@@ -175,9 +173,9 @@ pub const Widget = struct {
         pub const CpuData = struct {
             format: Format,
 
-            pub fn init(reg: *umem.Region) !*@This() {
+            pub fn init(reg: *umem.Region, format: Format) !*@This() {
                 const ret = try reg.frontAlloc(@This());
-                ret.* = .{ .format = .zero };
+                ret.format = format;
                 return ret;
             }
         };
@@ -187,14 +185,14 @@ pub const Widget = struct {
             len: u8,
             mountpoint: [MOUNTPOINT_SIZE]u8,
 
-            const MOUNTPOINT_SIZE = DATA_SIZE_MAX - 1 - @sizeOf(Format);
+            const MOUNTPOINT_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1;
 
-            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
                 if (arg.len >= MOUNTPOINT_SIZE)
                     log.fatal(&.{"DISK: mountpoint path too long"});
 
                 const ret = try reg.frontAlloc(@This());
-                ret.format = .zero;
+                ret.format = format;
                 ret.len = @intCast(arg.len);
                 @memcpy(ret.mountpoint[0..arg.len], arg);
                 ret.mountpoint[arg.len] = 0;
@@ -210,15 +208,14 @@ pub const Widget = struct {
             format: Format,
             ifr: linux.ifreq,
 
-            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
-                var ifr: linux.ifreq = undefined;
-                if (arg.len >= ifr.ifrn.name.len)
+            pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
+                if (arg.len >= linux.IFNAMESIZE)
                     log.fatal(&.{ "NET: interface name too long: ", arg });
 
                 const ret = try reg.frontAlloc(@This());
-                @memset(ifr.ifrn.name[0..], 0);
-                @memcpy(ifr.ifrn.name[0..arg.len], arg);
-                ret.* = .{ .ifr = ifr, .format = .zero };
+                ret.format = format;
+                @memset(ret.ifr.ifrn.name[0..], 0);
+                @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
                 return ret;
             }
         };
@@ -231,7 +228,7 @@ pub const Widget = struct {
 
             const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
-            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
                 const prefix = "/sys/class/power_supply/";
                 const suffix = "/uevent\x00";
                 const avail = @min(PATH_SIZE - prefix.len - suffix.len, 15);
@@ -241,13 +238,12 @@ pub const Widget = struct {
                     log.fatal(&.{"BAT: battery name too long"});
 
                 const ret = try reg.frontAlloc(@This());
-                ret.format = .zero;
-                var fw: uio.Writer = .fixed(&ret.path);
-                uio.writeStr(&fw, prefix);
-                ret.ps_off = @intCast(fw.end);
+                ret.format = format;
+                ret.ps_off = prefix.len;
                 ret.ps_len = @intCast(arg.len);
-                uio.writeStr(&fw, arg);
-                uio.writeStr(&fw, suffix);
+                @memcpy(ret.path[0..prefix.len], prefix);
+                @memcpy(ret.path[prefix.len..][0..arg.len], arg);
+                @memcpy(ret.path[prefix.len + arg.len ..][0..suffix.len], suffix);
                 return ret;
             }
 
@@ -268,20 +264,32 @@ pub const Widget = struct {
 
             const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
-            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
-                if (arg.len >= PATH_SIZE)
+            pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
+                const dirname = fs.path.dirname(arg) orelse
+                    log.fatal(&.{"READ: path must be absolute"});
+                const basename = fs.path.basename(arg);
+
+                if (dirname.len + 1 + basename.len >= PATH_SIZE)
                     log.fatal(&.{"READ: path too long"});
 
+                var path: [PATH_SIZE]u8 = undefined;
+                var off = dirname.len;
+
+                @memcpy(path[0..dirname.len], dirname);
+                if (dirname.len > 0 and dirname[dirname.len - 1] != '/') {
+                    path[dirname.len] = '/';
+                    off += 1;
+                }
+                @memcpy(path[off..][0..basename.len], basename);
+                path[off + basename.len] = 0;
+
                 const ret = try reg.frontAlloc(@This());
-                ret.format = .zero;
-                var fw: uio.Writer = .fixed(&ret.path);
-                uio.writeStr(&fw, arg);
-                uio.writeStr(&fw, "\x00");
-                const basename = fs.path.basename(fw.buffered());
-                ret.basename_off = @intCast(
-                    mem.indexOf(u8, &ret.path, basename) orelse unreachable,
-                );
-                ret.basename_len = @intCast(basename.len);
+                ret.* = .{
+                    .format = format,
+                    .basename_off = @intCast(off),
+                    .basename_len = @intCast(basename.len),
+                    .path = path,
+                };
                 return ret;
             }
 

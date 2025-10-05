@@ -238,7 +238,7 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
         };
 
         var ptr = try reg.frontPushVec(&parts);
-        ptr.* = .initDefault(opt);
+        ptr.* = .initDefault(.zero, opt);
 
         for (flags) |ch| switch (ch | 0x20) {
             'd' => ptr.diff = true,
@@ -560,49 +560,37 @@ pub fn parse(
                 } else {
                     return .fail("widget requires interval", line, line_nr, .zero);
                 }
-                if (current.id.acceptsArg()) {
-                    if (wi.arg) |ok| {
-                        const arg = line[ok.beg..ok.end];
-                        switch (current.id.castTo(typ.Widget.Id.AcceptsArg)) {
-                            .TIME => current.data = .{ .TIME = try .init(reg, arg) },
-                            .DISK => current.data = .{ .DISK = try .init(reg, arg) },
-                            .NET => current.data = .{ .NET = try .init(reg, arg) },
-                            .BAT => current.data = .{ .BAT = try .init(reg, arg) },
-                            .READ => current.data = .{ .READ = try .init(reg, arg) },
-                        }
-                    } else {
+                const arg = blk: {
+                    if (current.id.requiresArg()) {
+                        if (wi.arg) |ok| break :blk line[ok.beg..ok.end];
                         return .fail("widget requires arg parameter", line, line_nr, .zero);
                     }
-                }
-                if (wi.format) |ok| {
-                    const format = line[ok.beg..ok.end];
-                    const ref = switch (current.id) {
-                        .TIME => &current.data.TIME.format,
-                        .MEM => blk: {
-                            current.data = .{ .MEM = try .init(reg) };
-                            break :blk &current.data.MEM.format;
-                        },
-                        .CPU => blk: {
-                            current.data = .{ .CPU = try .init(reg) };
-                            break :blk &current.data.CPU.format;
-                        },
-                        .DISK => &current.data.DISK.format,
-                        .NET => &current.data.NET.format,
-                        .BAT => &current.data.BAT.format,
-                        .READ => &current.data.READ.format,
-                    };
-                    ref.* = switch (try acceptFormat(reg, format, current.id)) {
-                        .ok => |f| f,
-                        .err => |e| {
-                            return .fail(e.note, line, line_nr, .{
-                                .beg = ok.beg + e.field.beg,
-                                .end = ok.beg + e.field.end,
-                            });
-                        },
-                    };
-                } else {
+                    break :blk undefined;
+                };
+                const fmt_str, const fmt_split = blk: {
+                    if (wi.format) |ok| break :blk .{ line[ok.beg..ok.end], ok };
                     return .fail("widget requires format parameter", line, line_nr, .zero);
-                }
+                };
+                const format = switch (try acceptFormat(reg, fmt_str, current.id)) {
+                    .ok => |f| f,
+                    .err => |e| {
+                        return .fail(e.note, line, line_nr, .{
+                            .beg = fmt_split.beg + e.field.beg,
+                            .end = fmt_split.beg + e.field.end,
+                        });
+                    },
+                };
+                // zig fmt: off
+                current.data = switch (current.id) {
+                    .TIME => .{ .TIME = try .init(reg, arg, format) },
+                    .MEM  => .{ .MEM  = try .init(reg, format) },
+                    .CPU  => .{ .CPU  = try .init(reg, format) },
+                    .DISK => .{ .DISK = try .init(reg, arg, format) },
+                    .NET  => .{ .NET  = try .init(reg, arg, format) },
+                    .BAT  => .{ .BAT  = try .init(reg, arg, format) },
+                    .READ => .{ .READ = try .init(reg, arg, format) },
+                };
+                // zig fmt: on
             },
             .color => |co| {
                 if (widgets.len == 0) {
