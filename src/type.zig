@@ -207,8 +207,16 @@ pub const Widget = struct {
         pub const NetData = struct {
             format: Format,
             ifr: linux.ifreq,
+            opts: OptFlags,
 
-            pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
+            const OptFlags = PackedFlagsFromEnum(NetOpt, u32);
+
+            pub fn init(
+                reg: *umem.Region,
+                arg: []const u8,
+                format: Format,
+                base: [*]const u8,
+            ) !*@This() {
                 if (arg.len >= linux.IFNAMESIZE)
                     log.fatal(&.{ "NET: interface name too long: ", arg });
 
@@ -216,6 +224,11 @@ pub const Widget = struct {
                 ret.format = format;
                 @memset(ret.ifr.ifrn.name[0..], 0);
                 @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
+
+                var flags: u32 = 0;
+                for (format.parts.get(base)) |*part|
+                    flags |= @as(u32, 1) << @intCast(part.opt);
+                ret.opts = @bitCast(flags);
                 return ret;
             }
         };
@@ -589,9 +602,9 @@ pub fn writeWidgetEnd(writer: *uio.Writer) []const u8 {
     return buffer;
 }
 
-// == private =================================================================
+// == meta functions ==========================================================
 
-fn MakeEnumSubset(comptime E: type, comptime new_values: []const E) type {
+pub fn MakeEnumSubset(comptime E: type, comptime new_values: []const E) type {
     const E_enum = @typeInfo(E).@"enum";
 
     if (new_values.len == 0)
@@ -613,6 +626,79 @@ fn MakeEnumSubset(comptime E: type, comptime new_values: []const E) type {
             .fields = &result,
             .decls = &.{},
             .is_exhaustive = E_enum.is_exhaustive,
+        },
+    });
+}
+
+// This is useful if wanting to use enum fields as flags. The order of
+// flags in the backing integer changes if enum's field positions change,
+// lowering the maintenance burden and helping avoid subtle bugs at the
+// cost of discoverability of the resulting struct definition. Enum field
+// values must start at 0 and increment linearly.
+//
+// Flags may be initialized as follows:
+//
+//     const Flags = PackedFlagsFromEnum(Enum, u32);
+//     var w: u32 = 0;
+//     for (enum_values) |value|
+//         w |= @as(u32, 1) << value;
+//     const flags: Flags = @bitCast(w);
+//
+// To see the "definition" of the generated struct:
+//
+//     comptime {
+//         for (@typeInfo(Flags).@"struct".fields) |field|
+//             @compileLog(field.type, field.name);
+//     }
+//
+pub fn PackedFlagsFromEnum(comptime E: type, comptime BackingInt: type) type {
+    const E_enum = @typeInfo(E).@"enum";
+    const BI_int = @typeInfo(BackingInt).int;
+
+    if (E_enum.fields.len == 0)
+        @compileError("Provided an empty enum");
+    if (BI_int.signedness != .unsigned)
+        @compileError("Unsigned please");
+    if (BI_int.bits == 0 or (BI_int.bits & (BI_int.bits - 1)) != 0)
+        @compileError("No weird sizes please");
+    if (BI_int.bits < E_enum.fields.len)
+        @compileError("Backing integer cannot represent all enum fields");
+
+    const pad_bits = BI_int.bits - E_enum.fields.len;
+    const pad_type = meta.Int(.unsigned, pad_bits);
+
+    var nr_struct_fields = E_enum.fields.len;
+    if (pad_bits > 0) {
+        nr_struct_fields += 1;
+    }
+    var struct_fields: [nr_struct_fields]builtin.Type.StructField = undefined;
+    for (E_enum.fields, 0..) |field, i| {
+        if (field.value != i)
+            @compileError("Enum field values must start at 0 and increment linearly");
+        struct_fields[i] = .{
+            .alignment = 0,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .name = field.name,
+            .type = bool,
+        };
+    }
+    if (pad_bits > 0) {
+        struct_fields[nr_struct_fields - 1] = .{
+            .alignment = 0,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .name = "_",
+            .type = pad_type,
+        };
+    }
+    return @Type(.{
+        .@"struct" = .{
+            .backing_integer = BackingInt,
+            .decls = &.{},
+            .fields = &struct_fields,
+            .is_tuple = false,
+            .layout = .@"packed",
         },
     });
 }

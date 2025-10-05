@@ -314,28 +314,17 @@ pub noinline fn widget(
 
     const wd = w.data.NET;
 
-    var _inetbuf: [INET_BUF_SIZE]u8 = @splat(0);
-    var _iffbuf: [IFF_BUF_MAX]u8 = @splat(0);
+    var inetbuf: [INET_BUF_SIZE]u8 = @splat(0);
+    var iffbuf: [IFF_BUF_MAX]u8 = @splat(0);
 
     var inet: []const u8 = undefined;
     var flags: []const u8 = undefined;
     var up = false;
 
-    const INET = comptime (1 << @intFromEnum(typ.NetOpt.inet));
-    const FLAGS = comptime (1 << @intFromEnum(typ.NetOpt.flags));
-    const STATE = comptime (1 << @intFromEnum(typ.NetOpt.state));
-    var demands: u32 = 0;
-
-    if (@typeInfo(typ.NetOpt).@"enum".fields.len >= @bitSizeOf(@TypeOf(demands)))
-        @compileError("bump demands bitfield size");
-
-    for (wd.format.parts.get(base)) |*part|
-        demands |= @as(@TypeOf(demands), 1) << @intCast(part.opt);
-
-    if (demands & INET > 0)
-        inet = getInet(Static.sock, &wd.ifr, &_inetbuf);
-    if (demands & (FLAGS | STATE) > 0 or w.fg == .active or w.bg == .active)
-        flags = getFlags(Static.sock, &wd.ifr, &_iffbuf, &up);
+    if (wd.opts.inet)
+        inet = getInet(Static.sock, &wd.ifr, &inetbuf);
+    if (wd.opts.flags or wd.opts.state or w.fg == .active or w.bg == .active)
+        flags = getFlags(Static.sock, &wd.ifr, &iffbuf, &up);
 
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;

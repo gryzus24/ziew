@@ -586,7 +586,7 @@ pub fn parse(
                     .MEM  => .{ .MEM  = try .init(reg, format) },
                     .CPU  => .{ .CPU  = try .init(reg, format) },
                     .DISK => .{ .DISK = try .init(reg, arg, format) },
-                    .NET  => .{ .NET  = try .init(reg, arg, format) },
+                    .NET  => .{ .NET  = try .init(reg, arg, format, reg.head.ptr) },
                     .BAT  => .{ .BAT  = try .init(reg, arg, format) },
                     .READ => .{ .READ = try .init(reg, arg, format) },
                 };
