@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const uio = @import("io.zig");
 const fs = std.fs;
@@ -86,7 +87,11 @@ pub const Region = struct {
 
         self.front = aligned_off + alloc_size;
 
-        return @alignCast(mem.bytesAsSlice(T, self.head[aligned_off..][0..alloc_size]));
+        const allocation = self.head[aligned_off..][0..alloc_size];
+        if (builtin.mode == .Debug)
+            @memset(allocation, 0xaa);
+
+        return @alignCast(mem.bytesAsSlice(T, allocation));
     }
 
     pub inline fn frontAlloc(self: *@This(), comptime T: type) AllocError!*T {
@@ -109,7 +114,11 @@ pub const Region = struct {
 
         self.back = aligned_off - alloc_size;
 
-        return @alignCast(mem.bytesAsSlice(T, self.head[self.back..][0..alloc_size]));
+        const allocation = self.head[self.back..][0..alloc_size];
+        if (builtin.mode == .Debug)
+            @memset(allocation, 0xaa);
+
+        return @alignCast(mem.bytesAsSlice(T, allocation));
     }
 
     pub inline fn backAlloc(self: *@This(), comptime T: type) AllocError!*T {
