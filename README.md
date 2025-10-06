@@ -150,9 +150,9 @@ Every option and color configuration for each *Widget* is documented below.
       * [%]buffers   - memory used for filesystem metadata cache,
       * [%]cached    - memory used for the page cache (excludes buffers),
       * [%]used      - used memory (total - available),
-      * total        - total system memory,
-      * dirty        - memory waiting to get written back to disk,
-      * writeback    - memory actively being written back to disk.
+      * [%]total     - total system memory,
+      * [%]dirty     - memory waiting to get written back to disk,
+      * [%]writeback - memory actively being written back to disk.
 
     Colors
       [+] default
@@ -177,8 +177,8 @@ Every option and color configuration for each *Widget* is documented below.
       * intr      - number of serviced interrupts,
       * ctxt      - number of context switches,
       * forks     - number of forks,
-      * running   - number of processes running right now,
-      * blocked   - number of processes blocked on I/O right now,
+      * running   - number of processes running,
+      * blocked   - number of processes blocked on I/O,
       * softirq   - number of serviced software interrupts,
       * brlbars   - visualization of %all CPU usage as narrow (Braille
                     characters) bars, one bar per CPU,
@@ -186,7 +186,7 @@ Every option and color configuration for each *Widget* is documented below.
                     block characters with more granularity.
 
     Option flag @d may affect
-      intr, ctxt, forks, softirq
+      intr, ctxt, forks, running, blocked, softirq
 
     Colors
       [+] default
