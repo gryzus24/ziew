@@ -52,55 +52,52 @@ const ColorHandler = struct {
 };
 
 const IFace = struct {
-    const NR_FIELDS = 16;
-
-    name: [linux.IFNAMESIZE]u8 = .{'-'} ++ (.{0} ** 15),
-    fields: [NR_FIELDS]u64 = @splat(0),
     node: std.SinglyLinkedList.Node,
+    name: [linux.IFNAMESIZE]u8,
+    fields: [16]u64,
 
-    const FieldType = enum(u64) {
-        rx = 0,
-        tx = NR_FIELDS / 2,
-    };
+    const rx_bytes = 0;
+    const rx_pkts = 1;
+    const rx_errs = 2;
+    const rx_drop = 3;
+    const rx_fifo = 4;
+    const rx_frame = 5;
+    const rx_compressed = 6;
+    const rx_multicast = 7;
+    const tx_bytes = 8;
+    const tx_pkts = 9;
+    const tx_errs = 10;
+    const tx_drop = 11;
+    const tx_fifo = 12;
+    const tx_colls = 13;
+    const tx_carrier = 14;
+    const tx_compressed = 15;
+
+    comptime {
+        const assert = std.debug.assert;
+        const off = typ.NetOpt.NETDEV_OPTS_OFF;
+        assert(IFace.rx_bytes == @intFromEnum(typ.NetOpt.rx_bytes) - off);
+        assert(IFace.rx_pkts == @intFromEnum(typ.NetOpt.rx_pkts) - off);
+        assert(IFace.rx_errs == @intFromEnum(typ.NetOpt.rx_errs) - off);
+        assert(IFace.rx_drop == @intFromEnum(typ.NetOpt.rx_drop) - off);
+        assert(IFace.rx_fifo == @intFromEnum(typ.NetOpt.rx_fifo) - off);
+        assert(IFace.rx_frame == @intFromEnum(typ.NetOpt.rx_frame) - off);
+        assert(IFace.rx_compressed == @intFromEnum(typ.NetOpt.rx_compressed) - off);
+        assert(IFace.rx_multicast == @intFromEnum(typ.NetOpt.rx_multicast) - off);
+        assert(IFace.tx_bytes == @intFromEnum(typ.NetOpt.tx_bytes) - off);
+        assert(IFace.tx_pkts == @intFromEnum(typ.NetOpt.tx_pkts) - off);
+        assert(IFace.tx_errs == @intFromEnum(typ.NetOpt.tx_errs) - off);
+        assert(IFace.tx_drop == @intFromEnum(typ.NetOpt.tx_drop) - off);
+        assert(IFace.tx_fifo == @intFromEnum(typ.NetOpt.tx_fifo) - off);
+        assert(IFace.tx_colls == @intFromEnum(typ.NetOpt.tx_colls) - off);
+        assert(IFace.tx_carrier == @intFromEnum(typ.NetOpt.tx_carrier) - off);
+        assert(IFace.tx_compressed == @intFromEnum(typ.NetOpt.tx_compressed) - off);
+    }
 
     pub fn setName(self: *@This(), name: []const u8) void {
         self.name[0..16].* = @splat(0);
         // note: length check omitted
         for (0..name.len) |i| self.name[i] = name[i];
-    }
-
-    pub fn bytes(self: @This(), comptime t: FieldType) u64 {
-        return self.fields[0 + @intFromEnum(t)];
-    }
-    pub fn packets(self: @This(), comptime t: FieldType) u64 {
-        return self.fields[1 + @intFromEnum(t)];
-    }
-    pub fn errs(self: @This(), comptime t: FieldType) u64 {
-        return self.fields[2 + @intFromEnum(t)];
-    }
-    pub fn drop(self: @This(), comptime t: FieldType) u64 {
-        return self.fields[3 + @intFromEnum(t)];
-    }
-    pub fn fifo(self: @This(), comptime t: FieldType) u64 {
-        return self.fields[4 + @intFromEnum(t)];
-    }
-    pub fn rx_frame(self: @This()) u64 {
-        return self.fields[5];
-    }
-    pub fn rx_compressed(self: @This()) u64 {
-        return self.fields[6];
-    }
-    pub fn rx_multicast(self: @This()) u64 {
-        return self.fields[7];
-    }
-    pub fn tx_colls(self: @This()) u64 {
-        return self.fields[5 + @intFromEnum(.tx)];
-    }
-    pub fn tx_carrier(self: @This()) u64 {
-        return self.fields[6 + @intFromEnum(.tx)];
-    }
-    pub fn tx_compressed(self: @This()) u64 {
-        return self.fields[7 + @intFromEnum(.tx)];
     }
 };
 
@@ -228,7 +225,7 @@ fn parseProcNetDev(buf: []const u8, ifs: *Interfaces) !void {
         new_if.setName(line[i..j]);
         j += 1;
 
-        for (0..IFace.NR_FIELDS) |fi| {
+        for (0..new_if.fields.len) |fi| {
             while (line[j] == ' ') : (j += 1) {}
             new_if.fields[fi] = ustr.atou64ForwardUntilOrEOF(line, &j, ' ');
             j += 1;
@@ -282,6 +279,10 @@ pub const NetState = struct {
         }
         return state;
     }
+
+    pub fn getNetdev(self: *const @This(), mask: typ.OptBit) ?*const NetDev {
+        return if (mask != 0) &self.netdev.? else null;
+    }
 };
 
 pub fn update(netdev: *NetState.NetDev) void {
@@ -322,8 +323,8 @@ pub noinline fn widget(
 
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
-    var mismatched_ifs: bool = undefined;
-    if (state.netdev) |*ok| {
+    var ifs_match: bool = undefined;
+    if (state.getNetdev(wd.opts.netdev_mask)) |ok| {
         const new, const old = ok.getCurrPrev();
 
         const Hash = @Vector(linux.IFNAMESIZE, u8);
@@ -347,7 +348,7 @@ pub noinline fn widget(
                 break;
             }
         }
-        mismatched_ifs = new_if == null or old_if == null;
+        ifs_match = new_if != null and old_if != null;
     }
 
     const ch: ColorHandler = .{ .up = up };
@@ -358,44 +359,37 @@ pub noinline fn widget(
         part.str.writeBytes(writer, base);
 
         const opt: typ.NetOpt = @enumFromInt(part.opt);
-        if (typ.optBit(part.opt) & wd.opts.str_mask != 0) {
-            const str = switch (opt.castTo(typ.NetOpt.StringWriting)) {
-                // zig fmt: off
-                .arg   => mem.sliceTo(&wd.ifr.ifrn.name, 0),
-                .inet  => inet,
-                .flags => flags,
-                .state => if (up) "up" else "down",
-                // zig fmt: on
-            };
-            uio.writeStr(writer, str);
+        const bit = typ.optBit(part.opt);
+
+        if (bit & wd.opts.string_mask != 0) {
+            uio.writeStr(
+                writer,
+                switch (opt.castTo(typ.NetOpt.StringOpts)) {
+                    .arg => mem.sliceTo(&wd.ifr.ifrn.name, 0),
+                    .inet => inet,
+                    .flags => flags,
+                    .state => if (up) "up" else "down",
+                },
+            );
             continue;
         }
 
         var nu: unt.NumUnit = undefined;
-        if (mismatched_ifs) {
-            // New interfaces could have been added or removed in the meantime,
-            // always report zero for them instead of some bogus difference.
-            nu = if (opt == .rx_bytes or opt == .tx_bytes)
-                unt.SizeKb(0)
-            else
-                unt.UnitSI(0);
+        if (bit & wd.opts.netdev_size_mask != 0) {
+            nu = unt.SizeKb(0);
         } else {
-            const new = new_if.?;
-            const old = old_if.?;
-            const d = part.diff;
-            nu = switch (opt.castTo(typ.NetOpt.NetDevRequired)) {
-                // zig fmt: off
-                .rx_bytes => unt.SizeBytes(misc.calc(new.bytes(.rx), old.bytes(.rx), d)),
-                .rx_pkts  => unt.UnitSI(misc.calc(new.packets(.rx), old.packets(.rx), d)),
-                .rx_errs  => unt.UnitSI(misc.calc(new.errs(.rx), old.errs(.rx), d)),
-                .rx_drop  => unt.UnitSI(misc.calc(new.drop(.rx), old.drop(.rx), d)),
-                .rx_multicast => unt.UnitSI(misc.calc(new.rx_multicast(), old.rx_multicast(), d)),
-                .tx_bytes => unt.SizeBytes(misc.calc(new.bytes(.tx), old.bytes(.tx), d)),
-                .tx_pkts  => unt.UnitSI(misc.calc(new.packets(.tx), old.packets(.tx), d)),
-                .tx_errs  => unt.UnitSI(misc.calc(new.errs(.tx), old.errs(.tx), d)),
-                .tx_drop  => unt.UnitSI(misc.calc(new.drop(.tx), old.drop(.tx), d)),
-                // zig fmt: on
-            };
+            nu = unt.UnitSI(0);
+        }
+        if (ifs_match) {
+            @branchHint(.likely);
+            const a = new_if.?.fields[part.opt - typ.NetOpt.NETDEV_OPTS_OFF];
+            const b = old_if.?.fields[part.opt - typ.NetOpt.NETDEV_OPTS_OFF];
+
+            if (bit & wd.opts.netdev_size_mask != 0) {
+                nu = unt.SizeBytes(misc.calc(a, b, part.diff));
+            } else {
+                nu = unt.UnitSI(misc.calc(a, b, part.diff));
+            }
         }
         nu.write(writer, part.wopts, part.quiet);
     }

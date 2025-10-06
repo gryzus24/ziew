@@ -27,6 +27,8 @@ const meta = std.meta;
 // 1/10th of a second
 pub const DeciSec = u32;
 
+pub const OptBit = u32;
+
 pub const Format = struct {
     parts: umem.MemSlice(Part),
     last_str: umem.MemSlice(u8),
@@ -141,13 +143,13 @@ pub const Widget = struct {
         pub const MemData = struct {
             format: Format,
             opts: struct {
-                pct_mask: u32,
+                pct_mask: OptBit,
             },
 
             pub fn init(reg: *umem.Region, format: Format, base: [*]const u8) !*@This() {
                 const ret = try reg.frontAlloc(@This());
                 ret.format = format;
-                var pct_mask: u32 = 0;
+                var pct_mask: OptBit = 0;
                 for (format.parts.get(base)) |*part| {
                     const opt: MemOpt = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
@@ -165,15 +167,15 @@ pub const Widget = struct {
         pub const CpuData = struct {
             format: Format,
             opts: struct {
-                usage_mask: u32,
-                stats_mask: u32,
+                usage_mask: OptBit,
+                stats_mask: OptBit,
             },
 
             pub fn init(reg: *umem.Region, format: Format, base: [*]const u8) !*@This() {
                 const ret = try reg.frontAlloc(@This());
                 ret.format = format;
-                var usage_mask: u32 = 0;
-                var stats_mask: u32 = 0;
+                var usage_mask: OptBit = 0;
+                var stats_mask: OptBit = 0;
                 for (format.parts.get(base)) |*part| {
                     const opt: CpuOpt = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
@@ -219,11 +221,12 @@ pub const Widget = struct {
             format: Format,
             ifr: linux.ifreq,
             opts: struct {
-                enabled: OptFlags,
-                str_mask: u32,
-                netdev_mask: u32,
+                enabled: Flags,
+                string_mask: OptBit,
+                netdev_mask: OptBit,
+                netdev_size_mask: OptBit,
 
-                const OptFlags = PackedFlagsFromEnum(NetOpt, u32);
+                const Flags = PackedFlagsFromEnum(NetOpt, OptBit);
             },
 
             pub fn init(
@@ -240,23 +243,27 @@ pub const Widget = struct {
                 @memset(ret.ifr.ifrn.name[0..], 0);
                 @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
 
-                var enabled: u32 = 0;
-                var str_mask: u32 = 0;
-                var netdev_mask: u32 = 0;
+                var enabled: OptBit = 0;
+                var string_mask: OptBit = 0;
+                var netdev_mask: OptBit = 0;
+                var netdev_size_mask: OptBit = 0;
                 for (format.parts.get(base)) |*part| {
                     const opt: NetOpt = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
 
                     enabled |= bit;
-                    if (opt.checkCastTo(NetOpt.StringWriting)) |_|
-                        str_mask |= bit;
+                    if (opt.checkCastTo(NetOpt.StringOpts)) |_|
+                        string_mask |= bit;
                     if (opt.checkCastTo(NetOpt.NetDevRequired)) |_|
                         netdev_mask |= bit;
+                    if (opt.checkCastTo(NetOpt.NetDevSizeOpts)) |_|
+                        netdev_size_mask |= bit;
                 }
                 ret.opts = .{
                     .enabled = @bitCast(enabled),
-                    .str_mask = str_mask,
+                    .string_mask = string_mask,
                     .netdev_mask = netdev_mask,
+                    .netdev_size_mask = netdev_size_mask,
                 };
                 return ret;
             }
@@ -509,19 +516,36 @@ pub const NetOpt = enum {
     rx_pkts,
     rx_errs,
     rx_drop,
+    rx_fifo,
+    rx_frame,
+    rx_compressed,
     rx_multicast,
     tx_bytes,
     tx_pkts,
     tx_errs,
     tx_drop,
+    tx_fifo,
+    tx_colls,
+    tx_carrier,
+    tx_compressed,
 
-    pub const StringWriting = MakeEnumSubset(@This(), &.{
+    pub const NETDEV_OPTS_OFF = @intFromEnum(NetOpt.rx_bytes);
+
+    pub const StringOpts = MakeEnumSubset(@This(), &.{
         .arg, .inet, .flags, .state,
     });
+
     pub const NetDevRequired = MakeEnumSubset(@This(), &.{
-        .rx_bytes, .rx_pkts, .rx_errs, .rx_drop, .rx_multicast,
-        .tx_bytes, .tx_pkts, .tx_errs, .tx_drop,
+        .rx_bytes, .rx_pkts,  .rx_errs,       .rx_drop,
+        .rx_fifo,  .rx_frame, .rx_compressed, .rx_multicast,
+        .tx_bytes, .tx_pkts,  .tx_errs,       .tx_drop,
+        .tx_fifo,  .tx_colls, .tx_carrier,    .tx_compressed,
     });
+
+    pub const NetDevSizeOpts = MakeEnumSubset(@This(), &.{
+        .rx_bytes, .tx_bytes,
+    });
+
     pub const ColorSupported = MakeEnumSubset(@This(), &.{
         .state,
     });
@@ -667,8 +691,8 @@ pub fn writeWidgetEnd(writer: *uio.Writer) []const u8 {
     return buffer;
 }
 
-pub fn optBit(opt: u8) u32 {
-    return @as(u32, 1) << @intCast(opt);
+pub fn optBit(opt: u8) OptBit {
+    return @as(OptBit, 1) << @intCast(opt);
 }
 
 // == meta functions ==========================================================
