@@ -11,7 +11,7 @@ const fs = std.fs;
 
 // == private =================================================================
 
-fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
+fn parseProcMeminfo(buf: []const u8, out: *MemState) void {
     const KEY_LEN = "xxxxxxxx:       ".len;
     const VAL_LEN = 8;
     const UNIT_LEN = " kB".len;
@@ -23,7 +23,7 @@ fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
     for (0..7) |fi| {
         while (buf[i] != '\n') : (i += 1) {}
         // Will break on systems with over 953 GB of RAM.
-        new.fields[fi] = ustr.atou32V9Back(buf[0 .. i - "kb\n".len]);
+        out.fields[fi] = ustr.atou32V9Back(buf[0 .. i - "kb\n".len]);
 
         if (fi == 4) {
             // Skipping 11 fields is tight for kernels
@@ -37,6 +37,7 @@ fn parseProcMeminfo(buf: []const u8, new: *MemState) void {
         }
         i += FIELD_LEN + 1;
     }
+    out.fields[7] = out.total() - out.avail();
 }
 
 test "/proc/meminfo parser" {
@@ -88,61 +89,49 @@ test "/proc/meminfo parser" {
 // == public ==================================================================
 
 pub const MemState = struct {
-    fields: [7]u64 = @splat(0),
-    proc_meminfo: fs.File,
+    file: fs.File,
+    fields: [NR_FIELDS]u64,
+
+    const NR_FIELDS = 8;
+    comptime {
+        const nr_pct = @typeInfo(typ.MemOpt.PercentOpts).@"enum".fields.len;
+        const nr_size = @typeInfo(typ.MemOpt.SizeOpts).@"enum".fields.len;
+        std.debug.assert(nr_pct == NR_FIELDS and NR_FIELDS == nr_size);
+    }
 
     pub fn init() MemState {
         return .{
-            .proc_meminfo = fs.cwd().openFileZ("/proc/meminfo", .{}) catch |e|
+            .file = fs.cwd().openFileZ("/proc/meminfo", .{}) catch |e|
                 log.fatal(&.{ "open: /proc/meminfo: ", @errorName(e) }),
+            .fields = @splat(0),
         };
     }
 
     pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
         return color.firstColorGEThreshold(
             unt.Percent(
-                switch (@as(typ.MemOpt.ColorSupported, @enumFromInt(ac.opt))) {
-                    .@"%free" => self.free(),
-                    .@"%available" => self.avail(),
-                    .@"%buffers" => self.buffers(),
-                    .@"%cached" => self.cached(),
-                    .@"%used" => self.used(),
-                },
+                self.fields[ac.opt],
                 self.total(),
             ).n.roundU24AndTruncate(),
             ac.pairs.get(base),
         );
     }
 
-    fn total(self: @This()) u64 {
-        return self.fields[0];
-    }
-    fn free(self: @This()) u64 {
-        return self.fields[1];
-    }
-    fn avail(self: @This()) u64 {
-        return self.fields[2];
-    }
-    fn buffers(self: @This()) u64 {
-        return self.fields[3];
-    }
-    fn cached(self: @This()) u64 {
-        return self.fields[4];
-    }
-    fn dirty(self: @This()) u64 {
-        return self.fields[5];
-    }
-    fn writeback(self: @This()) u64 {
-        return self.fields[6];
-    }
-    fn used(self: @This()) u64 {
-        return self.total() - self.avail();
-    }
+    // zig fmt: off
+    fn     total(self: @This()) u64 { return self.fields[0]; }
+    fn      free(self: @This()) u64 { return self.fields[1]; }
+    fn     avail(self: @This()) u64 { return self.fields[2]; }
+    fn   buffers(self: @This()) u64 { return self.fields[3]; }
+    fn    cached(self: @This()) u64 { return self.fields[4]; }
+    fn     dirty(self: @This()) u64 { return self.fields[5]; }
+    fn writeback(self: @This()) u64 { return self.fields[6]; }
+    fn      used(self: @This()) u64 { return self.fields[7]; }
+    // zig fmt: on
 };
 
 pub fn update(state: *MemState) void {
     var buf: [4096]u8 = undefined;
-    const nr_read = state.proc_meminfo.pread(&buf, 0) catch |e|
+    const nr_read = state.file.pread(&buf, 0) catch |e|
         log.fatal(&.{ "MEM: pread: ", @errorName(e) });
     if (nr_read == buf.len)
         log.fatal(&.{"MEM: /proc/meminfo doesn't fit in 1 page"});
@@ -162,23 +151,16 @@ pub noinline fn widget(
     typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
-        const nu = switch (@as(typ.MemOpt, @enumFromInt(part.opt))) {
-            // zig fmt: off
-            .@"%free"      => unt.Percent(state.free(), state.total()),
-            .@"%available" => unt.Percent(state.avail(), state.total()),
-            .@"%cached"    => unt.Percent(state.cached(), state.total()),
-            .@"%buffers"   => unt.Percent(state.buffers(), state.total()),
-            .@"%used"      => unt.Percent(state.used(), state.total()),
-            .total         => unt.SizeKb(state.total()),
-            .free          => unt.SizeKb(state.free()),
-            .available     => unt.SizeKb(state.avail()),
-            .buffers       => unt.SizeKb(state.buffers()),
-            .cached        => unt.SizeKb(state.cached()),
-            .used          => unt.SizeKb(state.used()),
-            .dirty         => unt.SizeKb(state.dirty()),
-            .writeback     => unt.SizeKb(state.writeback()),
-            // zig fmt: on
-        };
+
+        var nu: unt.NumUnit = undefined;
+        if (typ.optBit(part.opt) & wd.opts.pct_mask != 0) {
+            nu = unt.Percent(
+                state.fields[part.opt],
+                state.total(),
+            );
+        } else {
+            nu = unt.SizeKb(state.fields[part.opt - typ.MemOpt.SIZE_OPTS_OFF]);
+        }
         nu.write(writer, part.wopts, part.quiet);
     }
     wd.format.last_str.writeBytes(writer, base);

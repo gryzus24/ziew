@@ -84,8 +84,8 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
 
     const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| switch (e) {
         error.FileNotFound => {
-            const noop: typ.Widget.NoopIndirect = .{};
-            const fg, const bg = w.check(noop, base);
+            const handler: typ.Widget.NoopColorHandler = .{};
+            const fg, const bg = w.check(handler, base);
             typ.writeWidgetBeg(writer, fg, bg);
             uio.writeStr(writer, wd.getPsName());
             uio.writeStr(writer, ": <not found>");

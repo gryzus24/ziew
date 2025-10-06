@@ -32,8 +32,8 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     // TODO: use statvfs instead of this
     var sfs: c.struct_statfs = undefined;
     if (c.statfs(wd.getMountpoint(), &sfs) != 0) {
-        const noop: typ.Widget.NoopIndirect = .{};
-        const fg, const bg = w.check(noop, base);
+        const handler: typ.Widget.NoopColorHandler = .{};
+        const fg, const bg = w.check(handler, base);
         typ.writeWidgetBeg(writer, fg, bg);
         uio.writeStr(writer, wd.getMountpoint());
         uio.writeStr(writer, ": <not mounted>");

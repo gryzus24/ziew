@@ -581,12 +581,13 @@ pub fn parse(
                     },
                 };
                 // zig fmt: off
+                const base = reg.head.ptr;
                 current.data = switch (current.id) {
                     .TIME => .{ .TIME = try .init(reg, arg, format) },
-                    .MEM  => .{ .MEM  = try .init(reg, format) },
-                    .CPU  => .{ .CPU  = try .init(reg, format) },
+                    .MEM  => .{ .MEM  = try .init(reg, format, base) },
+                    .CPU  => .{ .CPU  = try .init(reg, format, base) },
                     .DISK => .{ .DISK = try .init(reg, arg, format) },
-                    .NET  => .{ .NET  = try .init(reg, arg, format, reg.head.ptr) },
+                    .NET  => .{ .NET  = try .init(reg, arg, format, base) },
                     .BAT  => .{ .BAT  = try .init(reg, arg, format) },
                     .READ => .{ .READ = try .init(reg, arg, format) },
                 };

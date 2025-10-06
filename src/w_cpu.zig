@@ -72,35 +72,43 @@ const Cpu = struct {
 };
 
 const Stat = struct {
-    intr: u64,
-    ctxt: u64,
-    forks: u64,
-    running: u32,
-    blocked: u32,
-    softirq: u64,
     entries: [*]Cpu,
     nr_cpux_entries: usize,
+    stats: [6]u64,
+
+    const intr = 0;
+    const softirq = 1;
+    const blocked = 2;
+    const running = 3;
+    const forks = 4;
+    const ctxt = 5;
+
+    comptime {
+        const assert = std.debug.assert;
+        const off = typ.CpuOpt.STATS_OPTS_OFF;
+        assert(Stat.intr == @intFromEnum(typ.CpuOpt.intr) - off);
+        assert(Stat.softirq == @intFromEnum(typ.CpuOpt.softirq) - off);
+        assert(Stat.blocked == @intFromEnum(typ.CpuOpt.blocked) - off);
+        assert(Stat.running == @intFromEnum(typ.CpuOpt.running) - off);
+        assert(Stat.forks == @intFromEnum(typ.CpuOpt.forks) - off);
+        assert(Stat.ctxt == @intFromEnum(typ.CpuOpt.ctxt) - off);
+    }
 
     pub fn initZero(reg: *umem.Region, nr_possible_cpus: u32) !@This() {
         // First entry is the cumulative stat of every CPU.
         const entries = try reg.frontAllocMany(Cpu, nr_possible_cpus + 1);
         for (0..entries.len) |i| entries[i] = .zero;
         return .{
-            .intr = 0,
-            .ctxt = 0,
-            .forks = 0,
-            .running = 0,
-            .blocked = 0,
-            .softirq = 0,
             .entries = entries.ptr,
             .nr_cpux_entries = 0,
+            .stats = @splat(0),
         };
     }
 };
 
 // == private =================================================================
 
-fn parseProcStat(buf: []const u8, new: *Stat) void {
+fn parseProcStat(buf: []const u8, out: *Stat) void {
     var cpu: usize = 0;
     var i = "cpu  ".len;
     while (true) {
@@ -113,10 +121,10 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         // User time includes guest time. Check v6.17 kernel/sched/cputime.c#L158
         //                        user        nice
         //                        system      irq         softirq     steal
-        new.entries[cpu].user   = fields[0] + fields[1];
-        new.entries[cpu].sys    = fields[2] + fields[5] + fields[6] + fields[7];
-        new.entries[cpu].idle   = fields[3];
-        new.entries[cpu].iowait = fields[4];
+        out.entries[cpu].user   = fields[0] + fields[1];
+        out.entries[cpu].sys    = fields[2] + fields[5] + fields[6] + fields[7];
+        out.entries[cpu].idle   = fields[3];
+        out.entries[cpu].iowait = fields[4];
         // zig fmt: on
 
         // cpuXX  41208 ... 1061 0 [0] 0\n
@@ -130,33 +138,33 @@ fn parseProcStat(buf: []const u8, new: *Stat) void {
         i += 1;
         cpu += 1;
     }
+    // Value of `Stat.nr_cpux_entries` may change - CPUs might go online/offline.
+    out.nr_cpux_entries = cpu;
+
     i += "intr ".len;
-    new.intr = ustr.atou64ForwardUntil(buf, &i, ' ');
+    out.stats[Stat.intr] = ustr.atou64ForwardUntil(buf, &i, ' ');
 
     i = buf.len - 1 - " 0 0 0 0 0 0 0 0 0 0 0\n".len;
     while (buf[i] != 'q') : (i -= 1) {}
     // i at: softir[q] 123456 2345 ...
 
     var j = i + "q ".len;
-    new.softirq = ustr.atou64ForwardUntil(buf, &j, ' ');
+    out.stats[Stat.softirq] = ustr.atou64ForwardUntil(buf, &j, ' ');
     i -= "\nsoftirq".len;
 
-    new.blocked = @intCast(ustr.atou64BackwardUntil(buf, &i, ' '));
+    out.stats[Stat.blocked] = @intCast(ustr.atou64BackwardUntil(buf, &i, ' '));
     i -= "\nprocs_blocked ".len;
 
-    new.running = @intCast(ustr.atou64BackwardUntil(buf, &i, ' '));
+    out.stats[Stat.running] = @intCast(ustr.atou64BackwardUntil(buf, &i, ' '));
     i -= "\nprocs_running ".len;
 
-    new.forks = ustr.atou64BackwardUntil(buf, &i, ' ');
+    out.stats[Stat.forks] = ustr.atou64BackwardUntil(buf, &i, ' ');
     i -= "btime X\nprocesses ".len;
 
     while (buf[i] != '\n') : (i -= 1) {}
     i -= 1;
 
-    new.ctxt = ustr.atou64BackwardUntil(buf, &i, ' ');
-
-    // Value of `Stat.nr_cpux_entries` may change - CPUs might go online/offline.
-    new.nr_cpux_entries = cpu;
+    out.stats[Stat.ctxt] = ustr.atou64BackwardUntil(buf, &i, ' ');
 }
 
 test "/proc/stat parser" {
@@ -186,7 +194,7 @@ test "/proc/stat parser" {
     ;
     var tmem: [4096]u8 align(16) = undefined;
     var reg: umem.Region = .init(&tmem, "cputest");
-    var s: Stat = try .initZero(&reg, misc.nrPossibleCpus());
+    var s: Stat = try .initZero(&reg, 12);
     parseProcStat(buf, &s);
     try t.expect(s.entries[0].user == 46232 + 14);
     try t.expect(s.entries[0].sys == 14383 + 2994 + 1212 + 0);
@@ -198,12 +206,12 @@ test "/proc/stat parser" {
     try t.expect(s.entries[12].sys == 769 + 119 + 123 + 0);
     try t.expect(s.entries[12].idle == 1019145);
     try t.expect(s.entries[12].iowait == 138);
-    try t.expect(s.intr == 1894596);
-    try t.expect(s.ctxt == 3055158);
-    try t.expect(s.forks == 8594);
-    try t.expect(s.running == 1);
-    try t.expect(s.blocked == 0);
-    try t.expect(s.softirq == 4426117);
+    try t.expect(s.stats[Stat.intr] == 1894596);
+    try t.expect(s.stats[Stat.ctxt] == 3055158);
+    try t.expect(s.stats[Stat.forks] == 8594);
+    try t.expect(s.stats[Stat.running] == 1);
+    try t.expect(s.stats[Stat.blocked] == 0);
+    try t.expect(s.stats[Stat.softirq] == 4426117);
 }
 
 const BRLBARS: [5][5][3]u8 = .{
@@ -235,11 +243,11 @@ fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
 pub const CpuState = struct {
     stats: [2]Stat,
     curr: usize,
+    file: fs.File,
 
-    usage_pct: Cpu.Delta,
-    usage_abs: Cpu.Delta,
+    usage: [NR_USAGE_FIELDS]unt.F5608,
 
-    proc_stat: fs.File,
+    const NR_USAGE_FIELDS = @typeInfo(typ.CpuOpt.UsageOpts).@"enum".fields.len;
 
     pub fn init(reg: *umem.Region) !CpuState {
         const nr_cpus = misc.nrPossibleCpus();
@@ -248,28 +256,10 @@ pub const CpuState = struct {
         return .{
             .stats = .{ a, b },
             .curr = 0,
-            .usage_pct = .zero,
-            .usage_abs = .zero,
-            .proc_stat = fs.cwd().openFileZ("/proc/stat", .{}) catch |e|
+            .file = fs.cwd().openFileZ("/proc/stat", .{}) catch |e|
                 log.fatal(&.{ "open: /proc/stat: ", @errorName(e) }),
+            .usage = @splat(.{ .u = 0 }),
         };
-    }
-
-    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        const new, const old = self.getCurrPrev();
-
-        return color.firstColorGEThreshold(
-            switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(ac.opt))) {
-                .@"%all" => self.usage_pct.all.roundU24AndTruncate(),
-                .@"%user" => self.usage_pct.user.roundU24AndTruncate(),
-                .@"%sys" => self.usage_pct.sys.roundU24AndTruncate(),
-                .@"%iowait" => self.usage_pct.iowait.roundU24AndTruncate(),
-                .forks => new.forks - old.forks,
-                .running => new.running,
-                .blocked => new.blocked,
-            },
-            ac.pairs.get(base),
-        );
     }
 
     fn getCurrPrev(self: *const @This()) struct { *Stat, *Stat } {
@@ -280,25 +270,58 @@ pub const CpuState = struct {
     fn swapCurrPrev(self: *@This()) void {
         self.curr ^= 1;
     }
+
+    pub fn checkPairs(
+        self: @This(),
+        ac: color.Active,
+        base: [*]const u8,
+    ) color.Hex {
+        const new, const old = self.getCurrPrev();
+        return color.firstColorGEThreshold(
+            switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(ac.opt))) {
+                .@"%all",
+                .@"%user",
+                .@"%sys",
+                .@"%iowait",
+                => self.usage[ac.opt].roundU24AndTruncate(),
+                .blocked => new.stats[Stat.blocked],
+                .running => new.stats[Stat.running],
+                .forks => new.stats[Stat.forks] - old.stats[Stat.forks],
+            },
+            ac.pairs.get(base),
+        );
+    }
 };
 
 pub fn update(state: *CpuState) void {
     var buf: [2 * 4096]u8 = undefined;
 
-    const nr_read = state.proc_stat.pread(&buf, 0) catch |e|
+    const nr_read = state.file.pread(&buf, 0) catch |e|
         log.fatal(&.{ "CPU: pread: ", @errorName(e) });
     if (nr_read == buf.len)
         log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
     state.swapCurrPrev();
-    const new_stat, const old_stat = state.getCurrPrev();
+    const new, const old = state.getCurrPrev();
 
-    parseProcStat(buf[0..nr_read], new_stat);
+    parseProcStat(buf[0..nr_read], new);
 
-    const new = new_stat.entries[0];
-    const old = old_stat.entries[0];
-    state.usage_pct = new.delta(old);
-    state.usage_abs = new.deltaN(old, @intCast(new_stat.nr_cpux_entries));
+    const new_cpu = new.entries[0];
+    const old_cpu = old.entries[0];
+    const delta = new_cpu.delta(old_cpu);
+    const deltaN = new_cpu.deltaN(old_cpu, @intCast(new.nr_cpux_entries));
+
+    // zig fmt: off
+    const u = &state.usage;
+    u[@intFromEnum(typ.CpuOpt.@"%all")]    = delta.all;
+    u[@intFromEnum(typ.CpuOpt.@"%user")]   = delta.user;
+    u[@intFromEnum(typ.CpuOpt.@"%sys")]    = delta.sys;
+    u[@intFromEnum(typ.CpuOpt.@"%iowait")] = delta.iowait;
+    u[@intFromEnum(typ.CpuOpt.all)]        = deltaN.all;
+    u[@intFromEnum(typ.CpuOpt.user)]       = deltaN.user;
+    u[@intFromEnum(typ.CpuOpt.sys)]        = deltaN.sys;
+    u[@intFromEnum(typ.CpuOpt.iowait)]     = deltaN.iowait;
+    // zig fmt: on
 }
 
 pub noinline fn widget(
@@ -315,74 +338,64 @@ pub noinline fn widget(
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
-        const cpuopt: typ.CpuOpt = @enumFromInt(part.opt);
-        if (cpuopt == .brlbars) {
-            // Yes, I know it's off by one.
-            const needed = new.nr_cpux_entries * BRLBARS[0][0].len;
-            if (writer.unusedCapacityLen() < needed) {
-                @branchHint(.unlikely);
-                break;
-            }
-
-            var left: u32 = 0;
-            var right: u32 = 0;
-
-            const buffer = writer.buffer;
-            var pos = writer.end;
-            for (1..1 + new.nr_cpux_entries) |i| {
-                if (i & 1 == 1) {
-                    left = barIntensity(new.entries[i], old.entries[i], BRLBARS.len);
-                } else {
-                    right = barIntensity(new.entries[i], old.entries[i], BRLBARS[0].len);
-                    buffer[pos..][0..3].* = BRLBARS[left][right];
-                    pos += 3;
-                }
-            }
-            if (new.nr_cpux_entries & 1 == 1) {
-                buffer[pos..][0..3].* = BRLBARS[left][0];
-                pos += 3;
-            }
-            writer.end = pos;
-            continue;
-        } else if (cpuopt == .blkbars) {
-            const needed = new.nr_cpux_entries * BLKBARS[0].len;
-            if (writer.unusedCapacityLen() < needed) {
-                @branchHint(.unlikely);
-                break;
-            }
-
-            const buffer = writer.buffer;
-            var pos = writer.end;
-            for (1..1 + new.nr_cpux_entries) |i| {
-                buffer[pos..][0..3].* =
-                    BLKBARS[barIntensity(new.entries[i], old.entries[i], BLKBARS.len)];
-                pos += 3;
-            }
-            writer.end = pos;
+        const bit = typ.optBit(part.opt);
+        if (bit & wd.opts.usage_mask != 0) {
+            @as(unt.NumUnit, .{
+                .n = state.usage[part.opt],
+                .u = .percent,
+            }).write(writer, part.wopts, part.quiet);
             continue;
         }
-        const d = part.diff;
-        const nu: unt.NumUnit = switch (cpuopt) {
-            // zig fmt: off
-            .@"%all"    => .{ .n = state.usage_pct.all,    .u = .percent },
-            .@"%user"   => .{ .n = state.usage_pct.user,   .u = .percent },
-            .@"%sys"    => .{ .n = state.usage_pct.sys,    .u = .percent },
-            .@"%iowait" => .{ .n = state.usage_pct.iowait, .u = .percent },
-            .all        => .{ .n = state.usage_abs.all,    .u = .percent },
-            .user       => .{ .n = state.usage_abs.user,   .u = .percent },
-            .sys        => .{ .n = state.usage_abs.sys,    .u = .percent },
-            .iowait     => .{ .n = state.usage_abs.iowait, .u = .percent },
-            .intr       => unt.UnitSI(misc.calc(new.intr, old.intr, d)),
-            .ctxt       => unt.UnitSI(misc.calc(new.ctxt, old.ctxt, d)),
-            .forks      => unt.UnitSI(misc.calc(new.forks, old.forks, d)),
-            .running    => unt.UnitSI(new.running),
-            .blocked    => unt.UnitSI(new.blocked),
-            .softirq    => unt.UnitSI(misc.calc(new.softirq, old.softirq, d)),
-            .brlbars    => unreachable,
-            .blkbars    => unreachable,
-            // zig fmt: on
-        };
-        nu.write(writer, part.wopts, part.quiet);
+
+        if (bit & wd.opts.stats_mask != 0) {
+            unt.UnitSI(
+                misc.calc(
+                    new.stats[part.opt - typ.CpuOpt.STATS_OPTS_OFF],
+                    old.stats[part.opt - typ.CpuOpt.STATS_OPTS_OFF],
+                    part.diff,
+                ),
+            ).write(writer, part.wopts, part.quiet);
+            continue;
+        }
+
+        const needed = new.nr_cpux_entries * @max(BRLBARS[0][0].len, BLKBARS[0].len);
+        if (writer.unusedCapacityLen() < needed) {
+            @branchHint(.unlikely);
+            break;
+        }
+
+        const buffer = writer.buffer;
+        var pos = writer.end;
+
+        const opt: typ.CpuOpt = @enumFromInt(part.opt);
+        switch (opt.castTo(typ.CpuOpt.SpecialOpts)) {
+            .brlbars => {
+                var left: u32 = 0;
+                var right: u32 = 0;
+
+                for (1..1 + new.nr_cpux_entries) |i| {
+                    if (i & 1 == 1) {
+                        left = barIntensity(new.entries[i], old.entries[i], BRLBARS.len);
+                    } else {
+                        right = barIntensity(new.entries[i], old.entries[i], BRLBARS[0].len);
+                        buffer[pos..][0..3].* = BRLBARS[left][right];
+                        pos += 3;
+                    }
+                }
+                if (new.nr_cpux_entries & 1 == 1) {
+                    buffer[pos..][0..3].* = BRLBARS[left][0];
+                    pos += 3;
+                }
+            },
+            .blkbars => {
+                for (1..1 + new.nr_cpux_entries) |i| {
+                    buffer[pos..][0..3].* =
+                        BLKBARS[barIntensity(new.entries[i], old.entries[i], BLKBARS.len)];
+                    pos += 3;
+                }
+            },
+        }
+        writer.end = pos;
     }
     wd.format.last_str.writeBytes(writer, base);
 }

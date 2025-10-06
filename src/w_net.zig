@@ -358,7 +358,7 @@ pub noinline fn widget(
         part.str.writeBytes(writer, base);
 
         const opt: typ.NetOpt = @enumFromInt(part.opt);
-        if (wd.opts.bitOf(part.opt) & wd.opts.str_mask != 0) {
+        if (typ.optBit(part.opt) & wd.opts.str_mask != 0) {
             const str = switch (opt.castTo(typ.NetOpt.StringWriting)) {
                 // zig fmt: off
                 .arg   => mem.sliceTo(&wd.ifr.ifrn.name, 0),
