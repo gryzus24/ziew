@@ -76,22 +76,22 @@ const IFace = struct {
     comptime {
         const assert = std.debug.assert;
         const off = typ.NetOpt.NETDEV_OPTS_OFF;
-        assert(IFace.rx_bytes == @intFromEnum(typ.NetOpt.rx_bytes) - off);
-        assert(IFace.rx_pkts == @intFromEnum(typ.NetOpt.rx_pkts) - off);
-        assert(IFace.rx_errs == @intFromEnum(typ.NetOpt.rx_errs) - off);
-        assert(IFace.rx_drop == @intFromEnum(typ.NetOpt.rx_drop) - off);
-        assert(IFace.rx_fifo == @intFromEnum(typ.NetOpt.rx_fifo) - off);
-        assert(IFace.rx_frame == @intFromEnum(typ.NetOpt.rx_frame) - off);
-        assert(IFace.rx_compressed == @intFromEnum(typ.NetOpt.rx_compressed) - off);
-        assert(IFace.rx_multicast == @intFromEnum(typ.NetOpt.rx_multicast) - off);
-        assert(IFace.tx_bytes == @intFromEnum(typ.NetOpt.tx_bytes) - off);
-        assert(IFace.tx_pkts == @intFromEnum(typ.NetOpt.tx_pkts) - off);
-        assert(IFace.tx_errs == @intFromEnum(typ.NetOpt.tx_errs) - off);
-        assert(IFace.tx_drop == @intFromEnum(typ.NetOpt.tx_drop) - off);
-        assert(IFace.tx_fifo == @intFromEnum(typ.NetOpt.tx_fifo) - off);
-        assert(IFace.tx_colls == @intFromEnum(typ.NetOpt.tx_colls) - off);
-        assert(IFace.tx_carrier == @intFromEnum(typ.NetOpt.tx_carrier) - off);
-        assert(IFace.tx_compressed == @intFromEnum(typ.NetOpt.tx_compressed) - off);
+        assert(rx_bytes == @intFromEnum(typ.NetOpt.rx_bytes) - off);
+        assert(rx_pkts == @intFromEnum(typ.NetOpt.rx_pkts) - off);
+        assert(rx_errs == @intFromEnum(typ.NetOpt.rx_errs) - off);
+        assert(rx_drop == @intFromEnum(typ.NetOpt.rx_drop) - off);
+        assert(rx_fifo == @intFromEnum(typ.NetOpt.rx_fifo) - off);
+        assert(rx_frame == @intFromEnum(typ.NetOpt.rx_frame) - off);
+        assert(rx_compressed == @intFromEnum(typ.NetOpt.rx_compressed) - off);
+        assert(rx_multicast == @intFromEnum(typ.NetOpt.rx_multicast) - off);
+        assert(tx_bytes == @intFromEnum(typ.NetOpt.tx_bytes) - off);
+        assert(tx_pkts == @intFromEnum(typ.NetOpt.tx_pkts) - off);
+        assert(tx_errs == @intFromEnum(typ.NetOpt.tx_errs) - off);
+        assert(tx_drop == @intFromEnum(typ.NetOpt.tx_drop) - off);
+        assert(tx_fifo == @intFromEnum(typ.NetOpt.tx_fifo) - off);
+        assert(tx_colls == @intFromEnum(typ.NetOpt.tx_colls) - off);
+        assert(tx_carrier == @intFromEnum(typ.NetOpt.tx_carrier) - off);
+        assert(tx_compressed == @intFromEnum(typ.NetOpt.tx_compressed) - off);
     }
 
     pub fn setName(self: *@This(), name: []const u8) void {
