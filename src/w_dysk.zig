@@ -96,7 +96,7 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     f[Statfs.kb_total]  = (sfs.inner.f_bsize * sfs.inner.f_blocks) / 1024;
     f[Statfs.kb_free]   = (sfs.inner.f_bsize * sfs.inner.f_bfree) / 1024;
     f[Statfs.kb_avail]  = (sfs.inner.f_bsize * sfs.inner.f_bavail) / 1024;
-    f[Statfs.kb_used]   = sfs.fields[Statfs.kb_total] - sfs.fields[Statfs.kb_avail];
+    f[Statfs.kb_used]   = sfs.fields[Statfs.kb_total] - sfs.fields[Statfs.kb_free];
     f[Statfs.ino_total] = sfs.inner.f_files;
     f[Statfs.ino_free]  = sfs.inner.f_ffree;
     f[Statfs.ino_used]  = sfs.inner.f_files - sfs.inner.f_ffree;
