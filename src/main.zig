@@ -1,6 +1,6 @@
 const std = @import("std");
-const c = @import("c.zig").c;
 const cfg = @import("config.zig");
+const ext = @import("ext.zig");
 const log = @import("log.zig");
 const typ = @import("type.zig");
 
@@ -354,7 +354,7 @@ pub fn main() void {
             const ret = uio.sys_write(1, dst[0..pos]);
             if (ret <= 0) {
                 @branchHint(.cold);
-                if (ret == -c.EINTR) {
+                if (ret == -ext.c.EINTR) {
                     if (g_refresh_all) continue :refresh;
                     continue;
                 }
@@ -370,9 +370,9 @@ pub fn main() void {
         }
         var req = sleep_ts;
         while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {
-            -c.EFAULT => unreachable,
-            -c.EINTR => if (g_refresh_all) continue :refresh,
-            -c.EINVAL => unreachable,
+            -ext.c.EFAULT => unreachable,
+            -ext.c.EINTR => if (g_refresh_all) continue :refresh,
+            -ext.c.EINVAL => unreachable,
             else => break,
         };
     }

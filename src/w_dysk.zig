@@ -1,13 +1,13 @@
 const std = @import("std");
-const c = @import("c.zig").c;
 const color = @import("color.zig");
+const ext = @import("ext.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
 const uio = @import("util/io.zig");
 
 const Statfs = struct {
-    inner: c.struct_statfs,
+    inner: ext.struct_statfs,
     fields: [6]u64,
     opt_mask_pct_ino: typ.OptBit,
 
@@ -61,13 +61,27 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
         .fields = undefined,
         .opt_mask_pct_ino = wd.opt_mask.pct_ino,
     };
-    if (c.statfs(wd.getMountpoint(), &sfs.inner) != 0) {
-        const handler: typ.Widget.NoopColorHandler = .{};
-        const fg, const bg = w.check(handler, base);
-        typ.writeWidgetBeg(writer, fg, bg);
-        uio.writeStr(writer, wd.getMountpoint());
-        uio.writeStr(writer, ": <not mounted>");
-        return;
+    while (true) {
+        const ret = ext.sys_statfs(wd.getMountpoint(), &sfs.inner);
+        if (ret < 0) {
+            @branchHint(.unlikely);
+            const err = switch (ret) {
+                -ext.c.EACCES => "<no access>",
+                -ext.c.EFAULT => unreachable,
+                -ext.c.EINTR => continue,
+                -ext.c.ENAMETOOLONG => unreachable,
+                -ext.c.ENOENT, -ext.c.ENOTDIR => "<not mounted>",
+                -ext.c.ENOSYS => "<not supported>",
+                else => "<unlucky>",
+            };
+            const handler: typ.Widget.NoopColorHandler = .{};
+            const fg, const bg = w.check(handler, base);
+            typ.writeWidgetBeg(writer, fg, bg);
+            for ([3][]const u8{ wd.getMountpoint(), ": ", err }) |s|
+                uio.writeStr(writer, s);
+            return;
+        }
+        break;
     }
 
     // zig fmt: off

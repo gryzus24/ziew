@@ -1,6 +1,6 @@
 const std = @import("std");
-const c = @import("c.zig").c;
 const color = @import("color.zig");
+const ext = @import("ext.zig");
 const typ = @import("type.zig");
 
 const udiv = @import("util/div.zig");
@@ -20,10 +20,10 @@ pub noinline fn widget(
     const wd = w.data.TIME;
 
     var ts: linux.timespec = undefined;
-    var tm: c.struct_tm = undefined;
+    var tm: ext.struct_tm = undefined;
 
     _ = linux.clock_gettime(.REALTIME, &ts);
-    _ = c.localtime_r(&ts.sec, &tm);
+    _ = ext.localtime_r(&ts.sec, &tm);
 
     typ.writeWidgetBeg(writer, w.fg.static, w.bg.static);
     for (wd.format.parts.get(base)) |*part| {
@@ -31,7 +31,7 @@ pub noinline fn widget(
 
         const dst = writer.buffer[writer.end..];
         writer.end += switch (@as(typ.TimeOpt, @enumFromInt(part.opt))) {
-            .time => c.strftime(dst.ptr, dst.len, wd.getStrf(), &tm),
+            .time => ext.strftime(dst.ptr, dst.len, wd.getStrf(), &tm),
             .@"1", .@"2", .@"3", .@"4", .@"5", .@"6", .@"7", .@"8", .@"9" => advance: {
                 const DIVS: [9]u32 = comptime .{
                     100_000_000, 10_000_000, 1_000_000,

@@ -1,6 +1,6 @@
 const std = @import("std");
-const c = @import("c.zig").c;
 const color = @import("color.zig");
+const ext = @import("ext.zig");
 const log = @import("log.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
@@ -163,12 +163,12 @@ fn getInet(sock: linux.fd_t, ifr: *linux.ifreq, out: *[INET_BUF_SIZE]u8) usize {
             }
             break :blk i - 1;
         },
-        -c.EADDRNOTAVAIL => blk: {
+        -ext.c.EADDRNOTAVAIL => blk: {
             const s = "<no address>";
             @memcpy(out[0..s.len], s);
             break :blk s.len;
         },
-        -c.ENODEV => blk: {
+        -ext.c.ENODEV => blk: {
             const s = "<no device>";
             @memcpy(out[0..s.len], s);
             break :blk s.len;
@@ -200,7 +200,7 @@ fn getFlags(
             }
             break :blk .{ n, up };
         },
-        -c.ENODEV => blk: {
+        -ext.c.ENODEV => blk: {
             out[0] = '-';
             break :blk .{ 1, false };
         },
