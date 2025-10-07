@@ -51,7 +51,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                             displayed.
                               * d - show a difference since last refresh
                                     instead of a total,
-                              * q - do not display values equal to zero,
+                              * q - do not display values equal to zero.
               * ALIGNMENT - either < for left alignment or > for right
                             alignment - reserves space for the longest
                             representation of a number (no alignment if
@@ -119,7 +119,7 @@ Every option and color configuration for each *Widget* is documented below.
 
     FORMAT options
       * arg   - the provided <STRFTIME STRING> as specified in the argument,
-      * time  - time as formatted by the strftime(3) function.
+      * time  - time as formatted by the strftime(3) function,
       * <N>   - as an extension of the strftime(3) functionality this widget
                 supports displaying fractional part of the timestamp acquired
                 from the clock_gettime(2) syscall. Specify the number of digits
@@ -212,14 +212,14 @@ Every option and color configuration for each *Widget* is documented below.
     FORMAT options
       * arg          - the provided <MOUNTPOINT> name as specified in the
                        argument,
-      * [%]total     - total filesystem space.
+      * [%]total     - total filesystem space,
       * [%]free      - free filesystem space (with reserved blocks included,
                        e.g. ext4 reserves 5% of total filesystem space for
                        the super-user),
       * [%]available - available disk space for the normal user,
       * [%]used      - used filesystem space (total - free),
-      * [%]ino_total - number of filesystem inodes.
-      * [%]ino_free  - number of free filesystem inodes.
+      * [%]ino_total - number of filesystem inodes,
+      * [%]ino_free  - number of free filesystem inodes,
       * [%]ino_used  - number of used filesystem inodes (ino_total - ino_free).
 
     Colors
