@@ -5,52 +5,27 @@ const typ = @import("type.zig");
 
 const uio = @import("util/io.zig");
 
-const ascii = std.ascii;
 const fs = std.fs;
 const mem = std.mem;
 
 // == private =================================================================
 
-const FILE_END_MARKERS = ascii.whitespace[1..] ++ .{'\x00'};
-comptime {
-    if (mem.indexOfScalarPos(u8, FILE_END_MARKERS, 0, ' ') != null)
-        @compileError("0x20 in file end markers");
-}
+fn acceptColor(buf: []const u8, i: usize) struct { color.Hex, usize } {
+    var j = i;
+    while (j < buf.len and buf[j] <= ' ') : (j += 1) {}
+    if (j == buf.len or buf[j] != '#') return .{ .default, j };
 
-fn writeBlockError(
-    writer: *uio.Writer,
-    fg: color.Hex,
-    bg: color.Hex,
-    prefix: []const u8,
-    msg: []const u8,
-) void {
-    typ.writeWidgetBeg(writer, fg, bg);
-    uio.writeStr(writer, prefix);
-    uio.writeStr(writer, ": ");
-    uio.writeStr(writer, msg);
-}
-
-fn acceptColor(str: []const u8, pos: *usize) color.Hex {
-    var i: usize = 0;
-    defer pos.* += i;
-
-    i = mem.indexOfNonePos(u8, str, i, " \t") orelse return .default;
-
-    const beg = i;
-    if (str[beg] != '#') return .default;
-
-    i = mem.indexOfAnyPos(u8, str, beg + 1, " \t") orelse str.len;
-
-    if (color.acceptHex(str[beg..i])) |ok| {
-        return .init(ok);
-    } else {
-        return .default;
+    const k = j;
+    while (j < buf.len and buf[j] > ' ') : (j += 1) {}
+    if (color.acceptHex(buf[k..j])) |ok| {
+        return .{ .init(ok), j };
     }
+    return .{ .default, j };
 }
 
-fn readFileUntil(file: fs.File, endmarkers: []const u8, buf: *[typ.WIDGET_BUF_MAX]u8) ![]const u8 {
+fn readFileUntil(file: fs.File, comptime char: u8, buf: *[typ.WIDGET_BUF_MAX]u8) ![]const u8 {
     const n = try file.read(buf);
-    const end = mem.indexOfAny(u8, buf[0..n], endmarkers) orelse n;
+    const end = mem.indexOfScalarPos(u8, buf[0..n], 0, char) orelse n;
     return buf[0..end];
 }
 
@@ -60,18 +35,15 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     const wd = w.data.READ;
 
     const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| {
-        return writeBlockError(
-            writer,
-            w.fg.static,
-            w.bg.static,
-            wd.getBasename(),
-            @errorName(e),
-        );
+        typ.writeWidgetBeg(writer, w.fg.static, w.bg.static);
+        for ([3][]const u8{ wd.getBasename(), ": ", @errorName(e) }) |s|
+            uio.writeStr(writer, s);
+        return;
     };
     defer file.close();
 
     var buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
-    const content = readFileUntil(file, FILE_END_MARKERS, &buf) catch |e|
+    const data = readFileUntil(file, '\n', &buf) catch |e|
         log.fatal(&.{ "READ: read: ", wd.getBasename(), @errorName(e) });
 
     var pos: usize = 0;
@@ -79,10 +51,11 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     var bg = w.bg.static;
 
     for (wd.format.parts.get(base)) |*part| {
-        if (@as(typ.ReadOpt, @enumFromInt(part.opt)) == .content) {
-            fg = acceptColor(content[pos..], &pos);
-            bg = acceptColor(content[pos..], &pos);
-            if (pos < content.len and ascii.isWhitespace(content[pos])) pos += 1;
+        const opt: typ.ReadOpt = @enumFromInt(part.opt);
+        if (opt == .content) {
+            fg, pos = acceptColor(data, pos);
+            bg, pos = acceptColor(data, pos);
+            if (pos < data.len and data[pos] <= ' ') pos += 1;
             break;
         }
     }
@@ -90,17 +63,31 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
-        uio.writeStr(
-            writer,
-            switch (@as(typ.ReadOpt, @enumFromInt(part.opt))) {
-                // zig fmt: off
-                .arg      => mem.sliceTo(wd.getPath(), 0),
-                .basename => wd.getBasename(),
-                .content  => content[pos..],
-                .raw      => content[0..],
-                // zig fmt: on
+
+        const opt: typ.ReadOpt = @enumFromInt(part.opt);
+        const dst = writer.buffer[writer.end..];
+
+        writer.end += switch (opt) {
+            .arg => advance: {
+                const s = wd.getPath();
+                var i: usize = 0;
+                while (i < dst.len and s[i] != 0) : (i += 1) dst[i] = s[i];
+                break :advance i;
             },
-        );
+            .basename => advance: {
+                const s = wd.getBasename();
+                const n = @min(s.len, dst.len);
+                var i: usize = 0;
+                while (i < n) : (i += 1) dst[i] = s[i];
+                break :advance n;
+            },
+            .content, .raw => advance: {
+                const s = data[@intFromBool(opt == .content) * pos ..];
+                const n = @min(s.len, dst.len);
+                @memcpy(dst[0..n], s[0..n]);
+                break :advance n;
+            },
+        };
     }
     wd.format.last_str.writeBytes(writer, base);
 }
