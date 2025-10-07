@@ -295,15 +295,15 @@ pub const NumUnit = struct {
     }
 };
 
-pub fn SizeKb(value: u64) NumUnit {
+pub inline fn SizeKb(value: u64) NumUnit {
     return KB_UNIT(F5608.init(value));
 }
 
-pub fn SizeBytes(value: u64) NumUnit {
+pub inline fn SizeBytes(value: u64) NumUnit {
     return KB_UNIT(F5608.init(value).div(1024));
 }
 
-pub fn Percent(value: u64, total: u64) NumUnit {
+pub inline fn Percent(value: u64, total: u64) NumUnit {
     return .{ .n = F5608.init(value * 100).div(total), .u = .percent };
 }
 
