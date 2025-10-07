@@ -212,14 +212,15 @@ Every option and color configuration for each *Widget* is documented below.
     FORMAT options
       * arg          - the provided <MOUNTPOINT> name as specified in the
                        argument,
-      * [%]used      - used filesystem space,
+      * [%]total     - total filesystem space.
       * [%]free      - free filesystem space (with reserved blocks included,
                        e.g. ext4 reserves 5% of total filesystem space for
                        the super-user),
       * [%]available - available disk space for the normal user,
-      * [%]total     - total filesystem space.
+      * [%]used      - used filesystem space (total - free),
       * [%]ino_total - number of filesystem inodes.
       * [%]ino_free  - number of free filesystem inodes.
+      * [%]ino_used  - number of used filesystem inodes (ino_total - ino_free).
 
     Colors
       [+] default
