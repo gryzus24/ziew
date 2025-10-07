@@ -153,7 +153,7 @@ pub noinline fn widget(
         part.str.writeBytes(writer, base);
 
         var nu: unt.NumUnit = undefined;
-        if (typ.optBit(part.opt) & wd.opts.pct_mask != 0) {
+        if (typ.optBit(part.opt) & wd.opt_mask.pct != 0) {
             nu = unt.Percent(
                 state.fields[part.opt],
                 state.total(),

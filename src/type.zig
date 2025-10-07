@@ -142,53 +142,56 @@ pub const Widget = struct {
 
         pub const MemData = struct {
             format: Format,
-            opts: struct {
-                pct_mask: OptBit,
-            },
+            opt_mask: Masks,
+
+            const Masks = struct {
+                pct: OptBit,
+
+                const zero: Masks = .{ .pct = 0 };
+            };
 
             pub fn init(reg: *umem.Region, format: Format, base: [*]const u8) !*@This() {
                 const ret = try reg.frontAlloc(@This());
                 ret.format = format;
-                var pct_mask: OptBit = 0;
+                var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
                     const opt: MemOpt = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
 
                     if (opt.checkCastTo(MemOpt.PercentOpts)) |_|
-                        pct_mask |= bit;
+                        opt_mask.pct |= bit;
                 }
-                ret.opts = .{
-                    .pct_mask = pct_mask,
-                };
+                ret.opt_mask = opt_mask;
                 return ret;
             }
         };
 
         pub const CpuData = struct {
             format: Format,
-            opts: struct {
-                usage_mask: OptBit,
-                stats_mask: OptBit,
-            },
+            opt_mask: Masks,
+
+            const Masks = struct {
+                usage: OptBit,
+                stats: OptBit,
+
+                const zero: Masks = .{ .usage = 0, .stats = 0 };
+            };
 
             pub fn init(reg: *umem.Region, format: Format, base: [*]const u8) !*@This() {
                 const ret = try reg.frontAlloc(@This());
                 ret.format = format;
-                var usage_mask: OptBit = 0;
-                var stats_mask: OptBit = 0;
+                var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
                     const opt: CpuOpt = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
 
-                    if (opt.checkCastTo(CpuOpt.UsageOpts)) |_|
-                        usage_mask |= bit;
-                    if (opt.checkCastTo(CpuOpt.StatsOpts)) |_|
-                        stats_mask |= bit;
+                    if (opt.checkCastTo(CpuOpt.UsageOpts)) |_| {
+                        opt_mask.usage |= bit;
+                    } else if (opt.checkCastTo(CpuOpt.StatsOpts)) |_| {
+                        opt_mask.stats |= bit;
+                    }
                 }
-                ret.opts = .{
-                    .usage_mask = usage_mask,
-                    .stats_mask = stats_mask,
-                };
+                ret.opt_mask = opt_mask;
                 return ret;
             }
         };
@@ -197,10 +200,25 @@ pub const Widget = struct {
             format: Format,
             len: u8,
             mountpoint: [MOUNTPOINT_SIZE]u8,
+            opt_mask: Masks,
 
-            const MOUNTPOINT_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1;
+            const Masks = struct {
+                pct: OptBit,
+                pct_ino: OptBit,
+                size: OptBit,
 
-            pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
+                const zero: Masks = .{ .pct = 0, .pct_ino = 0, .size = 0 };
+            };
+
+            const MOUNTPOINT_SIZE =
+                DATA_SIZE_MAX - @sizeOf(Format) - 1 - @sizeOf(Masks);
+
+            pub fn init(
+                reg: *umem.Region,
+                arg: []const u8,
+                format: Format,
+                base: [*]const u8,
+            ) !*@This() {
                 if (arg.len >= MOUNTPOINT_SIZE)
                     log.fatal(&.{"DISK: mountpoint path too long"});
 
@@ -209,6 +227,20 @@ pub const Widget = struct {
                 ret.len = @intCast(arg.len);
                 @memcpy(ret.mountpoint[0..arg.len], arg);
                 ret.mountpoint[arg.len] = 0;
+                var opt_mask: Masks = .zero;
+                for (format.parts.get(base)) |*part| {
+                    const opt: DiskOpt = @enumFromInt(part.opt);
+                    const bit = optBit(part.opt);
+
+                    if (opt.checkCastTo(DiskOpt.PercentOpts)) |_| {
+                        opt_mask.pct |= bit;
+                        if (opt.checkCastTo(DiskOpt.PercentInoOpts)) |_|
+                            opt_mask.pct_ino |= bit;
+                    } else if (opt.checkCastTo(DiskOpt.SizeOpts)) |_| {
+                        opt_mask.size |= bit;
+                    }
+                }
+                ret.opt_mask = opt_mask;
                 return ret;
             }
 
@@ -220,14 +252,23 @@ pub const Widget = struct {
         pub const NetData = struct {
             format: Format,
             ifr: linux.ifreq,
-            opts: struct {
+            opt_mask: Masks,
+
+            const Masks = struct {
                 enabled: Flags,
-                string_mask: OptBit,
-                netdev_mask: OptBit,
-                netdev_size_mask: OptBit,
+                string: OptBit,
+                netdev: OptBit,
+                netdev_size: OptBit,
 
                 const Flags = PackedFlagsFromEnum(NetOpt, OptBit);
-            },
+
+                const zero: Masks = .{
+                    .enabled = @bitCast(@as(OptBit, 0)),
+                    .string = 0,
+                    .netdev = 0,
+                    .netdev_size = 0,
+                };
+            };
 
             pub fn init(
                 reg: *umem.Region,
@@ -243,28 +284,21 @@ pub const Widget = struct {
                 @memset(ret.ifr.ifrn.name[0..], 0);
                 @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
 
-                var enabled: OptBit = 0;
-                var string_mask: OptBit = 0;
-                var netdev_mask: OptBit = 0;
-                var netdev_size_mask: OptBit = 0;
+                var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
                     const opt: NetOpt = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
 
-                    enabled |= bit;
-                    if (opt.checkCastTo(NetOpt.StringOpts)) |_|
-                        string_mask |= bit;
-                    if (opt.checkCastTo(NetOpt.NetDevRequired)) |_|
-                        netdev_mask |= bit;
-                    if (opt.checkCastTo(NetOpt.NetDevSizeOpts)) |_|
-                        netdev_size_mask |= bit;
+                    if (opt.checkCastTo(NetOpt.StringOpts)) |_| {
+                        opt_mask.string |= bit;
+                    } else if (opt.checkCastTo(NetOpt.NetDevOpts)) |_| {
+                        opt_mask.netdev |= bit;
+                        if (opt.checkCastTo(NetOpt.NetDevSizeOpts)) |_|
+                            opt_mask.netdev_size |= bit;
+                    }
                 }
-                ret.opts = .{
-                    .enabled = @bitCast(enabled),
-                    .string_mask = string_mask,
-                    .netdev_mask = netdev_mask,
-                    .netdev_size_mask = netdev_size_mask,
-                };
+                ret.opt_mask = opt_mask;
+                ret.opt_mask.enabled = @bitCast(opt_mask.string | opt_mask.netdev);
                 return ret;
             }
         };
@@ -492,18 +526,50 @@ pub const CpuOpt = enum {
 };
 
 pub const DiskOpt = enum {
-    arg,
-    @"%used",
+    @"%total",
     @"%free",
     @"%available",
+    @"%used",
+    @"%ino_total",
+    @"%ino_free",
     total,
-    used,
     free,
     available,
+    used,
+    ino_total,
+    ino_free,
 
-    pub const ColorSupported = MakeEnumSubset(@This(), &.{
-        .@"%used", .@"%free", .@"%available",
+    arg,
+
+    pub const SIZE_OPTS_OFF = @intFromEnum(DiskOpt.total);
+    pub const SI_INO_OPTS_OFF = 6;
+
+    comptime {
+        const assert = std.debug.assert;
+        assert(@intFromEnum(DiskOpt.@"%total") ==
+            @intFromEnum(DiskOpt.total) - SIZE_OPTS_OFF);
+        assert(@intFromEnum(DiskOpt.@"%ino_total") ==
+            @intFromEnum(DiskOpt.ino_total) - SI_INO_OPTS_OFF);
+    }
+
+    pub const PercentOpts = MakeEnumSubset(@This(), &.{
+        .@"%total",     .@"%free",     .@"%available", .@"%used",
+        .@"%ino_total", .@"%ino_free",
     });
+
+    pub const PercentInoOpts = MakeEnumSubset(@This(), &.{
+        .@"%ino_total", .@"%ino_free",
+    });
+
+    pub const SizeOpts = MakeEnumSubset(@This(), &.{
+        .total, .free, .available, .used,
+    });
+
+    pub const ColorSupported = PercentOpts;
+
+    pub fn checkCastTo(self: @This(), comptime T: type) ?T {
+        return enums.fromInt(T, @intFromEnum(self));
+    }
 };
 
 pub const NetOpt = enum {
@@ -535,7 +601,7 @@ pub const NetOpt = enum {
         .arg, .inet, .flags, .state,
     });
 
-    pub const NetDevRequired = MakeEnumSubset(@This(), &.{
+    pub const NetDevOpts = MakeEnumSubset(@This(), &.{
         .rx_bytes, .rx_pkts,  .rx_errs,       .rx_drop,
         .rx_fifo,  .rx_frame, .rx_compressed, .rx_multicast,
         .tx_bytes, .tx_pkts,  .tx_errs,       .tx_drop,

@@ -6,19 +6,46 @@ const unt = @import("unit.zig");
 
 const uio = @import("util/io.zig");
 
-const ColorHandler = struct {
-    used_kb: u64,
-    free_kb: u64,
-    avail_kb: u64,
-    total_kb: u64,
+const Statfs = struct {
+    inner: c.struct_statfs,
+    fields: [6]u64,
+    opt_mask_pct_ino: typ.OptBit,
+
+    const kb_total = 0;
+    const kb_free = 1;
+    const kb_avail = 2;
+    const kb_used = 3;
+    const ino_total = 4;
+    const ino_free = 5;
+
+    comptime {
+        const assert = std.debug.assert;
+        assert(kb_total == @intFromEnum(typ.DiskOpt.@"%total"));
+        assert(kb_free == @intFromEnum(typ.DiskOpt.@"%free"));
+        assert(kb_avail == @intFromEnum(typ.DiskOpt.@"%available"));
+        assert(kb_used == @intFromEnum(typ.DiskOpt.@"%used"));
+        assert(ino_total == @intFromEnum(typ.DiskOpt.@"%ino_total"));
+        assert(ino_free == @intFromEnum(typ.DiskOpt.@"%ino_free"));
+        const off = typ.DiskOpt.SIZE_OPTS_OFF;
+        assert(kb_total == @intFromEnum(typ.DiskOpt.total) - off);
+        assert(kb_free == @intFromEnum(typ.DiskOpt.free) - off);
+        assert(kb_avail == @intFromEnum(typ.DiskOpt.available) - off);
+        assert(kb_used == @intFromEnum(typ.DiskOpt.used) - off);
+        assert(ino_total == @intFromEnum(typ.DiskOpt.ino_total) - off);
+        assert(ino_free == @intFromEnum(typ.DiskOpt.ino_free) - off);
+    }
 
     pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
         return color.firstColorGEThreshold(
-            switch (@as(typ.DiskOpt.ColorSupported, @enumFromInt(ac.opt))) {
-                .@"%used" => unt.Percent(self.used_kb, self.total_kb),
-                .@"%free" => unt.Percent(self.free_kb, self.total_kb),
-                .@"%available" => unt.Percent(self.avail_kb, self.total_kb),
-            }.n.roundU24AndTruncate(),
+            unt.Percent(
+                self.fields[ac.opt],
+                self.fields[
+                    if (typ.optBit(ac.opt) & self.opt_mask_pct_ino != 0)
+                        Statfs.ino_total
+                    else
+                        Statfs.kb_total
+                ],
+            ).n.roundU24AndTruncate(),
             ac.pairs.get(base),
         );
     }
@@ -29,9 +56,12 @@ const ColorHandler = struct {
 pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.data.DISK;
 
-    // TODO: use statvfs instead of this
-    var sfs: c.struct_statfs = undefined;
-    if (c.statfs(wd.getMountpoint(), &sfs) != 0) {
+    var sfs: Statfs = .{
+        .inner = undefined,
+        .fields = undefined,
+        .opt_mask_pct_ino = wd.opt_mask.pct_ino,
+    };
+    if (c.statfs(wd.getMountpoint(), &sfs.inner) != 0) {
         const handler: typ.Widget.NoopColorHandler = .{};
         const fg, const bg = w.check(handler, base);
         typ.writeWidgetBeg(writer, fg, bg);
@@ -40,61 +70,45 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
         return;
     }
 
-    // convert block size to 1K for calculations
-    if (sfs.f_bsize == 4096) {
-        sfs.f_bsize = 1024;
-        sfs.f_blocks *= 4;
-        sfs.f_bfree *= 4;
-        sfs.f_bavail *= 4;
-    } else {
-        while (sfs.f_bsize < 1024) {
-            sfs.f_bsize *= 2;
-            sfs.f_blocks /= 2;
-            sfs.f_bfree /= 2;
-            sfs.f_bavail /= 2;
-        }
-        while (sfs.f_bsize > 1024) {
-            sfs.f_bsize /= 2;
-            sfs.f_blocks *= 2;
-            sfs.f_bfree *= 2;
-            sfs.f_bavail *= 2;
-        }
-    }
+    // zig fmt: off
+    const f = &sfs.fields;
+    f[Statfs.kb_total]  = (sfs.inner.f_bsize * sfs.inner.f_blocks) / 1024;
+    f[Statfs.kb_free]   = (sfs.inner.f_bsize * sfs.inner.f_bfree) / 1024;
+    f[Statfs.kb_avail]  = (sfs.inner.f_bsize * sfs.inner.f_bavail) / 1024;
+    f[Statfs.kb_used]   = sfs.fields[Statfs.kb_total] - sfs.fields[Statfs.kb_avail];
+    f[Statfs.ino_total] = sfs.inner.f_files;
+    f[Statfs.ino_free]  = sfs.inner.f_ffree;
+    // zig fmt: on
 
-    const total_kb = sfs.f_blocks;
-    const free_kb = sfs.f_bfree;
-    const avail_kb = sfs.f_bavail;
-    const used_kb = sfs.f_blocks - sfs.f_bavail;
-
-    const ch: ColorHandler = .{
-        .used_kb = used_kb,
-        .free_kb = free_kb,
-        .avail_kb = avail_kb,
-        .total_kb = total_kb,
-    };
-
-    const fg, const bg = w.check(ch, base);
+    const fg, const bg = w.check(sfs, base);
     typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
-        const diskopt: typ.DiskOpt = @enumFromInt(part.opt);
-        if (diskopt == .arg) {
+        const opt: typ.DiskOpt = @enumFromInt(part.opt);
+        const bit = typ.optBit(part.opt);
+
+        if (opt == .arg) {
             uio.writeStr(writer, wd.getMountpoint());
             continue;
         }
-        const nu = switch (diskopt) {
-            // zig fmt: off
-            .arg           => unreachable,
-            .@"%used"      => unt.Percent(used_kb, total_kb),
-            .@"%free"      => unt.Percent(free_kb, total_kb),
-            .@"%available" => unt.Percent(avail_kb, total_kb),
-            .total         => unt.SizeKb(total_kb),
-            .used          => unt.SizeKb(used_kb),
-            .free          => unt.SizeKb(free_kb),
-            .available     => unt.SizeKb(avail_kb),
-            // zig fmt: on
-        };
+
+        var nu: unt.NumUnit = undefined;
+        if (bit & wd.opt_mask.pct != 0) {
+            nu = unt.Percent(
+                sfs.fields[part.opt],
+                sfs.fields[
+                    if (bit & wd.opt_mask.pct_ino != 0)
+                        Statfs.ino_total
+                    else
+                        Statfs.kb_total
+                ],
+            );
+        } else if (bit & wd.opt_mask.size != 0) {
+            nu = unt.SizeKb(sfs.fields[part.opt - typ.DiskOpt.SIZE_OPTS_OFF]);
+        } else {
+            nu = unt.UnitSI(sfs.fields[part.opt - typ.DiskOpt.SI_INO_OPTS_OFF]);
+        }
         nu.write(writer, part.wopts, part.quiet);
     }
     wd.format.last_str.writeBytes(writer, base);

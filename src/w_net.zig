@@ -264,7 +264,7 @@ pub const NetState = struct {
         };
         const wants_netdev = blk: {
             for (widgets) |*w|
-                if (w.id == .NET and w.data.NET.opts.netdev_mask != 0)
+                if (w.id == .NET and w.data.NET.opt_mask.netdev != 0)
                     break :blk true;
             break :blk false;
         };
@@ -316,7 +316,7 @@ pub noinline fn widget(
     var iff_len: usize = 0;
     var up = false;
 
-    const enabled = wd.opts.enabled;
+    const enabled = wd.opt_mask.enabled;
     if (enabled.inet)
         inet_len = getInet(state.sock, &wd.ifr, &inetbuf);
     if (enabled.flags or enabled.state or w.fg == .active or w.bg == .active)
@@ -325,7 +325,7 @@ pub noinline fn widget(
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
     var ifs_match = false;
-    if (state.getNetdev(wd.opts.netdev_mask)) |ok| {
+    if (state.getNetdev(wd.opt_mask.netdev)) |ok| {
         const new, const old = ok.getCurrPrev();
 
         const Hash = @Vector(linux.IFNAMESIZE, u8);
@@ -362,7 +362,7 @@ pub noinline fn widget(
         const opt: typ.NetOpt = @enumFromInt(part.opt);
         const bit = typ.optBit(part.opt);
 
-        if (bit & wd.opts.string_mask != 0) {
+        if (bit & wd.opt_mask.string != 0) {
             const SZ = 16;
             const expected = @max(wd.ifr.ifrn.name.len, INET_BUF_SIZE);
             comptime std.debug.assert(expected == SZ);
@@ -408,7 +408,7 @@ pub noinline fn widget(
         }
 
         var nu: unt.NumUnit = undefined;
-        if (bit & wd.opts.netdev_size_mask != 0) {
+        if (bit & wd.opt_mask.netdev_size != 0) {
             nu = unt.SizeKb(0);
         } else {
             nu = unt.UnitSI(0);
@@ -418,7 +418,7 @@ pub noinline fn widget(
             const a = new_if.?.fields[part.opt - typ.NetOpt.NETDEV_OPTS_OFF];
             const b = old_if.?.fields[part.opt - typ.NetOpt.NETDEV_OPTS_OFF];
 
-            if (bit & wd.opts.netdev_size_mask != 0) {
+            if (bit & wd.opt_mask.netdev_size != 0) {
                 nu = unt.SizeBytes(misc.calc(a, b, part.diff));
             } else {
                 nu = unt.UnitSI(misc.calc(a, b, part.diff));

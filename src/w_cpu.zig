@@ -339,7 +339,7 @@ pub noinline fn widget(
         part.str.writeBytes(writer, base);
 
         const bit = typ.optBit(part.opt);
-        if (bit & wd.opts.usage_mask != 0) {
+        if (bit & wd.opt_mask.usage != 0) {
             @as(unt.NumUnit, .{
                 .n = state.usage[part.opt],
                 .u = .percent,
@@ -347,7 +347,7 @@ pub noinline fn widget(
             continue;
         }
 
-        if (bit & wd.opts.stats_mask != 0) {
+        if (bit & wd.opt_mask.stats != 0) {
             unt.UnitSI(
                 misc.calc(
                     new.stats[part.opt - typ.CpuOpt.STATS_OPTS_OFF],
