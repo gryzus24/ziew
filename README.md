@@ -201,8 +201,8 @@ Every option and color configuration for each *Widget* is documented below.
 
     Displays filesystem statistics obtained via the statfs(2) syscall.
 
-    Values are displayed in a human readable form in the power of two units:
-    K M G T, or as a percentage of total filesystem space if prefixed
+    Size values are displayed in a human readable form in the power of two
+    units: K M G T, or as a percentage of total filesystem space if prefixed
     with a % sign.
 
     Required
@@ -217,7 +217,9 @@ Every option and color configuration for each *Widget* is documented below.
                        e.g. ext4 reserves 5% of total filesystem space for
                        the super-user),
       * [%]available - available disk space for the normal user,
-      * total        - total filesystem space.
+      * [%]total     - total filesystem space.
+      * [%]ino_total - number of filesystem inodes.
+      * [%]ino_free  - number of free filesystem inodes.
 
     Colors
       [+] default
