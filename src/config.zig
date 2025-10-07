@@ -533,6 +533,8 @@ pub fn parse(
     buffer: *uio.Buffer,
     scratch: []align(16) u8,
 ) ParseError!ParseResult {
+    const bentry = reg.save(u8, .back);
+
     var widgets: []typ.Widget = &.{};
     var current: *typ.Widget = undefined;
 
@@ -685,16 +687,20 @@ pub fn parse(
         }
     }
 
-    // Copy to front so we have a chance of fitting everything in one page.
-    const b = reg.back;
-    reg.back = reg.head.len;
-    var widgets_front: []typ.Widget = &.{};
-    for (widgets) |*w| {
-        const ret = try reg.frontPushVec(&widgets_front);
-        ret.* = w.*;
-    }
-    @memset(reg.head[b..], 0);
-    return .{ .ok = widgets_front };
+    // Get a reference to widgets allocated at the back, essentially
+    // a `widgets.ptr` but as an offset from `reg.head.ptr`.
+    const bexit = reg.save(u8, .back);
+
+    // Mark as free, restoring the region to the state at function's entry.
+    reg.restore(bentry);
+
+    // Move widgets from the back to the front, so we may have a chance
+    // of fitting everything tightly in a single memory page.
+    const ret = reg.frontAllocMany(typ.Widget, widgets.len) catch unreachable;
+    @memmove(ret[0..widgets.len], widgets);
+    @memset(reg.head[bexit.off..bentry.off], 0);
+
+    return .{ .ok = ret };
 }
 
 fn testParse(comptime str: []const u8, reg: *umem.Region, scratch: []align(16) u8) !ParseResult {

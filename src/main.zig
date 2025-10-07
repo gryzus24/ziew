@@ -27,7 +27,7 @@ const time = std.time;
 // This is all dynamic memory available to the program.
 // Four 4K pages minus some fiddle with BSS, DATA, and alignment,
 // packing everything tightly to avoid internal fragmentation.
-var g_bss: [0x4000 - 1024 - 40 - 0x40]u8 align(64) = undefined;
+var g_bss: [0x4000 - 1024 - 48 - 0x40]u8 align(64) = undefined;
 
 // USR1 signal latch.
 var g_refresh_all = false;
@@ -149,12 +149,18 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
     };
     defer file.close();
 
-    var linebuf: [256]u8 = undefined;
-    var scratch: [256]u8 align(16) = undefined;
+    const parse_bentry = reg.save(u8, .back);
+    defer reg.restore(parse_bentry);
 
-    var bf: uio.BufferedFile = .init(file.handle, &linebuf);
+    var bf: uio.BufferedFile = .init(
+        file.handle,
+        reg.backAllocMany(u8, 2048) catch unreachable,
+    );
+    const scratch: []align(16) u8 = @ptrCast(
+        reg.backAllocMany(u128, 512 / 16) catch unreachable,
+    );
 
-    const ret = cfg.parse(reg, &bf.buffer, &scratch) catch |e| switch (e) {
+    const ret = cfg.parse(reg, &bf.buffer, scratch) catch |e| switch (e) {
         error.NoSpaceLeft => log.fatal(&.{"config: out of memory"}),
         error.NoNewline => log.fatal(&.{"config: line too long"}),
         error.ReadError => log.fatal(&.{"config: file read error"}),
