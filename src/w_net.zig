@@ -130,11 +130,7 @@ fn openIoctlSocket() linux.fd_t {
     return @intCast(ret);
 }
 
-fn getInet(
-    sock: linux.fd_t,
-    ifr: *const linux.ifreq,
-    inetbuf: *[INET_BUF_SIZE]u8,
-) []const u8 {
+fn getInet(sock: linux.fd_t, ifr: *linux.ifreq, out: *[INET_BUF_SIZE]u8) usize {
     // the std.os.linux.E enum adds over 10kB of bloat to the executable,
     // use libc constants instead - we don't need pretty errno names.
     const ret: isize = @bitCast(linux.ioctl(sock, linux.SIOCGIFADDR, @intFromPtr(ifr)));
@@ -154,54 +150,59 @@ fn getInet(
                 if (t > 99) {
                     const q, const r = udiv.cMultShiftDivMod(t, 100, 255);
                     const b, const a = ustr.digits2_lut(r);
-                    inetbuf[i..][0..4].* = .{ '0' | @as(u8, @intCast(q)), b, a, '.' };
+                    out[i..][0..4].* = .{ '0' | @as(u8, @intCast(q)), b, a, '.' };
                     i += 4;
                 } else if (t > 9) {
                     const b, const a = ustr.digits2_lut(t);
-                    inetbuf[i..][0..3].* = .{ b, a, '.' };
+                    out[i..][0..3].* = .{ b, a, '.' };
                     i += 3;
                 } else {
-                    inetbuf[i..][0..2].* = .{ '0' | @as(u8, @intCast(t)), '.' };
+                    out[i..][0..2].* = .{ '0' | @as(u8, @intCast(t)), '.' };
                     i += 2;
                 }
             }
-            break :blk inetbuf[0 .. i - 1];
+            break :blk i - 1;
         },
-        -c.EADDRNOTAVAIL => "<no address>",
-        -c.ENODEV => "<no device>",
+        -c.EADDRNOTAVAIL => blk: {
+            const s = "<no address>";
+            @memcpy(out[0..s.len], s);
+            break :blk s.len;
+        },
+        -c.ENODEV => blk: {
+            const s = "<no device>";
+            @memcpy(out[0..s.len], s);
+            break :blk s.len;
+        },
         else => log.fatal(&.{"NET: SIOCGIFADDR"}),
     };
 }
 
 fn getFlags(
     sock: linux.fd_t,
-    ifr: *const linux.ifreq,
-    iffbuf: *[IFF_BUF_MAX]u8,
-    up: *bool,
-) []const u8 {
+    ifr: *linux.ifreq,
+    out: *[IFF_BUF_MAX]u8,
+) struct { usize, bool } {
     // interestingly, the SIOCGIF*P*FLAGS ioctl is not implemented for INET?
     // check switch prong of: v6.6-rc3/source/net/ipv4/af_inet.c#L974
     const ret: isize = @bitCast(linux.ioctl(sock, linux.SIOCGIFFLAGS, @intFromPtr(ifr)));
     return switch (ret) {
         0 => blk: {
-            if (ifr.ifru.flags.RUNNING)
-                up.* = true;
-
+            const up = ifr.ifru.flags.RUNNING;
             const flags: u16 = @bitCast(ifr.ifru.flags);
 
             var n: usize = 0;
             inline for (IFF_BIT_NAMES_ALPHA_ITER) |i| {
                 if (flags & (1 << i) != 0) {
                     const s = IFF_BIT_NAMES[i];
-                    @memcpy(iffbuf[n..][0..s.len], s);
+                    @memcpy(out[n..][0..s.len], s);
                     n += s.len;
                 }
             }
-            break :blk iffbuf[0..n];
+            break :blk .{ n, up };
         },
         -c.ENODEV => blk: {
-            iffbuf[0] = '-';
-            break :blk iffbuf[0..1];
+            out[0] = '-';
+            break :blk .{ 1, false };
         },
         else => log.fatal(&.{"NET: SIOCGIFFLAGS"}),
     };
@@ -308,22 +309,22 @@ pub noinline fn widget(
 ) void {
     const wd = w.data.NET;
 
-    var inetbuf: [INET_BUF_SIZE]u8 = @splat(0);
-    var iffbuf: [IFF_BUF_MAX]u8 = @splat(0);
+    var inetbuf: [INET_BUF_SIZE]u8 = undefined;
+    var iffbuf: [IFF_BUF_MAX]u8 = undefined;
 
-    var inet: []const u8 = undefined;
-    var flags: []const u8 = undefined;
+    var inet_len: usize = 0;
+    var iff_len: usize = 0;
     var up = false;
 
     const enabled = wd.opts.enabled;
     if (enabled.inet)
-        inet = getInet(state.sock, &wd.ifr, &inetbuf);
+        inet_len = getInet(state.sock, &wd.ifr, &inetbuf);
     if (enabled.flags or enabled.state or w.fg == .active or w.bg == .active)
-        flags = getFlags(state.sock, &wd.ifr, &iffbuf, &up);
+        iff_len, up = getFlags(state.sock, &wd.ifr, &iffbuf);
 
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
-    var ifs_match: bool = undefined;
+    var ifs_match = false;
     if (state.getNetdev(wd.opts.netdev_mask)) |ok| {
         const new, const old = ok.getCurrPrev();
 
@@ -362,15 +363,47 @@ pub noinline fn widget(
         const bit = typ.optBit(part.opt);
 
         if (bit & wd.opts.string_mask != 0) {
-            uio.writeStr(
-                writer,
-                switch (opt.castTo(typ.NetOpt.StringOpts)) {
-                    .arg => mem.sliceTo(&wd.ifr.ifrn.name, 0),
-                    .inet => inet,
-                    .flags => flags,
-                    .state => if (up) "up" else "down",
+            const SZ = 16;
+            const expected = @max(wd.ifr.ifrn.name.len, INET_BUF_SIZE);
+            comptime std.debug.assert(expected == SZ);
+
+            if (@max(expected, iff_len) > writer.unusedCapacityLen()) {
+                @branchHint(.unlikely);
+                break;
+            }
+            const dst = writer.buffer[writer.end..];
+            writer.end += switch (opt.castTo(typ.NetOpt.StringOpts)) {
+                .arg => advance: {
+                    const V = @Vector(SZ, u8);
+                    const name: V = wd.ifr.ifrn.name;
+                    dst[0..SZ].* = name;
+                    const where0: u16 = @bitCast(name == @as(V, @splat(0)));
+                    break :advance @ctz(where0);
                 },
-            );
+                .inet => advance: {
+                    dst[0..SZ].* = inetbuf;
+                    break :advance inet_len;
+                },
+                .flags => advance: {
+                    if (iff_len > expected) {
+                        @branchHint(.cold);
+                        uio.writeStr(writer, iffbuf[0..iff_len]);
+                    } else {
+                        dst[0..SZ].* = iffbuf[0..SZ].*;
+                    }
+                    break :advance iff_len;
+                },
+                .state => advance: {
+                    // Making it branchless gives the compiler some
+                    // wild ideas of actually generating code where
+                    // `up` is assumed unpredictable, hoisting this
+                    // entire calculation up to the function entry.
+                    // Not necessary, but pretty cool, so it stays.
+                    const i = @intFromBool(up) * @as(usize, 4);
+                    dst[0..4].* = "downup  "[i..][0..4].*;
+                    break :advance 4 - (i >> 1);
+                },
+            };
             continue;
         }
 
