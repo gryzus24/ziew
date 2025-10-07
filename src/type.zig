@@ -423,7 +423,7 @@ pub const Widget = struct {
 };
 
 pub const TimeOpt = enum {
-    arg,
+    time,
     @"1",
     @"2",
     @"3",
@@ -433,7 +433,7 @@ pub const TimeOpt = enum {
     @"7",
     @"8",
     @"9",
-    time,
+    arg,
 
     pub const ColorSupported = enum {};
 };

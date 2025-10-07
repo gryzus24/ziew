@@ -28,14 +28,11 @@ pub noinline fn widget(
     typ.writeWidgetBeg(writer, w.fg.static, w.bg.static);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
-        switch (@as(typ.TimeOpt, @enumFromInt(part.opt))) {
-            .arg => uio.writeStr(writer, mem.sliceTo(wd.getStrf(), 0)),
-            .time => {
-                const dst = writer.buffer[writer.end..];
-                const nr_written = c.strftime(dst.ptr, dst.len, wd.getStrf(), &tm);
-                writer.end += nr_written;
-            },
-            .@"1", .@"2", .@"3", .@"4", .@"5", .@"6", .@"7", .@"8", .@"9" => {
+
+        const dst = writer.buffer[writer.end..];
+        writer.end += switch (@as(typ.TimeOpt, @enumFromInt(part.opt))) {
+            .time => c.strftime(dst.ptr, dst.len, wd.getStrf(), &tm),
+            .@"1", .@"2", .@"3", .@"4", .@"5", .@"6", .@"7", .@"8", .@"9" => advance: {
                 const DIVS: [9]u32 = comptime .{
                     100_000_000, 10_000_000, 1_000_000,
                     100_000,     10_000,     1_000,
@@ -55,9 +52,7 @@ pub noinline fn widget(
                 };
                 var cur: u64 = @intCast(ts.nsec);
 
-                var n = @min(part.opt, writer.unusedCapacityLen());
-                const dst = writer.buffer[writer.end..];
-
+                var n = @min(part.opt, dst.len);
                 var i: usize = 0;
                 while (n >= 2) {
                     const ms = MULT_SHFT[i + 1];
@@ -72,9 +67,15 @@ pub noinline fn widget(
                     dst[i] = '0' | @as(u8, @intCast(q));
                     i += 1;
                 }
-                writer.end += i;
+                break :advance i;
             },
-        }
+            .arg => advance: {
+                const s = wd.getStrf();
+                var i: usize = 0;
+                while (i < dst.len and s[i] != 0) : (i += 1) dst[i] = s[i];
+                break :advance i;
+            },
+        };
     }
     wd.format.last_str.writeBytes(writer, base);
 }
