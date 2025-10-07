@@ -8,7 +8,7 @@ const uio = @import("util/io.zig");
 
 const Statfs = struct {
     inner: ext.struct_statfs,
-    fields: [6]u64,
+    fields: [7]u64,
     opt_mask_pct_ino: typ.OptBit,
 
     const kb_total = 0;
@@ -17,6 +17,7 @@ const Statfs = struct {
     const kb_used = 3;
     const ino_total = 4;
     const ino_free = 5;
+    const ino_used = 6;
 
     comptime {
         const assert = std.debug.assert;
@@ -26,13 +27,19 @@ const Statfs = struct {
         assert(kb_used == @intFromEnum(typ.DiskOpt.@"%used"));
         assert(ino_total == @intFromEnum(typ.DiskOpt.@"%ino_total"));
         assert(ino_free == @intFromEnum(typ.DiskOpt.@"%ino_free"));
-        const off = typ.DiskOpt.SIZE_OPTS_OFF;
-        assert(kb_total == @intFromEnum(typ.DiskOpt.total) - off);
-        assert(kb_free == @intFromEnum(typ.DiskOpt.free) - off);
-        assert(kb_avail == @intFromEnum(typ.DiskOpt.available) - off);
-        assert(kb_used == @intFromEnum(typ.DiskOpt.used) - off);
-        assert(ino_total == @intFromEnum(typ.DiskOpt.ino_total) - off);
-        assert(ino_free == @intFromEnum(typ.DiskOpt.ino_free) - off);
+        assert(ino_used == @intFromEnum(typ.DiskOpt.@"%ino_used"));
+        const size_off = typ.DiskOpt.SIZE_OPTS_OFF;
+        assert(kb_total == @intFromEnum(typ.DiskOpt.total) - size_off);
+        assert(kb_free == @intFromEnum(typ.DiskOpt.free) - size_off);
+        assert(kb_avail == @intFromEnum(typ.DiskOpt.available) - size_off);
+        assert(kb_used == @intFromEnum(typ.DiskOpt.used) - size_off);
+        assert(ino_total == @intFromEnum(typ.DiskOpt.ino_total) - size_off);
+        assert(ino_free == @intFromEnum(typ.DiskOpt.ino_free) - size_off);
+        assert(ino_used == @intFromEnum(typ.DiskOpt.ino_used) - size_off);
+        const si_ino_off = typ.DiskOpt.SI_INO_OPTS_OFF;
+        assert(ino_total == @intFromEnum(typ.DiskOpt.ino_total) - si_ino_off);
+        assert(ino_free == @intFromEnum(typ.DiskOpt.ino_free) - si_ino_off);
+        assert(ino_used == @intFromEnum(typ.DiskOpt.ino_used) - si_ino_off);
     }
 
     pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
@@ -92,6 +99,7 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     f[Statfs.kb_used]   = sfs.fields[Statfs.kb_total] - sfs.fields[Statfs.kb_avail];
     f[Statfs.ino_total] = sfs.inner.f_files;
     f[Statfs.ino_free]  = sfs.inner.f_ffree;
+    f[Statfs.ino_used]  = sfs.inner.f_files - sfs.inner.f_ffree;
     // zig fmt: on
 
     const fg, const bg = w.check(sfs, base);

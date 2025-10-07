@@ -532,33 +532,29 @@ pub const DiskOpt = enum {
     @"%used",
     @"%ino_total",
     @"%ino_free",
+    @"%ino_used",
     total,
     free,
     available,
     used,
     ino_total,
     ino_free,
+    ino_used,
 
     arg,
 
+    // Distance from %total.
     pub const SIZE_OPTS_OFF = @intFromEnum(DiskOpt.total);
-    pub const SI_INO_OPTS_OFF = 6;
-
-    comptime {
-        const assert = std.debug.assert;
-        assert(@intFromEnum(DiskOpt.@"%total") ==
-            @intFromEnum(DiskOpt.total) - SIZE_OPTS_OFF);
-        assert(@intFromEnum(DiskOpt.@"%ino_total") ==
-            @intFromEnum(DiskOpt.ino_total) - SI_INO_OPTS_OFF);
-    }
+    // Distance from %ino_total.
+    pub const SI_INO_OPTS_OFF = 7;
 
     pub const PercentOpts = MakeEnumSubset(@This(), &.{
         .@"%total",     .@"%free",     .@"%available", .@"%used",
-        .@"%ino_total", .@"%ino_free",
+        .@"%ino_total", .@"%ino_free", .@"%ino_used",
     });
 
     pub const PercentInoOpts = MakeEnumSubset(@This(), &.{
-        .@"%ino_total", .@"%ino_free",
+        .@"%ino_total", .@"%ino_free", .@"%ino_used",
     });
 
     pub const SizeOpts = MakeEnumSubset(@This(), &.{
