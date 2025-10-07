@@ -86,12 +86,12 @@ const Stat = struct {
     comptime {
         const assert = std.debug.assert;
         const off = typ.CpuOpt.STATS_OPTS_OFF;
-        assert(Stat.intr == @intFromEnum(typ.CpuOpt.intr) - off);
-        assert(Stat.softirq == @intFromEnum(typ.CpuOpt.softirq) - off);
-        assert(Stat.blocked == @intFromEnum(typ.CpuOpt.blocked) - off);
-        assert(Stat.running == @intFromEnum(typ.CpuOpt.running) - off);
-        assert(Stat.forks == @intFromEnum(typ.CpuOpt.forks) - off);
-        assert(Stat.ctxt == @intFromEnum(typ.CpuOpt.ctxt) - off);
+        assert(intr == @intFromEnum(typ.CpuOpt.intr) - off);
+        assert(softirq == @intFromEnum(typ.CpuOpt.softirq) - off);
+        assert(blocked == @intFromEnum(typ.CpuOpt.blocked) - off);
+        assert(running == @intFromEnum(typ.CpuOpt.running) - off);
+        assert(forks == @intFromEnum(typ.CpuOpt.forks) - off);
+        assert(ctxt == @intFromEnum(typ.CpuOpt.ctxt) - off);
     }
 
     pub fn initZero(reg: *umem.Region, nr_possible_cpus: u32) !@This() {
