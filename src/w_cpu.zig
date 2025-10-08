@@ -41,7 +41,7 @@ const Cpu = struct {
         const a: V = .{ self.user, self.sys, self.idle, self.iowait };
         const b: V = .{ old.user, old.sys, old.idle, old.iowait };
         const diff = a - b;
-        const diff_total = @reduce(.Add, diff);
+        const diff_total = diff[0] + diff[1] + diff[2] + diff[3];
 
         if (DELTA_ZERO_CHECK and diff_total == 0)
             return .zero;
@@ -226,7 +226,7 @@ const BLKBARS: [9][3]u8 = .{
     "⠀".*, "▁".*, "▂".*, "▃".*, "▄".*, "▅".*, "▆".*, "▇".*, "█".*,
 };
 
-fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
+inline fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
     if (range <= 1) @compileError("range <= 1");
     const step = comptime unt.F5608.init(100).div(range - 1).u;
     const off = step - 1;
