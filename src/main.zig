@@ -153,10 +153,10 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
 
     var bf: uio.BufferedFile = .init(
         fd,
-        reg.backAllocMany(u8, 2048) catch unreachable,
+        reg.allocMany(u8, 2048, .back) catch unreachable,
     );
     const scratch: []align(16) u8 = @ptrCast(
-        reg.backAllocMany(u128, 512 / 16) catch unreachable,
+        reg.allocMany(u128, 512 / 16, .back) catch unreachable,
     );
 
     const ret = cfg.parse(reg, &bf.buffer, scratch) catch |e| switch (e) {
@@ -182,11 +182,11 @@ fn getConfigPath(
     const sp = reg.save(u8, .front);
     var n: usize = 0;
     if (posix.getenvZ("XDG_CONFIG_HOME")) |ok| {
-        n += (try reg.frontWriteStr(ok)).len;
-        n += (try reg.frontWriteStr("/ziew/config\x00")).len;
+        n += (try reg.writeStr(ok, .front)).len;
+        n += (try reg.writeStr("/ziew/config\x00", .front)).len;
     } else if (posix.getenvZ("HOME")) |ok| {
-        n += (try reg.frontWriteStr(ok)).len;
-        n += (try reg.frontWriteStr("/.config/ziew/config\x00")).len;
+        n += (try reg.writeStr(ok, .front)).len;
+        n += (try reg.writeStr("/.config/ziew/config\x00", .front)).len;
     } else {
         log.warn(&.{"neither $HOME nor $XDG_CONFIG_HOME set!"});
         return error.NoPath;
@@ -275,8 +275,8 @@ pub fn main() void {
         else => {},
     };
 
-    var views = try reg.frontAllocMany([]const u8, widgets.len);
-    var bufs = try reg.frontAllocMany([typ.WIDGET_BUF_MAX]u8, widgets.len);
+    var views = try reg.allocMany([]const u8, widgets.len, .front);
+    var bufs = try reg.allocMany([typ.WIDGET_BUF_MAX]u8, widgets.len, .front);
 
     const base = reg.head.ptr;
 

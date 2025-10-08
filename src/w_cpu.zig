@@ -96,7 +96,7 @@ const Stat = struct {
 
     pub fn initZero(reg: *umem.Region, nr_possible_cpus: u32) !@This() {
         // First entry is the cumulative stat of every CPU.
-        const entries = try reg.frontAllocMany(Cpu, nr_possible_cpus + 1);
+        const entries = try reg.allocMany(Cpu, nr_possible_cpus + 1, .front);
         for (0..entries.len) |i| entries[i] = .zero;
         return .{
             .entries = entries.ptr,

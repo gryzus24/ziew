@@ -238,7 +238,7 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             return .fail("unknown option", split.opt);
         };
 
-        var ptr = try reg.frontPushVec(&parts);
+        var ptr = try reg.pushVec(&parts, .front);
         ptr.* = .initDefault(.zero, opt);
 
         for (flags) |ch| switch (ch | 0x20) {
@@ -275,7 +275,7 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             .err => unreachable,
         };
         const sp = reg.save(u8, .front);
-        if (s.len > 0) _ = try reg.frontWriteStr(s);
+        if (s.len > 0) _ = try reg.writeStr(s, .front);
         part.str = .{ .off = @intCast(sp.off), .len = @intCast(s.len) };
     }
 
@@ -286,7 +286,7 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             .err => unreachable,
         };
         const sp = reg.save(u8, .front);
-        if (s.len > 0) _ = try reg.frontWriteStr(s);
+        if (s.len > 0) _ = try reg.writeStr(s, .front);
         last_str = .{ .off = @intCast(sp.off), .len = @intCast(s.len) };
     }
 
@@ -450,10 +450,10 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
 
                 const hex = field[sep + 1 ..];
                 if (color.acceptHex(hex)) |ok| {
-                    const ptr = try tmp.frontPushVec(&result.color.data.?.active.pairs);
+                    const ptr = try tmp.pushVec(&result.color.data.?.active.pairs, .front);
                     ptr.* = .init(thresh, ok);
                 } else if (hex.len == 0 or mem.eql(u8, hex, "default")) {
-                    const ptr = try tmp.frontPushVec(&result.color.data.?.active.pairs);
+                    const ptr = try tmp.pushVec(&result.color.data.?.active.pairs, .front);
                     ptr.* = .initDefault(thresh);
                 } else {
                     return .fail("bad hex", .{ .beg = split.beg + sep + 1, .end = split.end });
@@ -555,7 +555,7 @@ pub fn parse(
 
         switch (try parseLine(&tmp, line)) {
             .widget => |wi| {
-                current = try reg.backPushVec(&widgets);
+                current = try reg.pushVec(&widgets, .back);
                 current.* = .initDefault(wi.id, undefined);
                 if (wi.interval) |ok| {
                     current.interval = ok;
@@ -653,7 +653,7 @@ pub fn parse(
                         }
                         const T = color.Active.Pair;
                         const sp = reg.save(T, .front);
-                        const ptr = try reg.frontAllocMany(T, active.pairs.len);
+                        const ptr = try reg.allocMany(T, active.pairs.len, .front);
                         @memcpy(ptr, active.pairs);
 
                         switch (co.type) {
@@ -696,7 +696,7 @@ pub fn parse(
 
     // Move widgets from the back to the front, so we may have a chance
     // of fitting everything tightly in a single memory page.
-    const ret = reg.frontAllocMany(typ.Widget, widgets.len) catch unreachable;
+    const ret = reg.allocMany(typ.Widget, widgets.len, .front) catch unreachable;
     @memmove(ret[0..widgets.len], widgets);
     @memset(reg.head[bexit.off..bentry.off], 0);
 

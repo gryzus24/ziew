@@ -111,7 +111,7 @@ const Interfaces = struct {
         if (self.free.popFirst()) |free| {
             new = @fieldParentPtr("node", free);
         } else {
-            new = try self.reg.frontAlloc(IFace);
+            new = try self.reg.alloc(IFace, .front);
         }
         self.list.prepend(&new.node);
         return new;

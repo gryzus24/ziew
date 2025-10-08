@@ -7,9 +7,10 @@ const meta = std.meta;
 
 // == private =================================================================
 
-fn printAlloc(reg: *Region, str: []const u8, comptime T: type, nmemb: usize, pad: usize) void {
+fn printAlloc(reg: *Region, where: Region.Where, comptime T: type, nmemb: usize, pad: usize) void {
     const front, const back = reg.spaceUsed();
     const total_size = @sizeOf(T) * nmemb + pad;
+    const str = if (where == .front) "FRONT" else "BACK ";
 
     var writer = fs.File.stderr().writer(&.{});
     const stderr = &writer.interface;
@@ -61,106 +62,100 @@ pub const Region = struct {
     /// Region's name - for debugging purposes.
     name: []const u8,
 
+    pub const Error = error{NoSpaceLeft};
+
+    pub const Where = enum(u8) { front, back };
+
     pub const SavePoint = struct {
         where: Where,
         off: usize,
-
-        pub const Where = enum(u8) { front, back };
     };
-    pub const AllocError = error{NoSpaceLeft};
 
     pub fn init(bytes: []align(16) u8, name: []const u8) Region {
         return .{ .head = bytes, .front = 0, .back = bytes.len, .name = name };
     }
 
-    pub inline fn frontAllocMany(self: *@This(), comptime T: type, nmemb: usize) AllocError![]T {
-        const pad = (~self.front +% 1) & (@alignOf(T) - 1);
-        const aligned_off = self.front + pad;
-        const avail = self.back -| aligned_off;
+    pub inline fn allocMany(self: *@This(), comptime T: type, nmemb: usize, comptime where: Where) Error![]T {
+        const allocation = switch (where) {
+            .front => alloc: {
+                const pad = (~self.front +% 1) & (@alignOf(T) - 1);
+                const aligned_off = self.front + pad;
+                const avail = self.back -| aligned_off;
 
-        if (TRACE_ALLOCATIONS)
-            printAlloc(self, "FRONT", T, nmemb, pad);
+                if (TRACE_ALLOCATIONS)
+                    printAlloc(self, where, T, nmemb, pad);
 
-        if (OOM_CHECK and nmemb > avail / @sizeOf(T)) {
-            @branchHint(.unlikely);
-            return error.NoSpaceLeft;
-        }
-        const alloc_size = @sizeOf(T) * nmemb;
+                if (OOM_CHECK and nmemb > avail / @sizeOf(T)) {
+                    @branchHint(.unlikely);
+                    return error.NoSpaceLeft;
+                }
+                const alloc_size = @sizeOf(T) * nmemb;
+                self.front = aligned_off + alloc_size;
+                break :alloc self.head[aligned_off..][0..alloc_size];
+            },
+            .back => alloc: {
+                const pad = self.back & (@alignOf(T) - 1);
+                const aligned_off = self.back - pad;
+                const avail = aligned_off -| self.front;
 
-        self.front = aligned_off + alloc_size;
+                if (TRACE_ALLOCATIONS)
+                    printAlloc(self, where, T, nmemb, pad);
 
-        const allocation = self.head[aligned_off..][0..alloc_size];
+                if (OOM_CHECK and nmemb > avail / @sizeOf(T)) {
+                    @branchHint(.unlikely);
+                    return error.NoSpaceLeft;
+                }
+                const alloc_size = @sizeOf(T) * nmemb;
+                self.back = aligned_off - alloc_size;
+                break :alloc self.head[self.back..][0..alloc_size];
+            },
+        };
         if (builtin.mode == .Debug)
             @memset(allocation, 0xaa);
 
         return @alignCast(mem.bytesAsSlice(T, allocation));
     }
 
-    pub inline fn frontAlloc(self: *@This(), comptime T: type) AllocError!*T {
-        return @ptrCast(try self.frontAllocMany(T, 1));
+    pub inline fn alloc(self: *@This(), comptime T: type, where: Where) Error!*T {
+        return @ptrCast(try self.allocMany(T, 1, where));
     }
 
-    pub inline fn backAllocMany(self: *@This(), comptime T: type, nmemb: usize) ![]T {
-        const pad = self.back & (@alignOf(T) - 1);
-        const aligned_off = self.back - pad;
-        const avail = aligned_off -| self.front;
-
-        if (TRACE_ALLOCATIONS)
-            printAlloc(self, "BACK ", T, nmemb, pad);
-
-        if (OOM_CHECK and nmemb > avail / @sizeOf(T)) {
-            @branchHint(.unlikely);
-            return error.NoSpaceLeft;
-        }
-        const alloc_size = @sizeOf(T) * nmemb;
-
-        self.back = aligned_off - alloc_size;
-
-        const allocation = self.head[self.back..][0..alloc_size];
-        if (builtin.mode == .Debug)
-            @memset(allocation, 0xaa);
-
-        return @alignCast(mem.bytesAsSlice(T, allocation));
-    }
-
-    pub inline fn backAlloc(self: *@This(), comptime T: type) AllocError!*T {
-        return @ptrCast(try self.backAllocMany(T, 1));
-    }
-
-    pub inline fn frontWriteStr(self: *@This(), str: []const u8) AllocError![]const u8 {
-        const retptr = try self.frontAllocMany(u8, str.len);
+    pub inline fn writeStr(self: *@This(), str: []const u8, comptime where: Where) Error![]const u8 {
+        const retptr = try self.allocMany(u8, str.len, where);
         @memcpy(retptr, str);
         return retptr;
     }
 
-    pub inline fn frontWriteStrZ(self: *@This(), str: []const u8) AllocError![:0]const u8 {
-        const retptr = try self.frontAllocMany(u8, str.len + 1);
+    pub inline fn writeStrZ(self: *@This(), str: []const u8, comptime where: Where) Error![:0]const u8 {
+        const retptr = try self.allocMany(u8, str.len + 1, where);
         return memcpyZ(retptr, str) orelse unreachable;
     }
 
-    pub inline fn frontPushVec(self: *@This(), vec: anytype) !*meta.Child(@TypeOf(vec.*)) {
+    pub inline fn pushVec(self: *@This(), vec: anytype, comptime where: Where) !*meta.Child(@TypeOf(vec.*)) {
         const T = meta.Child(@TypeOf(vec.*));
-        var retptr = try self.frontAllocMany(T, 1);
-        if (vec.len == 0) {
-            vec.* = retptr;
-        } else {
-            vec.len += 1;
-        }
-        return &retptr[0];
+        return switch (where) {
+            .front => blk: {
+                var retptr = try self.allocMany(T, 1, .front);
+                if (vec.len == 0) {
+                    vec.* = retptr;
+                } else {
+                    vec.len += 1;
+                }
+                break :blk &retptr[0];
+            },
+            .back => blk: {
+                var retptr = try self.allocMany(T, 1, .back);
+                if (vec.len > 0) {
+                    retptr.len = vec.len + 1;
+                    mem.copyForwards(T, retptr, vec.*);
+                }
+                vec.* = retptr;
+                break :blk &retptr[retptr.len - 1];
+            },
+        };
     }
 
-    pub inline fn backPushVec(self: *@This(), vec: anytype) !*meta.Child(@TypeOf(vec.*)) {
-        const T = meta.Child(@TypeOf(vec.*));
-        var retptr = try self.backAllocMany(T, 1);
-        if (vec.len > 0) {
-            retptr.len = vec.len + 1;
-            mem.copyForwards(T, retptr, vec.*);
-        }
-        vec.* = retptr;
-        return &retptr[retptr.len - 1];
-    }
-
-    pub inline fn save(self: @This(), comptime T: type, where: SavePoint.Where) SavePoint {
+    pub inline fn save(self: @This(), comptime T: type, comptime where: Where) SavePoint {
         return .{
             .where = where,
             .off = switch (where) {

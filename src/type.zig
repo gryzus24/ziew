@@ -128,7 +128,7 @@ pub const Widget = struct {
                 if (arg.len >= STRF_SIZE)
                     log.fatal(&.{"TIME: strftime format too long"});
 
-                const ret = try reg.frontAlloc(@This());
+                const ret = try reg.alloc(@This(), .front);
                 ret.format = format;
                 @memcpy(ret.strf[0..arg.len], arg);
                 ret.strf[arg.len] = 0;
@@ -151,7 +151,7 @@ pub const Widget = struct {
             };
 
             pub fn init(reg: *umem.Region, format: Format, base: [*]const u8) !*@This() {
-                const ret = try reg.frontAlloc(@This());
+                const ret = try reg.alloc(@This(), .front);
                 ret.format = format;
                 var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
@@ -178,7 +178,7 @@ pub const Widget = struct {
             };
 
             pub fn init(reg: *umem.Region, format: Format, base: [*]const u8) !*@This() {
-                const ret = try reg.frontAlloc(@This());
+                const ret = try reg.alloc(@This(), .front);
                 ret.format = format;
                 var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
@@ -222,7 +222,7 @@ pub const Widget = struct {
                 if (arg.len >= MOUNTPOINT_SIZE)
                     log.fatal(&.{"DISK: mountpoint path too long"});
 
-                const ret = try reg.frontAlloc(@This());
+                const ret = try reg.alloc(@This(), .front);
                 ret.format = format;
                 ret.len = @intCast(arg.len);
                 @memcpy(ret.mountpoint[0..arg.len], arg);
@@ -279,7 +279,7 @@ pub const Widget = struct {
                 if (arg.len >= linux.IFNAMESIZE)
                     log.fatal(&.{ "NET: interface name too long: ", arg });
 
-                const ret = try reg.frontAlloc(@This());
+                const ret = try reg.alloc(@This(), .front);
                 ret.format = format;
                 @memset(ret.ifr.ifrn.name[0..], 0);
                 @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
@@ -320,7 +320,7 @@ pub const Widget = struct {
                 if (arg.len > avail)
                     log.fatal(&.{"BAT: battery name too long"});
 
-                const ret = try reg.frontAlloc(@This());
+                const ret = try reg.alloc(@This(), .front);
                 ret.format = format;
                 ret.ps_off = prefix.len;
                 ret.ps_len = @intCast(arg.len);
@@ -366,7 +366,7 @@ pub const Widget = struct {
                 @memcpy(path[off..][0..basename.len], basename);
                 path[off + basename.len] = 0;
 
-                const ret = try reg.frontAlloc(@This());
+                const ret = try reg.alloc(@This(), .front);
                 ret.* = .{
                     .format = format,
                     .basename_off = @intCast(off),
