@@ -31,6 +31,8 @@ pub fn memcpyZ(dst: []u8, src: []const u8) ?[:0]const u8 {
 
 pub const TRACE_ALLOCATIONS = false;
 
+pub const OOM_CHECK = true;
+
 /// Region of address space that grows in both directions; from lower to higher
 /// address - front - and from higher to lower (stack-like) - back.
 ///
@@ -79,7 +81,7 @@ pub const Region = struct {
         if (TRACE_ALLOCATIONS)
             printAlloc(self, "FRONT", T, nmemb, pad);
 
-        if (nmemb > avail / @sizeOf(T)) {
+        if (OOM_CHECK and nmemb > avail / @sizeOf(T)) {
             @branchHint(.unlikely);
             return error.NoSpaceLeft;
         }
@@ -106,7 +108,7 @@ pub const Region = struct {
         if (TRACE_ALLOCATIONS)
             printAlloc(self, "BACK ", T, nmemb, pad);
 
-        if (nmemb > avail / @sizeOf(T)) {
+        if (OOM_CHECK and nmemb > avail / @sizeOf(T)) {
             @branchHint(.unlikely);
             return error.NoSpaceLeft;
         }
