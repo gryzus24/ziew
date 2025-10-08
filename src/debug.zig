@@ -219,7 +219,7 @@ pub noinline fn perfEventStart() [3]linux.fd_t {
 
 pub noinline fn perfEventStop(fds: [3]linux.fd_t) void {
     defer {
-        for (fds) |fd| _ = linux.close(fd);
+        for (fds) |fd| uio.close(fd);
     }
 
     for (fds) |fd| _ = linux.ioctl(fd, linux.PERF.EVENT_IOC.DISABLE, 0);

@@ -1,7 +1,20 @@
 const std = @import("std");
+
 const uio = @import("util/io.zig");
-const fs = std.fs;
+const ustr = @import("util/str.zig");
+
 const linux = std.os.linux;
+
+// == private =================================================================
+
+fn openLogStrings(prefix: []const u8, strings: []const []const u8) Log {
+    const log: Log = .open();
+    log.log(prefix);
+    for (strings) |s| log.log(s);
+    return log;
+}
+
+// == public ==================================================================
 
 pub const Log = struct {
     fd: linux.fd_t,
@@ -10,20 +23,20 @@ pub const Log = struct {
 
     pub fn open() Log {
         const path = "/tmp/ziew.log";
-        const file = fs.cwd().createFileZ(path, .{ .truncate = false }) catch |e| switch (e) {
+        const EACCES = "open: " ++ path ++ ": may be sticky - only author can modify\n";
+        const EOTHER = "open: " ++ path ++ ": unexpected error\n";
+
+        const fd = uio.openCWA(path, 0o644) catch |e| switch (e) {
             error.AccessDenied => {
-                _ = uio.sys_write(2, "open: " ++ path ++ ": probably sticky, only author can modify\n");
+                _ = uio.sys_write(2, EACCES);
                 return .nofile;
             },
             else => {
-                _ = uio.sys_write(2, "open: " ++ path ++ ": ");
-                _ = uio.sys_write(2, @errorName(e));
-                _ = uio.sys_write(2, "\n");
+                _ = uio.sys_write(2, EOTHER);
                 linux.exit(1);
             },
         };
-        file.seekFromEnd(0) catch {};
-        return .{ .fd = file.handle };
+        return .{ .fd = fd };
     }
 
     pub fn log(self: @This(), str: []const u8) void {
@@ -34,24 +47,36 @@ pub const Log = struct {
 
     pub fn close(self: @This()) void {
         if (self.fd != -1)
-            _ = linux.close(self.fd);
+            uio.close(self.fd);
     }
 };
 
 pub fn fatal(strings: []const []const u8) noreturn {
     @branchHint(.cold);
-    const log: Log = .open();
-    log.log("fatal: ");
-    for (strings) |s| log.log(s);
+    const log = openLogStrings("fatal: ", strings);
     log.log("\n");
+    linux.exit(1);
+}
+
+pub fn fatalSys(strings: []const []const u8, sysret: isize) noreturn {
+    @branchHint(.cold);
+    std.debug.assert(sysret < 0);
+
+    const log = openLogStrings("fatal: ", strings);
+    var buf: [8]u8 = undefined;
+
+    var pos = ustr.unsafeU64toa(&buf, @as(u64, @intCast(-sysret)) & 0x0fff);
+    @memcpy(buf[0..pos], buf[buf.len - pos ..]); // can't overlap
+    buf[pos] = '\n';
+    pos += 1;
+
+    log.log(buf[0..pos]);
     linux.exit(1);
 }
 
 pub fn warn(strings: []const []const u8) void {
     @branchHint(.cold);
-    const log: Log = .open();
+    const log = openLogStrings("warning: ", strings);
     defer log.close();
-    log.log("warning: ");
-    for (strings) |s| log.log(s);
     log.log("\n");
 }

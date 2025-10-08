@@ -7,7 +7,7 @@ const unt = @import("unit.zig");
 const uio = @import("util/io.zig");
 const ustr = @import("util/str.zig");
 
-const fs = std.fs;
+const linux = std.os.linux;
 const mem = std.mem;
 
 const BatSetBits = packed struct(u32) {
@@ -82,7 +82,7 @@ const Bat = struct {
 pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.data.BAT;
 
-    const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| switch (e) {
+    const fd = uio.open0(wd.getPath()) catch |e| switch (e) {
         error.FileNotFound => {
             const handler: typ.Widget.NoopColorHandler = .{};
             const fg, const bg = w.check(handler, base);
@@ -91,13 +91,13 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
             uio.writeStr(writer, ": <not found>");
             return;
         },
-        else => log.fatal(&.{ "BAT: check: ", @errorName(e) }),
+        else => log.fatal(&.{ "BAT: open: ", @errorName(e) }),
     };
-    defer file.close();
+    defer uio.close(fd);
 
     var buf: [1024]u8 = undefined;
-    const nr_read = file.read(&buf) catch |e|
-        log.fatal(&.{ "BAT: read: ", @errorName(e) });
+    const nr_read = uio.pread(fd, &buf, 0) orelse
+        log.fatal(&.{"BAT: read error"});
     if (nr_read == 0)
         log.fatal(&.{"BAT: empty uevent"});
 

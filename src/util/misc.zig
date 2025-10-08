@@ -1,18 +1,20 @@
 const std = @import("std");
+const uio = @import("io.zig");
 const ustr = @import("str.zig");
-const fs = std.fs;
+
+const linux = std.os.linux;
 
 pub const NR_POSSIBLE_CPUS_MAX = 64;
 
 pub fn nrPossibleCpus() u32 {
     const path = "/sys/devices/system/cpu/possible";
-    const file = fs.cwd().openFileZ(path, .{}) catch return 0;
-    defer file.close();
+    const fd = uio.open0(path) catch return 0;
+    defer uio.close(fd);
 
     var buf: [16]u8 = undefined;
-    const nr_read = file.read(&buf) catch return 0;
-    if (nr_read < 2) return 0;
+    const nr_read = uio.pread(fd, &buf, 0) orelse return 0;
 
+    if (nr_read < 2) return 0;
     var i = nr_read - 2;
     while (i > 0 and buf[i] != '-') : (i -= 1) {}
     if (i > 0) i += 1;

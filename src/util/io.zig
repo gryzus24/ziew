@@ -1,5 +1,8 @@
 const std = @import("std");
+
+const umem = @import("mem.zig");
 const ustr = @import("str.zig");
+
 const linux = std.os.linux;
 const posix = std.posix;
 
@@ -12,6 +15,39 @@ pub inline fn sys_writev(fd: linux.fd_t, vs: anytype) isize {
     var iovs: [len]posix.iovec_const = undefined;
     inline for (vs, 0..) |s, i| iovs[i] = .{ .base = s.ptr, .len = s.len };
     return @bitCast(linux.writev(fd, &iovs, iovs.len));
+}
+
+pub inline fn sys_pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) isize {
+    return @bitCast(linux.pread(fd, buf.ptr, buf.len, off));
+}
+
+pub inline fn pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) ?usize {
+    while (true) {
+        const ret = sys_pread(fd, buf, off);
+        if (ret >= 0) {
+            @branchHint(.likely);
+            return @intCast(ret);
+        }
+        if (-ret != @intFromEnum(linux.E.INTR)) return null;
+    }
+}
+
+pub inline fn open0(path: [*:0]const u8) !linux.fd_t {
+    return posix.openZ(path, .{}, undefined);
+}
+
+pub inline fn openCWA(path: [*:0]const u8, mode: linux.mode_t) !linux.fd_t {
+    const flags: linux.O = .{
+        .ACCMODE = .WRONLY,
+        .CREAT = true,
+        .APPEND = true,
+        .CLOEXEC = true,
+    };
+    return posix.openZ(path, flags, mode);
+}
+
+pub inline fn close(fd: linux.fd_t) void {
+    _ = linux.close(fd);
 }
 
 pub inline fn writeStr(writer: *Writer, str: []const u8) void {
@@ -69,10 +105,10 @@ pub const Buffer = struct {
 };
 
 pub const BufferedFile = struct {
-    fd: std.os.linux.fd_t,
+    fd: linux.fd_t,
     buffer: Buffer,
 
-    pub fn init(fd: std.os.linux.fd_t, buf: []u8) @This() {
+    pub fn init(fd: linux.fd_t, buf: []u8) @This() {
         return .{
             .fd = fd,
             .buffer = .{

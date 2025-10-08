@@ -74,12 +74,10 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
             @branchHint(.unlikely);
             const err = switch (ret) {
                 -ext.c.EACCES => "<no access>",
-                -ext.c.EFAULT => unreachable,
                 -ext.c.EINTR => continue,
-                -ext.c.ENAMETOOLONG => unreachable,
                 -ext.c.ENOENT, -ext.c.ENOTDIR => "<not mounted>",
                 -ext.c.ENOSYS => "<not supported>",
-                else => "<unlucky>",
+                else => "<unexpected error>",
             };
             const handler: typ.Widget.NoopColorHandler = .{};
             const fg, const bg = w.check(handler, base);

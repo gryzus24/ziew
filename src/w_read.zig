@@ -5,7 +5,7 @@ const typ = @import("type.zig");
 
 const uio = @import("util/io.zig");
 
-const fs = std.fs;
+const linux = std.os.linux;
 const mem = std.mem;
 
 // == private =================================================================
@@ -23,8 +23,8 @@ fn acceptColor(buf: []const u8, i: usize) struct { color.Hex, usize } {
     return .{ .default, j };
 }
 
-fn readFileUntil(file: fs.File, comptime char: u8, buf: *[typ.WIDGET_BUF_MAX]u8) ![]const u8 {
-    const n = try file.read(buf);
+fn readFileUntil(fd: linux.fd_t, char: u8, buf: []u8) ?[]const u8 {
+    const n = uio.pread(fd, buf, 0) orelse return null;
     const end = mem.indexOfScalarPos(u8, buf[0..n], 0, char) orelse n;
     return buf[0..end];
 }
@@ -34,17 +34,23 @@ fn readFileUntil(file: fs.File, comptime char: u8, buf: *[typ.WIDGET_BUF_MAX]u8)
 pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.data.READ;
 
-    const file = fs.cwd().openFileZ(wd.getPath(), .{}) catch |e| {
+    const fd = uio.open0(wd.getPath()) catch |e| {
+        const err = switch (e) {
+            error.AccessDenied => "<no access>",
+            error.SymLinkLoop => "<symlink loop>",
+            error.FileNotFound => "<no file>",
+            else => "<unexpected error>",
+        };
         typ.writeWidgetBeg(writer, w.fg.static, w.bg.static);
-        for ([3][]const u8{ wd.getBasename(), ": ", @errorName(e) }) |s|
+        for ([3][]const u8{ wd.getBasename(), ": ", err }) |s|
             uio.writeStr(writer, s);
         return;
     };
-    defer file.close();
+    defer uio.close(fd);
 
     var buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
-    const data = readFileUntil(file, '\n', &buf) catch |e|
-        log.fatal(&.{ "READ: read: ", wd.getBasename(), @errorName(e) });
+    const data = readFileUntil(fd, '\n', &buf) orelse
+        log.fatal(&.{ "READ: read error: ", wd.getBasename() });
 
     var pos: usize = 0;
     var fg = w.fg.static;

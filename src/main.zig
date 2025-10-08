@@ -16,7 +16,6 @@ const w_net = @import("w_net.zig");
 const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
 
-const fs = std.fs;
 const linux = std.os.linux;
 const math = std.math;
 const mem = std.mem;
@@ -122,13 +121,13 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
 }
 
 fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
-    var path_sp: ?umem.Region.SavePoint = null;
     var path: [*:0]const u8 = undefined;
+    var path_sp: ?umem.Region.SavePoint = null;
 
     if (config_path) |ok| {
         path = ok;
     } else {
-        path_sp, path = getConfigPath(reg) catch |e| switch (e) {
+        path, path_sp = getConfigPath(reg) catch |e| switch (e) {
             error.NoPath => {
                 log.warn(&.{"unknown config file path: using defaults..."});
                 return cfg.defaultConfig(reg);
@@ -136,24 +135,24 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
             error.NoSpaceLeft => log.fatal(&.{"config path too long"}),
         };
     }
-    const file_or_err = fs.cwd().openFileZ(path, .{});
+    const fd_or_err = uio.open0(path);
     if (path_sp) |ok| reg.restore(ok);
 
-    const file = file_or_err catch |e| switch (e) {
-        error.FileNotFound => {
-            log.warn(&.{ "config: file not found: ", mem.sliceTo(path, 0) });
+    const fd = fd_or_err catch |e| switch (e) {
+        error.FileNotFound, error.AccessDenied => {
+            log.warn(&.{ "config: ", @errorName(e), ": ", mem.sliceTo(path, 0) });
             log.warn(&.{"using defaults..."});
             return cfg.defaultConfig(reg);
         },
         else => log.fatal(&.{ "config: open: ", @errorName(e) }),
     };
-    defer file.close();
+    defer uio.close(fd);
 
     const parse_bentry = reg.save(u8, .back);
     defer reg.restore(parse_bentry);
 
     var bf: uio.BufferedFile = .init(
-        file.handle,
+        fd,
         reg.backAllocMany(u8, 2048) catch unreachable,
     );
     const scratch: []align(16) u8 = @ptrCast(
@@ -179,7 +178,7 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
 
 fn getConfigPath(
     reg: *umem.Region,
-) error{ NoSpaceLeft, NoPath }!struct { umem.Region.SavePoint, [*:0]const u8 } {
+) error{ NoSpaceLeft, NoPath }!struct { [*:0]const u8, umem.Region.SavePoint } {
     const sp = reg.save(u8, .front);
     var n: usize = 0;
     if (posix.getenvZ("XDG_CONFIG_HOME")) |ok| {
@@ -192,7 +191,7 @@ fn getConfigPath(
         log.warn(&.{"neither $HOME nor $XDG_CONFIG_HOME set!"});
         return error.NoPath;
     }
-    return .{ sp, reg.slice(u8, sp, n)[0 .. n - 1 :0] };
+    return .{ reg.slice(u8, sp, n)[0 .. n - 1 :0], sp };
 }
 
 fn sa_handler(signum: c_int) callconv(.c) void {
@@ -358,19 +357,14 @@ pub fn main() void {
 
         while (true) {
             const ret = uio.sys_write(1, dst[0..pos]);
-            if (ret <= 0) {
+            if (ret < 0) {
                 @branchHint(.cold);
                 if (ret == -ext.c.EINTR) {
                     if (g_refresh_all) continue :refresh;
                     continue;
                 }
-                if (WRITE_FAIL_CHECK) {
-                    const e: [2]u8 = .{
-                        @intCast(ret & 0xff),
-                        @intCast((ret >> 8) & 0xff),
-                    };
-                    log.fatal(&.{ "main: write: ", &e });
-                }
+                if (WRITE_FAIL_CHECK)
+                    log.fatalSys(&.{"main: write: "}, ret);
             }
             break;
         }
