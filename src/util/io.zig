@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const ext = @import("ext.zig");
 const umem = @import("mem.zig");
 const ustr = @import("str.zig");
 
@@ -28,7 +29,7 @@ pub inline fn pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) ?usize {
             @branchHint(.likely);
             return @intCast(ret);
         }
-        if (-ret != @intFromEnum(linux.E.INTR)) return null;
+        if (ret != -ext.c.EINTR) return null;
     }
 }
 

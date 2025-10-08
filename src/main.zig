@@ -1,9 +1,9 @@
 const std = @import("std");
 const cfg = @import("config.zig");
-const ext = @import("ext.zig");
 const log = @import("log.zig");
 const typ = @import("type.zig");
 
+const ext = @import("util/ext.zig");
 const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");

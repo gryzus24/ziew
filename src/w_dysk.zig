@@ -1,9 +1,9 @@
 const std = @import("std");
 const color = @import("color.zig");
-const ext = @import("ext.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
+const ext = @import("util/ext.zig");
 const uio = @import("util/io.zig");
 
 const Statfs = struct {

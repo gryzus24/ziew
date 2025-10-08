@@ -1,10 +1,10 @@
 const std = @import("std");
 const color = @import("color.zig");
-const ext = @import("ext.zig");
 const log = @import("log.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
+const ext = @import("util/ext.zig");
 const misc = @import("util/misc.zig");
 const udiv = @import("util/div.zig");
 const uio = @import("util/io.zig");
