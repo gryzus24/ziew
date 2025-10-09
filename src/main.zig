@@ -268,7 +268,7 @@ pub fn main() void {
         },
         .NET => {
             if (!net_state_inited) {
-                net_state = .init(&reg, widgets);
+                net_state = .init(widgets);
                 net_state_inited = true;
             }
         },
@@ -307,14 +307,14 @@ pub fn main() void {
                     .TIME => w_time.widget(&fw, w, base),
                     .MEM => {
                         if (!updated.mem) {
-                            w_mem.update(&mem_state);
+                            try w_mem.update(&mem_state);
                             updated.mem = true;
                         }
                         w_mem.widget(&fw, w, base, &mem_state);
                     },
                     .CPU => {
                         if (!updated.cpu) {
-                            w_cpu.update(&cpu_state);
+                            try w_cpu.update(&cpu_state);
                             updated.cpu = true;
                         }
                         w_cpu.widget(&fw, w, base, &cpu_state);
@@ -322,7 +322,7 @@ pub fn main() void {
                     .DISK => w_dysk.widget(&fw, w, base),
                     .NET => {
                         if (!updated.net) {
-                            w_net.update(&net_state.netdev.?);
+                            try w_net.update(&reg, &net_state.netdev.?);
                             updated.net = true;
                         }
                         w_net.widget(&fw, w, base, &net_state);

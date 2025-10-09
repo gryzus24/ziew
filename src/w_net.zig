@@ -11,9 +11,7 @@ const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");
 
-const fs = std.fs;
 const linux = std.os.linux;
-const mem = std.mem;
 
 // == private =================================================================
 
@@ -102,16 +100,17 @@ const IFace = struct {
 };
 
 const Interfaces = struct {
-    reg: *umem.Region,
-    list: std.SinglyLinkedList = .{},
-    free: std.SinglyLinkedList = .{},
+    list: std.SinglyLinkedList,
+    free: std.SinglyLinkedList,
 
-    pub fn allocIf(self: *@This()) !*IFace {
+    pub const empty: Interfaces = .{ .list = .{}, .free = .{} };
+
+    pub fn allocIf(self: *@This(), reg: *umem.Region) !*IFace {
         var new: *IFace = undefined;
         if (self.free.popFirst()) |free| {
             new = @fieldParentPtr("node", free);
         } else {
-            new = try self.reg.alloc(IFace, .front);
+            new = try reg.alloc(IFace, .front);
         }
         self.list.prepend(&new.node);
         return new;
@@ -208,7 +207,7 @@ fn getFlags(
     };
 }
 
-fn parseProcNetDev(buf: []const u8, ifs: *Interfaces) !void {
+fn parseProcNetDev(buf: []const u8, ifs: *Interfaces, reg: *umem.Region) !void {
     var nls: ustr.IndexIterator(u8, '\n') = .init(buf);
 
     var last: usize = undefined;
@@ -222,7 +221,7 @@ fn parseProcNetDev(buf: []const u8, ifs: *Interfaces) !void {
         while (line[i] == ' ') : (i += 1) {}
         var j = i;
         while (line[j] != ':') : (j += 1) {}
-        var new_if = try ifs.allocIf();
+        var new_if = try ifs.allocIf(reg);
         new_if.setName(line[i..j]);
         j += 1;
 
@@ -243,7 +242,7 @@ pub const NetState = struct {
     const NetDev = struct {
         ifs: [2]Interfaces,
         curr: usize,
-        file: fs.File,
+        fd: linux.fd_t,
 
         fn getCurrPrev(self: *const @This()) struct { *Interfaces, *Interfaces } {
             const i = self.curr;
@@ -257,7 +256,7 @@ pub const NetState = struct {
 
     pub const empty: NetState = .{ .sock = 0, .netdev = null };
 
-    pub fn init(reg: *umem.Region, widgets: []const typ.Widget) NetState {
+    pub fn init(widgets: []const typ.Widget) NetState {
         var state: NetState = .{
             .sock = openIoctlSocket(),
             .netdev = null,
@@ -269,12 +268,10 @@ pub const NetState = struct {
             break :blk false;
         };
         if (wants_netdev) {
-            const a: Interfaces = .{ .reg = reg };
-            const b: Interfaces = .{ .reg = reg };
             state.netdev = .{
-                .ifs = .{ a, b },
+                .ifs = .{ .empty, .empty },
                 .curr = 0,
-                .file = fs.cwd().openFileZ("/proc/net/dev", .{}) catch |e|
+                .fd = uio.open0("/proc/net/dev") catch |e|
                     log.fatal(&.{ "open: /proc/net/dev: ", @errorName(e) }),
             };
         }
@@ -286,18 +283,16 @@ pub const NetState = struct {
     }
 };
 
-pub fn update(netdev: *NetState.NetDev) void {
+pub fn update(reg: *umem.Region, state: *NetState.NetDev) !void {
     var buf: [4096]u8 = undefined;
-    const nr_read = netdev.file.pread(&buf, 0) catch |e|
-        log.fatal(&.{ "NET: pread: ", @errorName(e) });
-    if (nr_read == buf.len)
-        log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
+    const n = uio.pread(state.fd, &buf, 0) orelse return error.ReadError;
+    if (n == buf.len) log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
-    netdev.swapCurrPrev();
-    const new, _ = netdev.getCurrPrev();
+    state.swapCurrPrev();
+    const new, _ = state.getCurrPrev();
     new.freeAll();
 
-    parseProcNetDev(buf[0..nr_read], new) catch |e|
+    parseProcNetDev(buf[0..n], new, reg) catch |e|
         log.fatal(&.{ "NET: parse /proc/net/dev: ", @errorName(e) });
 }
 

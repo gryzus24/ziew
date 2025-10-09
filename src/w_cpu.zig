@@ -10,7 +10,7 @@ const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");
 
-const fs = std.fs;
+const linux = std.os.linux;
 
 const DELTA_ZERO_CHECK = false;
 
@@ -242,10 +242,15 @@ inline fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
 
 pub const CpuState = struct {
     stats: [2]Stat,
-    curr: usize,
-    file: fs.File,
-
     usage: [NR_USAGE_FIELDS]unt.F5608,
+
+    curr: usize,
+    fd: linux.fd_t,
+
+    comptime {
+        std.debug.assert(@sizeOf(Stat) == 64);
+        std.debug.assert(@sizeOf(@FieldType(CpuState, "usage")) == 64);
+    }
 
     const NR_USAGE_FIELDS = @typeInfo(typ.CpuOpt.UsageOpts).@"enum".fields.len;
 
@@ -255,10 +260,10 @@ pub const CpuState = struct {
         const b: Stat = try .initZero(reg, nr_cpus);
         return .{
             .stats = .{ a, b },
-            .curr = 0,
-            .file = fs.cwd().openFileZ("/proc/stat", .{}) catch |e|
-                log.fatal(&.{ "open: /proc/stat: ", @errorName(e) }),
             .usage = @splat(.{ .u = 0 }),
+            .curr = 0,
+            .fd = uio.open0("/proc/stat") catch |e|
+                log.fatal(&.{ "open: /proc/stat: ", @errorName(e) }),
         };
     }
 
@@ -293,18 +298,15 @@ pub const CpuState = struct {
     }
 };
 
-pub fn update(state: *CpuState) void {
-    var buf: [2 * 4096]u8 = undefined;
-
-    const nr_read = state.file.pread(&buf, 0) catch |e|
-        log.fatal(&.{ "CPU: pread: ", @errorName(e) });
-    if (nr_read == buf.len)
-        log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
+pub fn update(state: *CpuState) !void {
+    var buf: [8192]u8 = undefined;
+    const n = uio.pread(state.fd, &buf, 0) orelse return error.ReadError;
+    if (n == buf.len) log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
     state.swapCurrPrev();
     const new, const old = state.getCurrPrev();
 
-    parseProcStat(buf[0..nr_read], new);
+    parseProcStat(buf[0..n], new);
 
     const new_cpu = new.entries[0];
     const old_cpu = old.entries[0];

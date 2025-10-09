@@ -5,9 +5,10 @@ const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
 const uio = @import("util/io.zig");
+const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");
 
-const fs = std.fs;
+const linux = std.os.linux;
 
 // == private =================================================================
 
@@ -89,8 +90,8 @@ test "/proc/meminfo parser" {
 // == public ==================================================================
 
 pub const MemState = struct {
-    file: fs.File,
     fields: [NR_FIELDS]u64,
+    fd: linux.fd_t,
 
     const NR_FIELDS = 8;
     comptime {
@@ -101,9 +102,9 @@ pub const MemState = struct {
 
     pub fn init() MemState {
         return .{
-            .file = fs.cwd().openFileZ("/proc/meminfo", .{}) catch |e|
-                log.fatal(&.{ "open: /proc/meminfo: ", @errorName(e) }),
             .fields = @splat(0),
+            .fd = uio.open0("/proc/meminfo") catch |e|
+                log.fatal(&.{ "open: /proc/meminfo: ", @errorName(e) }),
         };
     }
 
@@ -129,14 +130,10 @@ pub const MemState = struct {
     // zig fmt: on
 };
 
-pub fn update(state: *MemState) void {
-    var buf: [4096]u8 = undefined;
-    const nr_read = state.file.pread(&buf, 0) catch |e|
-        log.fatal(&.{ "MEM: pread: ", @errorName(e) });
-    if (nr_read == buf.len)
-        log.fatal(&.{"MEM: /proc/meminfo doesn't fit in 1 page"});
-
-    parseProcMeminfo(&buf, state);
+pub fn update(state: *MemState) !void {
+    var buf: [8192]u8 = undefined;
+    const n = uio.pread(state.fd, &buf, 0) orelse return error.ReadError;
+    parseProcMeminfo(buf[0..n], state);
 }
 
 pub noinline fn widget(
