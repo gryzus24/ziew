@@ -21,6 +21,18 @@ fn printAlloc(reg: *Region, where: Region.Where, comptime T: type, nmemb: usize,
     ) catch {};
 }
 
+fn bytesAsSliceOrganic(comptime T: type, bytes: anytype) []T {
+    const w: [*]T = @ptrCast(@alignCast(bytes.ptr));
+    return w[0..@divExact(bytes.len, @sizeOf(T))];
+}
+
+// Just duplicate this function for const,
+// don't bother copying all pointer attributes.
+fn bytesAsConstSliceOrganic(comptime T: type, bytes: anytype) []const T {
+    const w: [*]const T = @ptrCast(@alignCast(bytes.ptr));
+    return w[0..@divExact(bytes.len, @sizeOf(T))];
+}
+
 // == public ==================================================================
 
 pub fn memcpyZ(dst: []u8, src: []const u8) ?[:0]const u8 {
@@ -76,6 +88,10 @@ pub const Region = struct {
     }
 
     pub inline fn allocMany(self: *@This(), comptime T: type, nmemb: usize, comptime where: Where) Error![]T {
+        if (@sizeOf(T) == 0)
+            @compileError("Tried to allocate a zero-sized type");
+
+        const alloc_size = @sizeOf(T) * nmemb;
         const allocation = switch (where) {
             .front => alloc: {
                 const pad = (~self.front +% 1) & (@alignOf(T) - 1);
@@ -89,7 +105,6 @@ pub const Region = struct {
                     @branchHint(.unlikely);
                     return error.NoSpaceLeft;
                 }
-                const alloc_size = @sizeOf(T) * nmemb;
                 self.front = aligned_off + alloc_size;
                 break :alloc self.head[aligned_off..][0..alloc_size];
             },
@@ -105,7 +120,6 @@ pub const Region = struct {
                     @branchHint(.unlikely);
                     return error.NoSpaceLeft;
                 }
-                const alloc_size = @sizeOf(T) * nmemb;
                 self.back = aligned_off - alloc_size;
                 break :alloc self.head[self.back..][0..alloc_size];
             },
@@ -113,7 +127,12 @@ pub const Region = struct {
         if (builtin.mode == .Debug)
             @memset(allocation, 0xaa);
 
-        return @alignCast(mem.bytesAsSlice(T, allocation));
+        // `mem.bytesAsSlice` does some paranoia checks before the cast
+        // which take up a whole register just to insert pattern poison
+        // 0xaa and cmov that into the slice pointer if it turns out it
+        // has a length of zero. We have good bytes! Valid bytes! Their
+        // provenance is more important for debugging than some poison!
+        return bytesAsSliceOrganic(T, allocation);
     }
 
     pub inline fn alloc(self: *@This(), comptime T: type, where: Where) Error!*T {
@@ -173,7 +192,8 @@ pub const Region = struct {
     }
 
     pub inline fn slice(self: @This(), comptime T: type, beg: SavePoint, len: usize) []T {
-        return mem.bytesAsSlice(T, self.head[beg.off..][0 .. @sizeOf(T) * len]);
+        const bytes = self.head[beg.off..][0 .. @sizeOf(T) * len];
+        return bytesAsSliceOrganic(T, bytes);
     }
 
     pub inline fn spaceLeft(self: @This(), comptime T: type) usize {
@@ -196,8 +216,8 @@ pub fn MemSlice(T: type) type {
         pub const zero: MemSlice(T) = .{ .off = 0, .len = 0 };
 
         pub fn get(self: @This(), base: [*]const u8) []const T {
-            const size = @sizeOf(T) * self.len;
-            return @alignCast(mem.bytesAsSlice(T, base[self.off..][0..size]));
+            const bytes = base[self.off..][0 .. @sizeOf(T) * self.len];
+            return bytesAsConstSliceOrganic(T, bytes);
         }
 
         pub inline fn writeBytes(
