@@ -66,7 +66,7 @@ pub fn fatalSys(strings: []const []const u8, sysret: isize) noreturn {
     var buf: [8]u8 = undefined;
 
     var pos = ustr.unsafeU64toa(&buf, @as(u64, @intCast(-sysret)) & 0x0fff);
-    @memcpy(buf[0..pos], buf[buf.len - pos ..]); // can't overlap
+    @memmove(buf[0..pos], buf[buf.len - pos ..]);
     buf[pos] = '\n';
     pos += 1;
 
