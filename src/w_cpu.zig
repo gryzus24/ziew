@@ -300,7 +300,7 @@ pub const CpuState = struct {
 
 pub fn update(state: *CpuState) !void {
     var buf: [8192]u8 = undefined;
-    const n = uio.pread(state.fd, &buf, 0) orelse return error.ReadError;
+    const n = try uio.pread(state.fd, &buf, 0);
     if (n == buf.len) log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
     state.swapCurrPrev();

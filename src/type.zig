@@ -753,6 +753,16 @@ pub fn writeWidgetEnd(writer: *uio.Writer) []const u8 {
     return buffer;
 }
 
+pub fn writeWidget(
+    writer: *uio.Writer,
+    fg: color.Hex,
+    bg: color.Hex,
+    data: []const []const u8,
+) void {
+    writeWidgetBeg(writer, fg, bg);
+    for (data) |s| uio.writeStr(writer, s);
+}
+
 pub fn optBit(opt: u8) OptBit {
     return @as(OptBit, 1) << @intCast(opt);
 }

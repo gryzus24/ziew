@@ -12,7 +12,7 @@ pub fn nrPossibleCpus() u32 {
     defer uio.close(fd);
 
     var buf: [16]u8 = undefined;
-    const nr_read = uio.pread(fd, &buf, 0) orelse return 0;
+    const nr_read = uio.pread(fd, &buf, 0) catch return 0;
 
     if (nr_read < 2) return 0;
     var i = nr_read - 2;

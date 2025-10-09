@@ -23,10 +23,11 @@ fn acceptColor(buf: []const u8, i: usize) struct { color.Hex, usize } {
     return .{ .default, j };
 }
 
-fn readFileUntil(fd: linux.fd_t, char: u8, buf: []u8) ?[]const u8 {
-    const n = uio.pread(fd, buf, 0) orelse return null;
-    const end = mem.indexOfScalarPos(u8, buf[0..n], 0, char) orelse n;
-    return buf[0..end];
+fn openAndRead(path: [*:0]const u8, buf: []u8) ![]const u8 {
+    const fd = try uio.open0(path);
+    defer uio.close(fd);
+    const n = try uio.pread(fd, buf, 0);
+    return buf[0 .. mem.indexOfScalarPos(u8, buf[0..n], 0, '\n') orelse n];
 }
 
 // == public ==================================================================
@@ -34,23 +35,15 @@ fn readFileUntil(fd: linux.fd_t, char: u8, buf: []u8) ?[]const u8 {
 pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.data.READ;
 
-    const fd = uio.open0(wd.getPath()) catch |e| {
-        const err = switch (e) {
-            error.AccessDenied => "<no access>",
-            error.SymLinkLoop => "<symlink loop>",
-            error.FileNotFound => "<no file>",
-            else => "<unexpected error>",
-        };
-        typ.writeWidgetBeg(writer, w.fg.static, w.bg.static);
-        for ([3][]const u8{ wd.getBasename(), ": ", err }) |s|
-            uio.writeStr(writer, s);
-        return;
-    };
-    defer uio.close(fd);
-
     var buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
-    const data = readFileUntil(fd, '\n', &buf) orelse
-        log.fatal(&.{ "READ: read error: ", wd.getBasename() });
+
+    const data = openAndRead(wd.getPath(), &buf) catch |e|
+        return typ.writeWidget(
+            writer,
+            w.fg.static,
+            w.bg.static,
+            &[3][]const u8{ wd.getBasename(), ": ", @errorName(e) },
+        );
 
     var pos: usize = 0;
     var fg = w.fg.static;

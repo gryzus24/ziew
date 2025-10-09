@@ -285,7 +285,7 @@ pub const NetState = struct {
 
 pub fn update(reg: *umem.Region, state: *NetState.NetDev) !void {
     var buf: [4096]u8 = undefined;
-    const n = uio.pread(state.fd, &buf, 0) orelse return error.ReadError;
+    const n = try uio.pread(state.fd, &buf, 0);
     if (n == buf.len) log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
     state.swapCurrPrev();

@@ -132,7 +132,7 @@ pub const MemState = struct {
 
 pub fn update(state: *MemState) !void {
     var buf: [8192]u8 = undefined;
-    const n = uio.pread(state.fd, &buf, 0) orelse return error.ReadError;
+    const n = try uio.pread(state.fd, &buf, 0);
     parseProcMeminfo(buf[0..n], state);
 }
 

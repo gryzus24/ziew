@@ -96,7 +96,7 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     defer uio.close(fd);
 
     var buf: [1024]u8 = undefined;
-    const nr_read = uio.pread(fd, &buf, 0) orelse
+    const nr_read = uio.pread(fd, &buf, 0) catch
         log.fatal(&.{"BAT: read error"});
     if (nr_read == 0)
         log.fatal(&.{"BAT: empty uevent"});

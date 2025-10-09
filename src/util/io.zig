@@ -22,14 +22,14 @@ pub inline fn sys_pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) isize {
     return @bitCast(linux.pread(fd, buf.ptr, buf.len, off));
 }
 
-pub inline fn pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) ?usize {
+pub inline fn pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) !usize {
     while (true) {
         const ret = sys_pread(fd, buf, off);
         if (ret >= 0) {
             @branchHint(.likely);
             return @intCast(ret);
         }
-        if (ret != -ext.c.EINTR) return null;
+        if (ret != -ext.c.EINTR) return error.ReadError;
     }
 }
 
