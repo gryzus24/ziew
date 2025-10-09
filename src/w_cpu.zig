@@ -94,7 +94,7 @@ const Stat = struct {
         assert(ctxt == @intFromEnum(typ.CpuOpt.ctxt) - off);
     }
 
-    pub fn initZero(reg: *umem.Region, nr_possible_cpus: u32) !@This() {
+    fn initZero(reg: *umem.Region, nr_possible_cpus: u32) !@This() {
         // First entry is the cumulative stat of every CPU.
         const entries = try reg.allocMany(Cpu, nr_possible_cpus + 1, .front);
         for (0..entries.len) |i| entries[i] = .zero;
@@ -298,7 +298,7 @@ pub const CpuState = struct {
     }
 };
 
-pub fn update(state: *CpuState) !void {
+pub fn update(state: *CpuState) error{ReadError}!void {
     var buf: [8192]u8 = undefined;
     const n = try uio.pread(state.fd, &buf, 0);
     if (n == buf.len) log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});

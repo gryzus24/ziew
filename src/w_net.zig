@@ -92,7 +92,7 @@ const IFace = struct {
         assert(tx_compressed == @intFromEnum(typ.NetOpt.tx_compressed) - off);
     }
 
-    pub fn setName(self: *@This(), name: []const u8) void {
+    fn setName(self: *@This(), name: []const u8) void {
         self.name[0..16].* = @splat(0);
         // note: length check omitted
         for (0..name.len) |i| self.name[i] = name[i];
@@ -103,9 +103,9 @@ const Interfaces = struct {
     list: std.SinglyLinkedList,
     free: std.SinglyLinkedList,
 
-    pub const empty: Interfaces = .{ .list = .{}, .free = .{} };
+    const empty: Interfaces = .{ .list = .{}, .free = .{} };
 
-    pub fn allocIf(self: *@This(), reg: *umem.Region) !*IFace {
+    fn allocIf(self: *@This(), reg: *umem.Region) !*IFace {
         var new: *IFace = undefined;
         if (self.free.popFirst()) |free| {
             new = @fieldParentPtr("node", free);
@@ -116,7 +116,7 @@ const Interfaces = struct {
         return new;
     }
 
-    pub fn freeAll(self: *@This()) void {
+    fn freeAll(self: *@This()) void {
         while (self.list.popFirst()) |node| {
             self.free.prepend(node);
         }
@@ -125,7 +125,7 @@ const Interfaces = struct {
 
 fn openIoctlSocket() linux.fd_t {
     const ret: isize = @bitCast(linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0));
-    if (ret < 0) log.fatal(&.{"NET: socket"});
+    if (ret < 0) log.fatalSys(&.{"NET: socket: "}, ret);
     return @intCast(ret);
 }
 
@@ -172,7 +172,7 @@ fn getInet(sock: linux.fd_t, ifr: *linux.ifreq, out: *[INET_BUF_SIZE]u8) usize {
             @memcpy(out[0..s.len], s);
             break :blk s.len;
         },
-        else => log.fatal(&.{"NET: SIOCGIFADDR"}),
+        else => log.fatalSys(&.{"NET: SIOCGIFADDR: "}, ret),
     };
 }
 
@@ -203,11 +203,15 @@ fn getFlags(
             out[0] = '-';
             break :blk .{ 1, false };
         },
-        else => log.fatal(&.{"NET: SIOCGIFFLAGS"}),
+        else => log.fatalSys(&.{"NET: SIOCGIFFLAGS: "}, ret),
     };
 }
 
-fn parseProcNetDev(buf: []const u8, ifs: *Interfaces, reg: *umem.Region) !void {
+fn parseProcNetDev(
+    buf: []const u8,
+    ifs: *Interfaces,
+    reg: *umem.Region,
+) !void {
     var nls: ustr.IndexIterator(u8, '\n') = .init(buf);
 
     var last: usize = undefined;
@@ -278,12 +282,15 @@ pub const NetState = struct {
         return state;
     }
 
-    pub fn getNetdev(self: *const @This(), mask: typ.OptBit) ?*const NetDev {
+    fn getNetdev(self: *const @This(), mask: typ.OptBit) ?*const NetDev {
         return if (mask != 0) &self.netdev.? else null;
     }
 };
 
-pub fn update(reg: *umem.Region, state: *NetState.NetDev) !void {
+pub fn update(
+    reg: *umem.Region,
+    state: *NetState.NetDev,
+) error{ NoSpaceLeft, ReadError }!void {
     var buf: [4096]u8 = undefined;
     const n = try uio.pread(state.fd, &buf, 0);
     if (n == buf.len) log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
@@ -292,8 +299,7 @@ pub fn update(reg: *umem.Region, state: *NetState.NetDev) !void {
     const new, _ = state.getCurrPrev();
     new.freeAll();
 
-    parseProcNetDev(buf[0..n], new, reg) catch |e|
-        log.fatal(&.{ "NET: parse /proc/net/dev: ", @errorName(e) });
+    try parseProcNetDev(buf[0..n], new, reg);
 }
 
 pub noinline fn widget(

@@ -34,11 +34,11 @@ const Splitter = struct {
     i: usize,
     want: enum { char, ws, quote },
 
-    pub fn init(buf: []const u8) @This() {
+    fn init(buf: []const u8) @This() {
         return .{ .buf = buf, .i = 0, .want = .char };
     }
 
-    pub fn next(self: *@This()) ?Split {
+    fn next(self: *@This()) ?Split {
         if (self.i == self.buf.len) return null;
 
         var beg: usize = 0;
@@ -87,7 +87,7 @@ const FormatSplitter = struct {
 
         const FailType = enum { no_open, no_close };
 
-        pub fn init(i: usize) @This() {
+        fn init(i: usize) @This() {
             return .{
                 .ok = .{
                     .part = .{ .beg = i, .end = 0 },
@@ -96,16 +96,16 @@ const FormatSplitter = struct {
             };
         }
 
-        pub fn fail(t: FailType, field: Split) @This() {
+        fn fail(t: FailType, field: Split) @This() {
             return .{ .err = .{ .type = t, .field = field } };
         }
     };
 
-    pub fn init(buf: []const u8) @This() {
+    fn init(buf: []const u8) @This() {
         return .{ .buf = buf, .i = 0 };
     }
 
-    pub fn next(self: *@This()) ?FormatSplit {
+    fn next(self: *@This()) ?FormatSplit {
         if (self.i == self.buf.len) return null;
 
         var r: FormatSplit = .init(self.i);
@@ -151,7 +151,7 @@ const FormatResult = union(enum) {
         field: Split,
     },
 
-    pub fn fail(note: []const u8, field: Split) @This() {
+    fn fail(note: []const u8, field: Split) @This() {
         return .{ .err = .{ .note = note, .field = field } };
     }
 };
@@ -379,7 +379,7 @@ const ParseLineResult = union(enum) {
         field: Split,
     },
 
-    pub fn fail(note: []const u8, field: Split) @This() {
+    fn fail(note: []const u8, field: Split) @This() {
         return .{ .err = .{ .note = note, .field = field } };
     }
 };
@@ -505,7 +505,7 @@ pub const ParseResult = union(enum) {
         field: Split,
     };
 
-    pub fn fail(
+    fn fail(
         note: []const u8,
         line: []const u8,
         line_nr: usize,

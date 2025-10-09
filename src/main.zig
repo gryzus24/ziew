@@ -132,7 +132,7 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
                 log.warn(&.{"unknown config file path: using defaults..."});
                 return cfg.defaultConfig(reg);
             },
-            error.NoSpaceLeft => log.fatal(&.{"config path too long"}),
+            error.NoSpaceLeft => log.fatal(&.{"config: path too long"}),
         };
     }
     const fd_or_err = uio.open0(path);
@@ -176,9 +176,7 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
     return widgets;
 }
 
-fn getConfigPath(
-    reg: *umem.Region,
-) error{ NoSpaceLeft, NoPath }!struct { [*:0]const u8, umem.Region.SavePoint } {
+fn getConfigPath(reg: *umem.Region) !struct { [*:0]const u8, umem.Region.SavePoint } {
     const sp = reg.save(u8, .front);
     var n: usize = 0;
     if (posix.getenvZ("XDG_CONFIG_HOME")) |ok| {

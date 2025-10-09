@@ -150,7 +150,7 @@ pub const Region = struct {
         return memcpyZ(retptr, str) orelse unreachable;
     }
 
-    pub inline fn pushVec(self: *@This(), vec: anytype, comptime where: Where) !*meta.Child(@TypeOf(vec.*)) {
+    pub inline fn pushVec(self: *@This(), vec: anytype, comptime where: Where) Error!*meta.Child(@TypeOf(vec.*)) {
         const T = meta.Child(@TypeOf(vec.*));
         return switch (where) {
             .front => blk: {

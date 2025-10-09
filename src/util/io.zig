@@ -22,7 +22,7 @@ pub inline fn sys_pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) isize {
     return @bitCast(linux.pread(fd, buf.ptr, buf.len, off));
 }
 
-pub inline fn pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) !usize {
+pub inline fn pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) error{ReadError}!usize {
     while (true) {
         const ret = sys_pread(fd, buf, off);
         if (ret >= 0) {
@@ -33,11 +33,11 @@ pub inline fn pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) !usize {
     }
 }
 
-pub inline fn open0(path: [*:0]const u8) !linux.fd_t {
+pub inline fn open0(path: [*:0]const u8) posix.OpenError!linux.fd_t {
     return posix.openZ(path, .{}, undefined);
 }
 
-pub inline fn openCWA(path: [*:0]const u8, mode: linux.mode_t) !linux.fd_t {
+pub inline fn openCWA(path: [*:0]const u8, mode: linux.mode_t) posix.OpenError!linux.fd_t {
     const flags: linux.O = .{
         .ACCMODE = .WRONLY,
         .CREAT = true,
