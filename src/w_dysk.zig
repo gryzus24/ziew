@@ -70,23 +70,27 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     };
     while (true) {
         const ret = ext.sys_statfs(wd.getMountpoint(), &sfs.inner);
-        if (ret < 0) {
-            @branchHint(.unlikely);
-            const err = switch (ret) {
-                -ext.c.EACCES => "<no access>",
-                -ext.c.EINTR => continue,
-                -ext.c.ENOENT, -ext.c.ENOTDIR => "<not mounted>",
-                -ext.c.ENOSYS => "<not supported>",
-                else => "<unexpected error>",
-            };
+        if (ret == 0) {
+            @branchHint(.likely);
+            break;
+        }
+        if (ret != -ext.c.EINTR) {
             const handler: typ.Widget.NoopColorHandler = .{};
             const fg, const bg = w.check(handler, base);
-            typ.writeWidgetBeg(writer, fg, bg);
-            for ([3][]const u8{ wd.getMountpoint(), ": ", err }) |s|
-                uio.writeStr(writer, s);
-            return;
+            return typ.writeWidget(
+                writer,
+                fg,
+                bg,
+                &[3][]const u8{
+                    wd.getMountpoint(), ": ", switch (ret) {
+                        -ext.c.EACCES => "<no access>",
+                        -ext.c.ENOENT, -ext.c.ENOTDIR => "<not mounted>",
+                        -ext.c.ENOSYS => "<not supported>",
+                        else => "<unexpected error>",
+                    },
+                },
+            );
         }
-        break;
     }
 
     // zig fmt: off
