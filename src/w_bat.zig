@@ -77,36 +77,42 @@ const Bat = struct {
     }
 };
 
+fn openAndRead(path: [*:0]const u8, buf: []u8) ![]const u8 {
+    const fd = try uio.open0(path);
+    defer uio.close(fd);
+    const n = try uio.pread(fd, buf, 0);
+    if (n == 0) return error.EmptyUevent;
+    return buf[0..n];
+}
+
 // == public ==================================================================
 
 pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.data.BAT;
 
-    const fd = uio.open0(wd.getPath()) catch |e| switch (e) {
-        error.FileNotFound => {
-            const handler: typ.Widget.NoopColorHandler = .{};
-            const fg, const bg = w.check(handler, base);
-            typ.writeWidgetBeg(writer, fg, bg);
-            uio.writeStr(writer, wd.getPsName());
-            uio.writeStr(writer, ": <not found>");
-            return;
-        },
-        else => log.fatal(&.{ "BAT: open: ", @errorName(e) }),
-    };
-    defer uio.close(fd);
-
     var buf: [1024]u8 = undefined;
-    const nr_read = uio.pread(fd, &buf, 0) catch
-        log.fatal(&.{"BAT: read error"});
-    if (nr_read == 0)
-        log.fatal(&.{"BAT: empty uevent"});
+    const data = openAndRead(wd.getPath(), &buf) catch |e| {
+        const handler: typ.Widget.NoopColorHandler = .{};
+        const fg, const bg = w.check(handler, base);
+        return typ.writeWidget(
+            writer,
+            fg,
+            bg,
+            &[3][]const u8{
+                wd.getPsName(), ": ", switch (e) {
+                    error.FileNotFound => "<not found>",
+                    else => @errorName(e),
+                },
+            },
+        );
+    };
 
     var bat: Bat = .{};
 
-    var nls: ustr.IndexIterator(u8, '\n') = .init(buf[0..nr_read]);
+    var nls: ustr.IndexIterator(u8, '\n') = .init(data);
     var last: usize = 0;
     while (nls.next()) |nl| {
-        const line = buf[last..nl];
+        const line = data[last..nl];
         last = nl + 1;
 
         const i = mem.indexOfScalarPos(u8, line, 0, '=') orelse {
