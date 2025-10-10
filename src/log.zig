@@ -23,16 +23,16 @@ pub const Log = struct {
 
     pub fn open() Log {
         const path = "/tmp/ziew.log";
-        const EACCES = "open: " ++ path ++ ": may be sticky - only author can modify\n";
-        const EOTHER = "open: " ++ path ++ ": unexpected error\n";
-
         const fd = uio.openCWA(path, 0o644) catch |e| switch (e) {
             error.AccessDenied => {
-                _ = uio.sys_write(2, EACCES);
+                _ = uio.sys_write(2, "open: " ++ path ++ ": AccessDenied: ");
+                _ = uio.sys_write(2, "may be sticky - only author can modify\n");
                 return .nofile;
             },
             else => {
-                _ = uio.sys_write(2, EOTHER);
+                _ = uio.sys_write(2, "open: " ++ path ++ ": ");
+                _ = uio.sys_write(2, @errorName(e));
+                _ = uio.sys_write(2, "\n");
                 linux.exit(1);
             },
         };
