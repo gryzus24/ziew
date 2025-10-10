@@ -309,13 +309,14 @@ pub const Widget = struct {
             ps_len: u8,
             path: [PATH_SIZE]u8,
 
-            const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
+            pub const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
+            pub const PS_NAME_SIZE_MAX = 12;
 
             pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
                 const prefix = "/sys/class/power_supply/";
                 const suffix = "/uevent\x00";
-                const avail = @min(PATH_SIZE - prefix.len - suffix.len, 15);
-                comptime std.debug.assert(avail == 15);
+                const avail = @min(PATH_SIZE - prefix.len - suffix.len, PS_NAME_SIZE_MAX);
+                comptime std.debug.assert(avail == PS_NAME_SIZE_MAX);
 
                 if (arg.len > avail)
                     log.fatal(&.{"BAT: battery name too long"});
@@ -622,13 +623,13 @@ pub const NetOpt = enum {
 };
 
 pub const BatOpt = enum {
-    arg,
-    @"%fullnow",
-    @"%fulldesign",
     state,
+    @"%fulldesign",
+    @"%fullnow",
+    arg,
 
     pub const ColorSupported = MakeEnumSubset(@This(), &.{
-        .@"%fullnow", .@"%fulldesign", .state,
+        .@"%fulldesign", .@"%fullnow", .state,
     });
 };
 

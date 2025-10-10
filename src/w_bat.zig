@@ -7,73 +7,97 @@ const unt = @import("unit.zig");
 const uio = @import("util/io.zig");
 const ustr = @import("util/str.zig");
 
-const linux = std.os.linux;
-const mem = std.mem;
+const Parser = struct {
+    key: Key,
+    value: usize,
+    state: usize,
 
-const BatSetBits = packed struct(u32) {
-    state: bool = false,
-    full_design: bool = false,
-    full: bool = false,
-    now: bool = false,
-    _last_bit: bool = false,
-    _pad: u27 = 0,
+    const Key = enum(u8) {
+        status,
+        full_design,
+        full,
+        now,
+    };
 
-    fn hasSetAll(self: @This()) bool {
-        const bits: u32 = @bitCast(self);
-        return @as(BatSetBits, @bitCast(bits + 1))._last_bit;
-    }
+    const SZ = 16;
+    const V = @Vector(SZ, u8);
+
+    // zig fmt: off
+    const s_status      = "STATUS";
+    const s_full_design = "FULL_DESIGN";
+    const s_full        = "FULL";
+    const s_charge_now  = "CHARGE_NOW";
+    const s_energy_now  = "ENERGY_NOW";
+
+    const status: V      = ((.{0} ** (SZ - s_status.len))      ++ s_status).*;
+    const full_design: V = ((.{0} ** (SZ - s_full_design.len)) ++ s_full_design).*;
+    const full: V        = ((.{0} ** (SZ - s_full.len))        ++ s_full).*;
+    const charge_now: V  = ((.{0} ** (SZ - s_charge_now.len))  ++ s_charge_now).*;
+    const energy_now: V  = ((.{0} ** (SZ - s_energy_now.len))  ++ s_energy_now).*;
+
+    const checks: [5]struct {V, usize, Key} = .{
+        .{status,      (SZ - s_status.len),      Key.status},
+        .{full_design, (SZ - s_full_design.len), Key.full_design},
+        .{full,        (SZ - s_full.len),        Key.full},
+        .{charge_now,  (SZ - s_charge_now.len),  Key.now},
+        .{energy_now,  (SZ - s_energy_now.len),  Key.now},
+    };
+    // zig fmt: on
 };
 
-const Bat = struct {
-    state: []const u8 = "Unknown",
-    full_design: u64 = 0,
-    full: u64 = 0,
-    now: u64 = 0,
-    set: BatSetBits = .{},
+const Battery = struct {
+    fields: [4]u64,
 
-    fn setState(self: *@This(), state: []const u8) void {
-        self.state = state;
-        self.set.state = true;
+    const state = @intFromEnum(Parser.Key.status);
+    const full_design = @intFromEnum(Parser.Key.full_design);
+    const full_now = @intFromEnum(Parser.Key.full);
+    const now = @intFromEnum(Parser.Key.now);
+
+    comptime {
+        const assert = std.debug.assert;
+        assert(state == @intFromEnum(typ.BatOpt.state));
+        assert(full_design == @intFromEnum(typ.BatOpt.@"%fulldesign"));
+        assert(full_now == @intFromEnum(typ.BatOpt.@"%fullnow"));
     }
 
-    fn setFullDesign(self: *@This(), full_design: u64) void {
-        self.full_design = full_design;
-        self.set.full_design = true;
-    }
+    const State = enum(u8) {
+        discharging,
+        charging,
+        full,
+        notcharging,
+        unknown,
 
-    fn setFull(self: *@This(), full: u64) void {
-        self.full = full;
-        self.set.full = true;
-    }
+        // zig fmt: off
+        const names: [5][12]u8 = blk: {
+            var t: [5][12]u8 = undefined;
+            t[@intFromEnum(Battery.State.discharging)] = "Discharging ".*;
+            t[@intFromEnum(Battery.State.charging)]    = "Charging    ".*;
+            t[@intFromEnum(Battery.State.full)]        = "Full        ".*;
+            t[@intFromEnum(Battery.State.notcharging)] = "Not-charging".*;
+            t[@intFromEnum(Battery.State.unknown)]     = "Unknown     ".*;
+            break :blk t;
+        };
+        // zig fmt: on
+    };
 
-    fn setNow(self: *@This(), now: u64) void {
-        self.now = now;
-        self.set.now = true;
-    }
+    const default: Battery = .{
+        .fields = @splat(0),
+    };
 
     pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        const batopt_cs: typ.BatOpt.ColorSupported = @enumFromInt(ac.opt);
-        if (batopt_cs == .state) {
-            return color.firstColorEQThreshold(
-                switch (self.state[0] & (0xff - 0x20)) {
-                    'D' => 0, // Discharging
-                    'C' => 1, // Charging
-                    'F' => 2, // Full
-                    'N' => 3, // Not-charging
-                    else => 4, // Unknown
-                },
+        return switch (@as(typ.BatOpt.ColorSupported, @enumFromInt(ac.opt))) {
+            .state => color.firstColorEQThreshold(
+                @intCast(self.fields[Battery.state]),
                 ac.pairs.get(base),
-            );
-        } else {
-            return color.firstColorGEThreshold(
-                switch (batopt_cs) {
-                    .@"%fullnow" => unt.Percent(self.now, self.full),
-                    .@"%fulldesign" => unt.Percent(self.now, self.full_design),
-                    .state => unreachable,
-                }.n.roundU24AndTruncate(),
+            ),
+            .@"%fulldesign", .@"%fullnow" => color.firstColorGEThreshold(
+                unt.Percent(
+                    self.fields[Battery.now],
+                    self.fields[ac.opt],
+                ).n.roundU24AndTruncate(),
                 ac.pairs.get(base),
-            );
-        }
+            ),
+        };
     }
 };
 
@@ -83,6 +107,71 @@ fn openAndRead(path: [*:0]const u8, buf: []u8) ![]const u8 {
     const n = try uio.pread(fd, buf, 0);
     if (n == 0) return error.EmptyUevent;
     return buf[0..n];
+}
+
+// An extraordinary tour de force where
+// futility meets wrongheadedness...
+fn parseLine(line: []const u8, state: usize) !Parser {
+    const SZ = Parser.SZ;
+    const V = Parser.V;
+
+    if (state >= Parser.checks.len) return error.Break;
+
+    var i = line.len;
+    const eq = blk: while (i >= SZ) {
+        i -= SZ;
+        const v: V = line[i..][0..SZ].*;
+        const m: u16 = @bitCast(v == @as(V, @splat('=')));
+        const j = @ctz(m);
+        if (j != SZ) break :blk i + j;
+        if (i == 0) return error.InvalidUevent;
+        if (i < SZ) i = SZ;
+    } else return error.InvalidUevent;
+
+    const prefix = "POWER_SUPPLY_XXXX";
+    if (eq < prefix.len) return error.Continue;
+
+    const current: V = line[eq - SZ .. eq][0..SZ].*;
+
+    for (Parser.checks[state..]) |check| {
+        const v, const key_len_complement, const key = check;
+        const m: u16 = @bitCast(current == v);
+        if (@ctz(m) == key_len_complement) {
+            const vstr = line[eq + 1 ..];
+            // zig fmt: off
+            const state_lut: [8]u8 = .{
+                @intFromEnum(Battery.State.unknown),
+                @intFromEnum(Battery.State.charging),    // vstr[0] == 'C'
+                @intFromEnum(Battery.State.discharging), // vstr[0] == 'D'
+                @intFromEnum(Battery.State.full),        // vstr[0] == 'F'
+                @intFromEnum(Battery.State.unknown),
+                @intFromEnum(Battery.State.unknown),
+                @intFromEnum(Battery.State.unknown),
+                @intFromEnum(Battery.State.notcharging), // vstr[0] == 'N'
+            };
+            // zig fmt: on
+            const value: usize = switch (key) {
+                // Make uppercase, switch off 0x40, reduce a bit, lookup.
+                .status => state_lut[(vstr[0] & (0xff - 0x20 - 0x40)) >> 1],
+                .full_design, .full, .now => ustr.unsafeAtou64(vstr),
+            };
+            // Technically the order of fields in uevent shouldn't change,
+            // but let's be fancy and account for that possibility, change
+            // state only if `starting state` == `found state`, so that it
+            // doesn't form "holes" as that would require a different data
+            // structure to account for them and would get too complicated
+            // even for this questionable exercise of SIMD uevent parsing.
+            var advance: usize = 0;
+            if (state == @intFromEnum(key)) advance += 1;
+            if (state == @intFromEnum(Parser.Key.now)) advance += 1;
+            return .{
+                .key = key,
+                .value = value,
+                .state = state + advance,
+            };
+        }
+    }
+    return error.Continue;
 }
 
 // == public ==================================================================
@@ -107,35 +196,22 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
         );
     };
 
-    var bat: Bat = .{};
+    var bat: Battery = .default;
 
+    var state: usize = 0;
     var nls: ustr.IndexIterator(u8, '\n') = .init(data);
     var last: usize = 0;
     while (nls.next()) |nl| {
         const line = data[last..nl];
         last = nl + 1;
 
-        const i = mem.indexOfScalarPos(u8, line, 0, '=') orelse {
-            log.fatal(&.{"BAT: crazy uevent"});
+        const ret = parseLine(line, state) catch |e| switch (e) {
+            error.Break => break,
+            error.Continue => continue,
+            error.InvalidUevent => log.fatal(&.{ "BAT: ", @errorName(e) }),
         };
-        const key = line[0..i];
-        const val = line[i + 1 ..];
-
-        if (!mem.startsWith(u8, key, "POWER_SUPPLY_")) continue;
-        const cmp = key["POWER_SUPPLY_".len..];
-
-        if (mem.eql(u8, cmp, "STATUS")) {
-            bat.setState(val);
-        } else if (mem.eql(u8, cmp, "ENERGY_FULL_DESIGN") or mem.eql(u8, cmp, "CHARGE_FULL_DESIGN")) {
-            bat.setFullDesign(ustr.unsafeAtou64(val));
-        } else if (mem.eql(u8, cmp, "ENERGY_FULL") or mem.eql(u8, cmp, "CHARGE_FULL")) {
-            bat.setFull(ustr.unsafeAtou64(val));
-        } else if (mem.eql(u8, cmp, "ENERGY_NOW") or mem.eql(u8, cmp, "CHARGE_NOW")) {
-            bat.setNow(ustr.unsafeAtou64(val));
-        } else {
-            continue;
-        }
-        if (bat.set.hasSetAll()) break;
+        bat.fields[@intFromEnum(ret.key)] = ret.value;
+        state = ret.state;
     }
 
     const fg, const bg = w.check(bat, base);
@@ -143,24 +219,32 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
-        const batopt: typ.BatOpt = @enumFromInt(part.opt);
-        if (batopt == .arg) {
-            uio.writeStr(writer, wd.getPsName());
-            continue;
+        const opt: typ.BatOpt = @enumFromInt(part.opt);
+        switch (opt) {
+            .state, .arg => {
+                const SZ = 12;
+                const expected = @max(SZ, typ.Widget.Data.BatData.PS_NAME_SIZE_MAX);
+                comptime std.debug.assert(expected == SZ);
+
+                if (expected > writer.unusedCapacityLen()) {
+                    @branchHint(.unlikely);
+                    break;
+                }
+                writer.buffer[writer.end..][0..SZ].* =
+                    if (opt == .state)
+                        Battery.State.names[bat.fields[Battery.state]]
+                    else
+                        // It would seem it is accessing invalid memory, but it
+                        // doesn't even go past the NUL byte of the widget path
+                        // in the common case of `wd.ps_len == 4`.
+                        wd.path[wd.ps_off..].ptr[0..SZ].*;
+                writer.end += SZ;
+            },
+            .@"%fulldesign", .@"%fullnow" => {
+                unt.Percent(bat.fields[Battery.now], bat.fields[part.opt])
+                    .write(writer, part.wopts, part.quiet);
+            },
         }
-        if (batopt == .state) {
-            uio.writeStr(writer, bat.state);
-            continue;
-        }
-        const nu = switch (batopt) {
-            // zig fmt: off
-            .arg            => unreachable,
-            .@"%fullnow"    => unt.Percent(bat.now, bat.full),
-            .@"%fulldesign" => unt.Percent(bat.now, bat.full_design),
-            .state          => unreachable,
-            // zig fmt: on
-        };
-        nu.write(writer, part.wopts, part.quiet);
     }
     wd.format.last_str.writeBytes(writer, base);
 }
