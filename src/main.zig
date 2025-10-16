@@ -43,7 +43,7 @@ fn showHelpAndExit() noreturn {
 }
 
 fn showVersionAndExit() noreturn {
-    _ = uio.sys_write(2, "ziew 0.0.11\n");
+    _ = uio.sys_write(2, "ziew 0.0.12\n");
     linux.exit(0);
 }
 
