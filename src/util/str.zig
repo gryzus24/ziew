@@ -30,58 +30,51 @@ pub fn trimWhitespace(str: []const u8) []const u8 {
     return str[a..b];
 }
 
-pub inline fn unsafeAtou64(buf: []const u8) u64 {
-    var r: u64 = buf[0] & 0x0f;
+pub inline fn atou(comptime T: type, buf: []const u8) T {
+    var r: T = buf[0] & 0x0f;
     for (buf[1..]) |ch| r = r * 10 + (ch & 0x0f);
     return r;
 }
 
 pub inline fn atou64ForwardUntil(
     buf: []const u8,
-    i: *usize,
+    i: usize,
     comptime char: u8,
-) u64 {
-    var j = i.*;
-
-    var r: u64 = buf[j] & 0x0f;
-    j += 1;
-    while (buf[j] != char) : (j += 1)
+) struct { u64, usize } {
+    var j = i;
+    var r: u64 = 0;
+    while (buf[j] != char) : (j += 1) {
         r = r * 10 + (buf[j] & 0x0f);
-
-    i.* = j;
-    return r;
+    }
+    return .{ r, j };
 }
 
 pub inline fn atou64ForwardUntilOrEOF(
     buf: []const u8,
-    i: *usize,
+    i: usize,
     comptime char: u8,
-) u64 {
-    var j = i.*;
-
+) struct { u64, usize } {
+    var j = i;
     var r: u64 = 0;
-    while (j < buf.len and buf[j] != char) : (j += 1)
+    while (j < buf.len and buf[j] != char) : (j += 1) {
         r = r * 10 + (buf[j] & 0x0f);
-
-    i.* = j;
-    return r;
+    }
+    return .{ r, j };
 }
 
 pub inline fn atou64BackwardUntil(
     buf: []const u8,
-    i: *usize,
+    i: usize,
     comptime char: u8,
-) u64 {
-    var j = i.*;
-
+) struct { u64, usize } {
+    var j = i;
     var mul: u64 = 1;
     var r: u64 = 0;
     while (buf[j] != char) : (j -= 1) {
         r += (buf[j] & 0x0f) * mul;
         mul *= 10;
     }
-    i.* = j;
-    return r;
+    return .{ r, j };
 }
 
 pub fn atou32V9Back(buf: []const u8) u32 {

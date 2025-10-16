@@ -153,7 +153,7 @@ fn parseLine(line: []const u8, state: usize) !Parser {
             const value: usize = switch (key) {
                 // Make uppercase, switch off 0x40, reduce a bit, lookup.
                 .status => state_lut[(vstr[0] & (0xff - 0x20 - 0x40)) >> 1],
-                .full_design, .full, .now => ustr.unsafeAtou64(vstr),
+                .full_design, .full, .now => ustr.atou(u64, vstr),
             };
             // Technically the order of fields in uevent shouldn't change,
             // but let's be fancy and account for that possibility, change

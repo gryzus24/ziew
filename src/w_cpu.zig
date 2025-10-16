@@ -114,7 +114,7 @@ fn parseProcStat(buf: []const u8, out: *Stat) void {
     while (true) {
         var fields: [8]u64 = undefined;
         for (0..fields.len) |fi| {
-            fields[fi] = ustr.atou64ForwardUntil(buf, &i, ' ');
+            fields[fi], i = ustr.atou64ForwardUntil(buf, i, ' ');
             i += 1;
         }
         // zig fmt: off
@@ -142,29 +142,26 @@ fn parseProcStat(buf: []const u8, out: *Stat) void {
     out.nr_cpux_entries = cpu;
 
     i += "intr ".len;
-    out.stats[Stat.intr] = ustr.atou64ForwardUntil(buf, &i, ' ');
+    out.stats[Stat.intr], _ = ustr.atou64ForwardUntil(buf, i, ' ');
 
     i = buf.len - 1 - " 0 0 0 0 0 0 0 0 0 0 0\n".len;
     while (buf[i] != 'q') : (i -= 1) {}
     // i at: softir[q] 123456 2345 ...
 
-    var j = i + "q ".len;
-    out.stats[Stat.softirq] = ustr.atou64ForwardUntil(buf, &j, ' ');
+    out.stats[Stat.softirq], _ = ustr.atou64ForwardUntil(buf, i + "q ".len, ' ');
     i -= "\nsoftirq".len;
 
-    out.stats[Stat.blocked] = @intCast(ustr.atou64BackwardUntil(buf, &i, ' '));
+    out.stats[Stat.blocked], i = ustr.atou64BackwardUntil(buf, i, ' ');
     i -= "\nprocs_blocked ".len;
 
-    out.stats[Stat.running] = @intCast(ustr.atou64BackwardUntil(buf, &i, ' '));
+    out.stats[Stat.running], i = ustr.atou64BackwardUntil(buf, i, ' ');
     i -= "\nprocs_running ".len;
 
-    out.stats[Stat.forks] = ustr.atou64BackwardUntil(buf, &i, ' ');
+    out.stats[Stat.forks], i = ustr.atou64BackwardUntil(buf, i, ' ');
     i -= "btime X\nprocesses ".len;
 
     while (buf[i] != '\n') : (i -= 1) {}
-    i -= 1;
-
-    out.stats[Stat.ctxt] = ustr.atou64BackwardUntil(buf, &i, ' ');
+    out.stats[Stat.ctxt], _ = ustr.atou64BackwardUntil(buf, i - 1, ' ');
 }
 
 test "/proc/stat parser" {
