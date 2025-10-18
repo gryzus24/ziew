@@ -155,9 +155,9 @@ pub const NumUnit = struct {
                 return .{ rp, free - p, p, rp_nr_digits };
             }
             // Got rounded up - take one digit off the fractional part and make
-            // ustr.e there is one space of padding inserted if precision digits
+            // sure there is one space of padding inserted if precision digits
             // hit zero. Otherwise, there is no need to worry about inserting
-            // padding here as enough `digit_space` reustr.ts in `round` returning
+            // padding here as enough `digit_space` results in `round` returning
             // itself making the `nr_digits == rp_nr_digits` check always true.
             return .{ self.n.roundU24(p - 1), @intFromBool(p == 1), p - 1, rp_nr_digits };
         }
