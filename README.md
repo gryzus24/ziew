@@ -277,7 +277,8 @@ Every option and color configuration for each *Widget* is documented below.
 
 **BAT**
 
-    Displays power supply statistics from /sys/class/power_supply/<BATTERY>/*.
+    Displays power supply statistics from
+    /sys/class/power_supply/<BATTERY>/uevent.
 
     Required
       arg "<BATTERY>"
@@ -285,10 +286,10 @@ Every option and color configuration for each *Widget* is documented below.
 
     FORMAT options
       * arg         - the <BATTERY> name as specified in the argument,
-      * %fullnow    - charge relative to the current battery capacity,
       * %fulldesign - charge relative to the designed battery capacity,
-      * state       - battery state, either "Discharging", "Charging",
-                      "Full" or "Not charging".
+      * %fullnow    - charge relative to the current battery capacity,
+      * state       - battery state: "Discharging", "Charging", "Full",
+                      or "Not-charging".
 
     Colors
       [+] default
