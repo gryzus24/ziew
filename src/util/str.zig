@@ -49,6 +49,33 @@ pub inline fn atou64ForwardUntil(
     return .{ r, j };
 }
 
+pub inline fn atou64By8ForwardUntil(
+    buf: []const u8,
+    i: usize,
+    comptime char: u8,
+) struct { u64, usize } {
+    const V = @Vector(8, u8);
+    const exp10: [16]u32 = .{
+        100_000_000, 10_000_000, 1_000_000, 100_000,
+        10_000,      1_000,      100,       10,
+        1,           0,          0,         0,
+        0,           0,          0,         0,
+    };
+    var j = i;
+    var r: u64 = 0;
+    while (true) {
+        const block: V = buf[j..][0..8].*;
+        const digits = block & @as(V, @splat(0x0f));
+        const mask: u8 = @bitCast(block == @as(V, @splat(char)));
+        const len: u8 = @ctz(mask);
+        r *= exp10[8 - len];
+        r += @reduce(.Add, digits * exp10[1 + 8 - len ..][0..8].*);
+        j += len;
+        if (len != 8 or buf[j] == char) break;
+    }
+    return .{ r, j };
+}
+
 pub inline fn atou64ForwardUntilOrEOF(
     buf: []const u8,
     i: usize,

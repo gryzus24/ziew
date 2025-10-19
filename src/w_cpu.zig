@@ -114,7 +114,7 @@ fn parseProcStat(buf: []const u8, out: *Stat) void {
     while (true) {
         var fields: [8]u64 = undefined;
         for (0..fields.len) |fi| {
-            fields[fi], i = ustr.atou64ForwardUntil(buf, i, ' ');
+            fields[fi], i = ustr.atou64By8ForwardUntil(buf, i, ' ');
             i += 1;
         }
         // zig fmt: off
@@ -168,14 +168,14 @@ test "/proc/stat parser" {
     const t = std.testing;
 
     const buf =
-        \\cpu  46232 14 14383 12181824 2122 2994 1212 0 0 0
+        \\cpu  46232 14 14383 12181824987654321 2122 2994 1212 0 0 0
         \\cpu0 9483 5 1638 1007864 211 917 227 0 0 0
         \\cpu1 9934 0 1386 1008813 285 200 103 0 0 0
         \\cpu2 10687 4 2756 1006096 257 272 158 0 0 0
         \\cpu3 4310 2 2257 1013687 165 195 103 0 0 0
         \\cpu4 2183 0 1382 1016243 194 205 149 0 0 0
         \\cpu5 1990 0 1088 1016634 167 550 125 0 0 0
-        \\cpu6 3005 0 1043 1016226 149 135 80 0 0 0
+        \\cpu6 3005 0 1043 1016226 149 135 80123456 0 0 0
         \\cpu7 1491 0 811 1018026 141 235 67 0 0 0
         \\cpu8 848 0 573 1019392 150 78 29 0 0 0
         \\cpu9 749 0 378 1019750 122 47 24 0 0 0
@@ -195,10 +195,11 @@ test "/proc/stat parser" {
     parseProcStat(buf, &s);
     try t.expect(s.entries[0].user == 46232 + 14);
     try t.expect(s.entries[0].sys == 14383 + 2994 + 1212 + 0);
-    try t.expect(s.entries[0].idle == 12181824);
+    try t.expect(s.entries[0].idle == 12181824987654321);
     try t.expect(s.entries[0].iowait == 2122);
     try t.expect(s.entries[1].user == 9483 + 5);
     try t.expect(s.entries[1].sys == 1638 + 917 + 227 + 0);
+    try t.expect(s.entries[7].sys == 1043 + 135 + 80123456);
     try t.expect(s.entries[12].user == 858 + 0);
     try t.expect(s.entries[12].sys == 769 + 119 + 123 + 0);
     try t.expect(s.entries[12].idle == 1019145);
