@@ -7,24 +7,25 @@ const ustr = @import("util/str.zig");
 
 // == private =================================================================
 
-inline fn KB_UNIT(kb: F5608) NumUnit {
-    const MB_8 = 8192 << F5608.FRAC_SHIFT;
-    const GB_8 = 8192 * 1024 << F5608.FRAC_SHIFT;
-    const TB_8 = 8192 * 1024 * 1024 << F5608.FRAC_SHIFT;
+// Sounds ominous...
+inline fn HUMAN_UNIT(f: F5608, comptime steps: [4]NumUnit.Unit) NumUnit {
+    const K8 = 8192 << F5608.FRAC_SHIFT;
+    const M8 = 8192 * 1024 << F5608.FRAC_SHIFT;
+    const G8 = 8192 * 1024 * 1024 << F5608.FRAC_SHIFT;
 
     const shift =
-        @as(u6, @intFromBool(kb.u >= MB_8)) * 10 +
-        @as(u6, @intFromBool(kb.u >= GB_8)) * 10 +
-        @as(u6, @intFromBool(kb.u >= TB_8)) * 10;
+        @as(u6, @intFromBool(f.u >= K8)) * 10 +
+        @as(u6, @intFromBool(f.u >= M8)) * 10 +
+        @as(u6, @intFromBool(f.u >= G8)) * 10;
 
     const unit =
-        @as(u64, @intFromEnum(NumUnit.Unit.kilo)) |
-        @as(u64, @intFromEnum(NumUnit.Unit.mega)) << 10 |
-        @as(u64, @intFromEnum(NumUnit.Unit.giga)) << 20 |
-        @as(u64, @intFromEnum(NumUnit.Unit.tera)) << 30;
+        @as(u64, @intFromEnum(steps[0])) |
+        @as(u64, @intFromEnum(steps[1])) << 10 |
+        @as(u64, @intFromEnum(steps[2])) << 20 |
+        @as(u64, @intFromEnum(steps[3])) << 30;
 
     return .{
-        .n = .{ .u = kb.u >> shift },
+        .n = .{ .u = f.u >> shift },
         .u = @enumFromInt((unit >> shift) & 0xff),
     };
 }
@@ -273,11 +274,11 @@ pub const NumUnit = struct {
 };
 
 pub inline fn SizeKb(value: u64) NumUnit {
-    return KB_UNIT(F5608.init(value));
+    return HUMAN_UNIT(.init(value), .{ .kilo, .mega, .giga, .tera });
 }
 
 pub inline fn SizeBytes(value: u64) NumUnit {
-    return KB_UNIT(F5608.init(value).div(1024));
+    return HUMAN_UNIT(F5608.init(value).div(1024), .{ .kilo, .mega, .giga, .tera });
 }
 
 pub inline fn Percent(value: u64, total: u64) NumUnit {
@@ -290,7 +291,7 @@ pub fn UnitSI(value: u64) NumUnit {
     const G = 1000 * 1000 * 1000;
     const T = 1000 * 1000 * 1000 * 1000;
 
-    const f = F5608.init(value);
+    const f: F5608 = .init(value);
     if (value < K) return .{ .n = f, .u = .si_one };
     if (value < M) return .{ .n = f.div(K), .u = .si_kilo };
     if (value < G) return .{ .n = f.div(M), .u = .si_mega };
