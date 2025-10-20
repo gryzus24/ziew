@@ -18,7 +18,6 @@ const builtin = std.builtin;
 const enums = std.enums;
 const fs = std.fs;
 const linux = std.os.linux;
-const math = std.math;
 const mem = std.mem;
 const meta = std.meta;
 
@@ -423,7 +422,7 @@ pub const Widget = struct {
     };
 };
 
-pub const TimeOpt = enum {
+pub const TimeOpt = enum(u8) {
     time,
     @"1",
     @"2",
@@ -436,10 +435,10 @@ pub const TimeOpt = enum {
     @"9",
     arg,
 
-    pub const ColorSupported = enum {};
+    pub const ColorSupported = enum(u8) {};
 };
 
-pub const MemOpt = enum {
+pub const MemOpt = enum(u8) {
     @"%total",
     @"%free",
     @"%available",
@@ -477,7 +476,7 @@ pub const MemOpt = enum {
     }
 };
 
-pub const CpuOpt = enum {
+pub const CpuOpt = enum(u8) {
     @"%all",
     @"%user",
     @"%sys",
@@ -526,7 +525,7 @@ pub const CpuOpt = enum {
     }
 };
 
-pub const DiskOpt = enum {
+pub const DiskOpt = enum(u8) {
     @"%total",
     @"%free",
     @"%available",
@@ -569,7 +568,7 @@ pub const DiskOpt = enum {
     }
 };
 
-pub const NetOpt = enum {
+pub const NetOpt = enum(u8) {
     arg,
     inet,
     flags,
@@ -622,7 +621,7 @@ pub const NetOpt = enum {
     }
 };
 
-pub const BatOpt = enum {
+pub const BatOpt = enum(u8) {
     state,
     @"%fulldesign",
     @"%fullnow",
@@ -633,13 +632,13 @@ pub const BatOpt = enum {
     });
 };
 
-pub const ReadOpt = enum {
+pub const ReadOpt = enum(u8) {
     arg,
     basename,
     content,
     raw,
 
-    pub const ColorSupported = enum {};
+    pub const ColorSupported = enum(u8) {};
 };
 
 pub fn strWid(str: []const u8) ?Widget.Id {
@@ -788,7 +787,7 @@ pub fn MakeEnumSubset(comptime E: type, comptime new_values: []const E) type {
     }
     return @Type(.{
         .@"enum" = .{
-            .tag_type = math.IntFittingRange(0, new_val_max),
+            .tag_type = E_enum.tag_type,
             .fields = &result,
             .decls = &.{},
             .is_exhaustive = E_enum.is_exhaustive,
