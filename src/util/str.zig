@@ -169,14 +169,13 @@ pub fn IndexIterator(comptime T: type, findme: T) type {
                 return self.nextBit(i);
 
             const len = self.buf.len;
-            while (i < len & ~@as(usize, BlockSize - 1)) {
+            while (i < len & ~@as(usize, BlockSize - 1)) : (i += BlockSize) {
                 const block: Block = self.buf[i..][0..BlockSize].*;
                 const mask = block == @as(Block, @splat(findme));
                 if (@reduce(.Or, mask)) {
                     self.bits = @bitCast(mask);
                     return self.nextBit(i);
                 }
-                i += BlockSize;
             }
             while (i < len) : (i += 1) {
                 if (self.buf[i] == findme) {
@@ -184,7 +183,7 @@ pub fn IndexIterator(comptime T: type, findme: T) type {
                     return i;
                 }
             }
-            self.i = self.buf.len;
+            self.i = len;
             return null;
         }
     };
