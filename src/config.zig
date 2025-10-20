@@ -242,8 +242,12 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
         ptr.* = .initDefault(.zero, opt);
 
         for (flags) |ch| switch (ch | 0x20) {
-            'd' => ptr.diff = true,
-            'q' => ptr.quiet = true,
+            'd' => ptr.flags.diff = true,
+            's' => {
+                ptr.flags.diff = true;
+                ptr.flags.persec = true;
+            },
+            'q' => ptr.flags.quiet = true,
             else => {},
         };
 

@@ -158,7 +158,7 @@ pub noinline fn widget(
         } else {
             nu = unt.SizeKb(state.fields[part.opt - typ.MemOpt.SIZE_OPTS_OFF]);
         }
-        nu.write(writer, part.wopts, part.quiet);
+        nu.write(writer, part.wopts, part.flags.quiet);
     }
     wd.format.last_str.writeBytes(writer, base);
 }

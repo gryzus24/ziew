@@ -45,7 +45,3 @@ pub inline fn nrDigits(n: u64) u8 {
     }
     return r;
 }
-
-pub inline fn calc(new: u64, old: u64, diff: bool) u64 {
-    return if (diff) new - old else new;
-}

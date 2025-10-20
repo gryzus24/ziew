@@ -35,17 +35,29 @@ pub const Format = struct {
     pub const Part = struct {
         str: umem.MemSlice(u8),
         opt: u8,
-        diff: bool,
-        quiet: bool,
         wopts: unt.NumUnit.WriteOptions,
+        flags: Flags,
+
+        const Flags = packed struct(u16) {
+            diff: bool,
+            persec: bool,
+            quiet: bool,
+            _: u13,
+
+            pub const default: Flags = .{
+                .diff = false,
+                .persec = false,
+                .quiet = false,
+                ._ = 0,
+            };
+        };
 
         pub fn initDefault(str: umem.MemSlice(u8), opt: u8) @This() {
             return .{
                 .str = str,
                 .opt = opt,
-                .diff = false,
-                .quiet = false,
                 .wopts = .default,
+                .flags = .default,
             };
         }
     };
@@ -765,6 +777,10 @@ pub fn writeWidget(
 
 pub fn optBit(opt: u8) OptBit {
     return @as(OptBit, 1) << @intCast(opt);
+}
+
+pub inline fn calc(new: u64, old: u64, flags: Format.Part.Flags) u64 {
+    return if (flags.diff) new - old else new;
 }
 
 // == meta functions ==========================================================

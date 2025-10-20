@@ -339,18 +339,18 @@ pub noinline fn widget(
             @as(unt.NumUnit, .{
                 .n = state.usage[part.opt],
                 .u = .percent,
-            }).write(writer, part.wopts, part.quiet);
+            }).write(writer, part.wopts, part.flags.quiet);
             continue;
         }
 
         if (bit & wd.opt_mask.stats != 0) {
             unt.UnitSI(
-                misc.calc(
+                typ.calc(
                     new.stats[part.opt - typ.CpuOpt.STATS_OPTS_OFF],
                     old.stats[part.opt - typ.CpuOpt.STATS_OPTS_OFF],
-                    part.diff,
+                    part.flags,
                 ),
-            ).write(writer, part.wopts, part.quiet);
+            ).write(writer, part.wopts, part.flags.quiet);
             continue;
         }
 

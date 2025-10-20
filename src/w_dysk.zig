@@ -133,7 +133,7 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
         } else {
             nu = unt.UnitSI(sfs.fields[part.opt - typ.DiskOpt.SI_INO_OPTS_OFF]);
         }
-        nu.write(writer, part.wopts, part.quiet);
+        nu.write(writer, part.wopts, part.flags.quiet);
     }
     wd.format.last_str.writeBytes(writer, base);
 }

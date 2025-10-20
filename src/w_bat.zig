@@ -242,7 +242,7 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
             },
             .@"%fulldesign", .@"%fullnow" => {
                 unt.Percent(bat.fields[Battery.now], bat.fields[part.opt])
-                    .write(writer, part.wopts, part.quiet);
+                    .write(writer, part.wopts, part.flags.quiet);
             },
         }
     }

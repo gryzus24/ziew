@@ -5,7 +5,6 @@ const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
 const ext = @import("util/ext.zig");
-const misc = @import("util/misc.zig");
 const udiv = @import("util/div.zig");
 const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
@@ -420,12 +419,12 @@ pub noinline fn widget(
             const b = old_if.?.fields[part.opt - typ.NetOpt.NETDEV_OPTS_OFF];
 
             if (bit & wd.opt_mask.netdev_size != 0) {
-                nu = unt.SizeBytes(misc.calc(a, b, part.diff));
+                nu = unt.SizeBytes(typ.calc(a, b, part.flags));
             } else {
-                nu = unt.UnitSI(misc.calc(a, b, part.diff));
+                nu = unt.UnitSI(typ.calc(a, b, part.flags));
             }
         }
-        nu.write(writer, part.wopts, part.quiet);
+        nu.write(writer, part.wopts, part.flags.quiet);
     }
     wd.format.last_str.writeBytes(writer, base);
 }
