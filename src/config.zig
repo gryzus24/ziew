@@ -364,7 +364,7 @@ const ParseWant = enum {
 const ParseLineResult = union(enum) {
     widget: struct {
         id: typ.Widget.Id,
-        interval: ?typ.DeciSec = null,
+        interval: ?typ.Widget.Interval = null,
         arg: ?Split = null,
         format: ?Split = null,
     },
@@ -410,7 +410,7 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
             },
             .interval => {
                 if (acceptInterval(field)) |ok| {
-                    result.widget.interval = ok;
+                    result.widget.interval = .init(ok);
                     want = .key;
                 } else {
                     return .fail("bad interval", split);

@@ -214,9 +214,9 @@ fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
     for (widgets) |*w| {
         // Intervals of `WIDGET_INTERVAL_MAX` are
         // treated as "refresh once and forget".
-        if (w.interval != typ.WIDGET_INTERVAL_MAX) {
-            min = @min(min, w.interval);
-            gcd = math.gcd(if (gcd == 0) w.interval else gcd, w.interval);
+        if (w.interval.set != typ.WIDGET_INTERVAL_MAX) {
+            min = @min(min, w.interval.set);
+            gcd = math.gcd(if (gcd == 0) w.interval.set else gcd, w.interval.set);
         }
     }
     if (gcd < min) {
@@ -282,7 +282,7 @@ pub fn main() void {
     refresh: while (true) {
         if (g_refresh_all) {
             @branchHint(.unlikely);
-            for (widgets) |*w| w.interval_now = 0;
+            for (widgets) |*w| w.interval.now = 0;
             g_refresh_all = false;
         }
 
@@ -295,10 +295,10 @@ pub fn main() void {
         var updated: Update = .{ .net = net_state.netdev == null };
 
         for (widgets, 0..) |*w, i| {
-            w.interval_now -|= sleep_dsec;
-            if (w.interval_now == 0) {
+            w.interval.now -|= sleep_dsec;
+            if (w.interval.now == 0) {
                 @branchHint(.likely);
-                w.interval_now = w.interval;
+                w.interval.now = w.interval.set;
 
                 var fw: uio.Writer = .fixed(&bufs[i]);
                 switch (w.id) {

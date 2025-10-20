@@ -66,17 +66,24 @@ pub const Format = struct {
 pub const Widget = struct {
     id: Id,
     data: Data,
-    interval: DeciSec,
-    interval_now: DeciSec,
+    interval: Interval,
     fg: Color,
     bg: Color,
+
+    pub const Interval = struct {
+        set: DeciSec,
+        now: DeciSec,
+
+        pub fn init(set: DeciSec) @This() {
+            return .{ .set = set, .now = 0 };
+        }
+    };
 
     pub fn initDefault(id: Id, data: Data) @This() {
         return .{
             .id = id,
             .data = data,
-            .interval = WIDGET_INTERVAL_DEFAULT,
-            .interval_now = 0,
+            .interval = .init(WIDGET_INTERVAL_DEFAULT),
             .fg = .{ .static = .default },
             .bg = .{ .static = .default },
         };
