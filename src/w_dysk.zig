@@ -42,7 +42,7 @@ const Statfs = struct {
         assert(ino_used == @intFromEnum(typ.DiskOpt.ino_used) - si_ino_off);
     }
 
-    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
+    pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         return color.firstColorGEThreshold(
             unt.Percent(
                 self.fields[ac.opt],

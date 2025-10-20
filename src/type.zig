@@ -410,7 +410,7 @@ pub const Widget = struct {
 
     pub const NoopColorHandler = struct {
         pub fn checkPairs(
-            other: @This(),
+            other: *const @This(),
             active: color.Active,
             base: [*]const u8,
         ) color.Hex {

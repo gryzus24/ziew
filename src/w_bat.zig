@@ -84,7 +84,7 @@ const Battery = struct {
         .fields = @splat(0),
     };
 
-    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
+    pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         return switch (@as(typ.BatOpt.ColorSupported, @enumFromInt(ac.opt))) {
             .state => color.firstColorEQThreshold(
                 @intCast(self.fields[Battery.state]),

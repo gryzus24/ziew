@@ -44,7 +44,7 @@ comptime {
 const ColorHandler = struct {
     up: bool,
 
-    pub fn checkPairs(self: @This(), ac: color.Active, base: [*]const u8) color.Hex {
+    pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         return color.firstColorEQThreshold(@intFromBool(self.up), ac.pairs.get(base));
     }
 };

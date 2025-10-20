@@ -274,11 +274,7 @@ pub const CpuState = struct {
         self.curr ^= 1;
     }
 
-    pub fn checkPairs(
-        self: @This(),
-        ac: color.Active,
-        base: [*]const u8,
-    ) color.Hex {
+    pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         const new, const old = self.getCurrPrev();
         return color.firstColorGEThreshold(
             switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(ac.opt))) {
