@@ -230,7 +230,7 @@ pub const NumUnit = struct {
             const n = (rp.frac() * 1000) >> F5608.FRAC_SHIFT;
             const q, const r = udiv.cMultShiftDivMod(n, 100, n_max);
             buf[i - 2 ..][0..2].* = ustr.digits2_lut(r);
-            buf[i - 4 ..][0..2].* = @bitCast(@as(u16, @intCast(q)) | 0x2e30);
+            buf[i - 4 ..][0..2].* = .{ '.', '0' | @as(u8, @intCast(q)) };
             i -= 4;
         } else if (precision != 0) {
             const p2 = precision == 2;
