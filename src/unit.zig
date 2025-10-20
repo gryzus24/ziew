@@ -102,7 +102,7 @@ pub const NumUnit = struct {
         mega = 'M',
         giga = 'G',
         tera = 'T',
-        si_one = '\x00',
+        si_one = ' ',
         si_kilo = 'k',
         si_mega = 'm',
         si_giga = 'g',
@@ -219,65 +219,42 @@ pub const NumUnit = struct {
 
         if (alignment == .left)
             i -= pad;
-
-        if (self.u != .si_one) {
+        if (self.u != .si_one)
             i -= 1;
-            buf[i] = @intFromEnum(self.u);
-        }
 
-        switch (precision) {
-            0 => {},
-            1 => {
-                const n = (rp.frac() * 10) >> F5608.FRAC_SHIFT;
-                i -= 2;
-                buf[i..][0..2].* = .{ '.', '0' | @as(u8, @intCast(n)) };
-            },
-            2 => {
-                const n = (rp.frac() * 100) >> F5608.FRAC_SHIFT;
-                const b, const a = ustr.digits2_lut(n);
-                i -= 3;
-                buf[i..][0..3].* = .{ '.', b, a };
-            },
-            PRECISION_DIGITS_MAX => {
-                const n_max = (F5608.FRAC_MASK * 1000) >> F5608.FRAC_SHIFT;
-                const n = (rp.frac() * 1000) >> F5608.FRAC_SHIFT;
-                const q, const r = udiv.cMultShiftDivMod(n, 100, n_max);
-                const b, const a = ustr.digits2_lut(r);
-                i -= 4;
-                buf[i..][0..4].* = .{ '.', '0' | @as(u8, @intCast(q)), b, a };
-            },
-            else => unreachable,
+        buf[i] = @intFromEnum(self.u);
+
+        if (precision > PRECISION_DIGITS_MAX) unreachable;
+        if (precision == PRECISION_DIGITS_MAX) {
+            const n_max = (F5608.FRAC_MASK * 1000) >> F5608.FRAC_SHIFT;
+            const n = (rp.frac() * 1000) >> F5608.FRAC_SHIFT;
+            const q, const r = udiv.cMultShiftDivMod(n, 100, n_max);
+            buf[i - 2 ..][0..2].* = ustr.digits2_lut(r);
+            buf[i - 4 ..][0..2].* = @bitCast(@as(u16, @intCast(q)) | 0x2e30);
+            i -= 4;
+        } else if (precision != 0) {
+            const p2 = precision == 2;
+            const n = (rp.frac() * @as(u8, if (p2) 100 else 10)) >> F5608.FRAC_SHIFT;
+            buf[i - 2 ..][0..2].* = ustr.digits2_lut(n);
+            buf[i - 1 - precision] = '.';
+            i -= 1 + precision;
         }
 
         const n = rp.whole();
-        switch (nr_digits) {
-            0 => unreachable,
-            1 => {
-                i -= 1;
-                buf[i] = '0' | @as(u8, @intCast(n));
-            },
-            2 => {
-                i -= 2;
-                buf[i..][0..2].* = ustr.digits2_lut(n);
-            },
-            3 => {
-                const q, const r = udiv.cMultShiftDivMod(n, 100, 999);
-                const b, const a = ustr.digits2_lut(r);
-                i -= 3;
-                buf[i..][0..3].* = .{ '0' | @as(u8, @intCast(q)), b, a };
-            },
-            4 => {
-                const q, const r = udiv.cMultShiftDivMod(n, 100, 9999);
-                const b, const a = ustr.digits2_lut(r);
-                const d, const c = ustr.digits2_lut(q);
-                i -= 4;
-                buf[i..][0..4].* = .{ d, c, b, a };
-            },
-            else => {
-                @branchHint(.cold);
-                _ = ustr.unsafeU64toa(&buf, n);
-            },
+
+        if (nr_digits <= 2) {
+            buf[i - 2 ..][0..2].* = ustr.digits2_lut(n);
+        } else if (nr_digits <= 4) {
+            const div = 100;
+            const ms = comptime udiv.DivConstant(div, 9999);
+            const q, const r = udiv.multShiftDivMod(n, ms, div);
+            buf[i - 2 ..][0..2].* = ustr.digits2_lut(r);
+            buf[i - 4 ..][0..2].* = ustr.digits2_lut(q);
+        } else {
+            _ = ustr.unsafeU64toa(buf[i - nr_digits .. i], n);
         }
+        buf[i - 1 - nr_digits] = ' ';
+        i -= nr_digits;
 
         if (alignment == .right)
             i -= pad;
