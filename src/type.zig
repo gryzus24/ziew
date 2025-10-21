@@ -24,7 +24,8 @@ const meta = std.meta;
 // == public types ============================================================
 
 // 1/10th of a second
-pub const DeciSec = u32;
+pub const DeciSec = i32;
+pub const UDeciSec = u32;
 
 pub const OptBit = u32;
 
@@ -709,7 +710,7 @@ pub const WID__OPTS_SUPPORTING_COLOR: [Widget.NR_WIDGETS][]const bool = blk: {
 pub const WIDGET_INTERVAL_DEFAULT = 50;
 
 /// Maximum widget refresh interval (refresh once and forget).
-pub const WIDGET_INTERVAL_MAX = 1 << 31;
+pub const WIDGET_INTERVAL_MAX: DeciSec = (1 << 31) - 1;
 
 /// Individual widget maximum buffer size.
 pub const WIDGET_BUF_MAX = 128;
@@ -786,8 +787,21 @@ pub fn optBit(opt: u8) OptBit {
     return @as(OptBit, 1) << @intCast(opt);
 }
 
-pub inline fn calc(new: u64, old: u64, flags: Format.Part.Flags) u64 {
-    return if (flags.diff) new - old else new;
+pub inline fn calc(
+    new: u64,
+    old: u64,
+    interval: Widget.Interval,
+    flags: Format.Part.Flags,
+) u64 {
+    var value = new;
+    if (flags.diff)
+        value -= old;
+    if (flags.persec) {
+        if (!flags.diff) unreachable;
+        const span: UDeciSec = @intCast(interval.set - interval.now);
+        value = value * 10 / span;
+    }
+    return value;
 }
 
 // == meta functions ==========================================================

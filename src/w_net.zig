@@ -418,10 +418,11 @@ pub noinline fn widget(
             const a = new_if.?.fields[part.opt - typ.NetOpt.NETDEV_OPTS_OFF];
             const b = old_if.?.fields[part.opt - typ.NetOpt.NETDEV_OPTS_OFF];
 
+            const value = typ.calc(a, b, w.interval, part.flags);
             if (bit & wd.opt_mask.netdev_size != 0) {
-                nu = unt.SizeBytes(typ.calc(a, b, part.flags));
+                nu = unt.SizeBytes(value);
             } else {
-                nu = unt.UnitSI(typ.calc(a, b, part.flags));
+                nu = unt.UnitSI(value);
             }
         }
         nu.write(writer, part.wopts, part.flags.quiet);

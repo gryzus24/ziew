@@ -209,22 +209,23 @@ fn setupSignals() void {
 }
 
 fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
-    var min: typ.DeciSec = typ.WIDGET_INTERVAL_MAX;
-    var gcd: typ.DeciSec = 0;
+    var min: typ.UDeciSec = typ.WIDGET_INTERVAL_MAX;
+    var gcd: typ.UDeciSec = 0;
     for (widgets) |*w| {
         // Intervals of `WIDGET_INTERVAL_MAX` are
         // treated as "refresh once and forget".
-        if (w.interval.set != typ.WIDGET_INTERVAL_MAX) {
-            min = @min(min, w.interval.set);
-            gcd = math.gcd(if (gcd == 0) w.interval.set else gcd, w.interval.set);
+        const interval: typ.UDeciSec = @intCast(w.interval.set);
+        if (interval != typ.WIDGET_INTERVAL_MAX) {
+            min = @min(min, interval);
+            gcd = math.gcd(if (gcd == 0) interval else gcd, interval);
         }
     }
     if (gcd < min) {
-        log.warn(&.{"gcd of intervals < minimum interval, widget refreshes will be inexact"});
+        log.warn(&.{"GCD of intervals < shortest interval, widget updates will be inexact"});
     }
     // NOTE: gcd is the obvious choice here, but it might prove
     //       disastrous if the interval is misconfigured...
-    return min;
+    return @intCast(min);
 }
 
 pub fn main() void {
@@ -239,37 +240,54 @@ pub fn main() void {
 
     const sleep_dsec = sleepInterval(widgets);
     const sleep_ts: linux.timespec = .{
-        .sec = sleep_dsec / 10,
-        .nsec = (sleep_dsec % 10) * (time.ns_per_s / 10),
+        .sec = @divTrunc(sleep_dsec, 10),
+        .nsec = (@rem(sleep_dsec, 10)) * (time.ns_per_s / 10),
     };
 
     var cpu_state: w_cpu.CpuState = undefined;
     var mem_state: w_mem.MemState = undefined;
     var net_state: w_net.NetState = .empty;
 
-    var mem_state_inited = false;
-    var cpu_state_inited = false;
-    var net_state_inited = false;
+    const Info = struct {
+        cpu: Widget = .{},
+        mem: Widget = .{},
+        net: Widget = .{},
+
+        const Widget = struct {
+            inited: bool = false,
+            interval_min: typ.DeciSec = typ.WIDGET_INTERVAL_MAX,
+        };
+    };
+    var info: Info = .{};
 
     for (widgets) |*w| switch (w.id) {
         .CPU => {
-            if (!cpu_state_inited) {
+            if (!info.cpu.inited) {
                 cpu_state = try .init(&reg);
-                cpu_state_inited = true;
+                info.cpu.inited = true;
             }
+            info.cpu.interval_min = @min(info.cpu.interval_min, w.interval.set);
         },
         .MEM => {
-            if (!mem_state_inited) {
+            if (!info.mem.inited) {
                 mem_state = .init();
-                mem_state_inited = true;
+                info.mem.inited = true;
             }
+            info.mem.interval_min = @min(info.mem.interval_min, w.interval.set);
         },
         .NET => {
-            if (!net_state_inited) {
+            if (!info.net.inited) {
                 net_state = .init(widgets);
-                net_state_inited = true;
+                info.net.inited = true;
             }
+            info.net.interval_min = @min(info.net.interval_min, w.interval.set);
         },
+        else => {},
+    };
+    for (widgets) |*w| switch (w.id) {
+        .CPU => w.interval.set = info.cpu.interval_min,
+        .MEM => w.interval.set = info.mem.interval_min,
+        .NET => w.interval.set = info.net.interval_min,
         else => {},
     };
 
@@ -295,11 +313,8 @@ pub fn main() void {
         var updated: Update = .{ .net = net_state.netdev == null };
 
         for (widgets, 0..) |*w, i| {
-            w.interval.now -|= sleep_dsec;
-            if (w.interval.now == 0) {
-                @branchHint(.likely);
-                w.interval.now = w.interval.set;
-
+            w.interval.now -= sleep_dsec;
+            if (w.interval.now <= 0) {
                 var fw: uio.Writer = .fixed(&bufs[i]);
                 switch (w.id) {
                     .TIME => w_time.widget(&fw, w, base),
@@ -329,6 +344,7 @@ pub fn main() void {
                     .READ => w_read.widget(&fw, w, base),
                 }
                 views[i] = typ.writeWidgetEnd(&fw);
+                w.interval.now = w.interval.set;
             }
         }
 

@@ -348,6 +348,7 @@ pub noinline fn widget(
                 typ.calc(
                     new.stats[part.opt - typ.CpuOpt.STATS_OPTS_OFF],
                     old.stats[part.opt - typ.CpuOpt.STATS_OPTS_OFF],
+                    w.interval,
                     part.flags,
                 ),
             ).write(writer, part.wopts, part.flags.quiet);
