@@ -354,7 +354,7 @@ pub noinline fn widget(
 
     const ch: ColorHandler = .{ .up = up };
 
-    const fg, const bg = w.check(ch, base);
+    const fg, const bg = w.check(&ch, base);
     typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);

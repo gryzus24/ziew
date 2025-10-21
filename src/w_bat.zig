@@ -214,7 +214,7 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
         state = ret.state;
     }
 
-    const fg, const bg = w.check(bat, base);
+    const fg, const bg = w.check(&bat, base);
     typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
