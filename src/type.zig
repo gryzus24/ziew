@@ -217,6 +217,7 @@ pub const Widget = struct {
 
         pub const DiskData = struct {
             format: Format,
+            mount_id: u8,
             len: u8,
             mountpoint: [MOUNTPOINT_SIZE]u8,
             opt_mask: Masks,
@@ -230,7 +231,7 @@ pub const Widget = struct {
             };
 
             const MOUNTPOINT_SIZE =
-                DATA_SIZE_MAX - @sizeOf(Format) - 1 - @sizeOf(Masks);
+                DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1 - @sizeOf(Masks);
 
             pub fn init(
                 reg: *umem.Region,
@@ -243,6 +244,7 @@ pub const Widget = struct {
 
                 const ret = try reg.alloc(@This(), .front);
                 ret.format = format;
+                ret.mount_id = 0;
                 ret.len = @intCast(arg.len);
                 @memcpy(ret.mountpoint[0..arg.len], arg);
                 ret.mountpoint[arg.len] = 0;
@@ -793,6 +795,7 @@ pub inline fn calc(
     interval: Widget.Interval,
     flags: Format.Part.Flags,
 ) u64 {
+    // Might generate a cmov if there are spare registers available.
     var value = new;
     if (flags.diff)
         value -= old;
@@ -802,6 +805,25 @@ pub inline fn calc(
         value = value * 10 / span;
     }
     return value;
+}
+
+pub inline fn calcWithOverflow(
+    new: u64,
+    old: u64,
+    interval: Widget.Interval,
+    flags: Format.Part.Flags,
+) struct { u64, bool } {
+    var value, var of: u8 = .{ new, 0 };
+    if (flags.diff) {
+        value, of = @subWithOverflow(value, old);
+        if (of != 0)
+            value = 0 -% value;
+        if (flags.persec) {
+            const span: UDeciSec = @intCast(interval.set - interval.now);
+            value = value * 10 / span;
+        }
+    }
+    return .{ value, of != 0 };
 }
 
 // == meta functions ==========================================================

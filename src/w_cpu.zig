@@ -336,14 +336,22 @@ pub noinline fn widget(
 
         const bit = typ.optBit(part.opt);
         if (bit & wd.opt_mask.usage != 0) {
+            const flags: unt.NumUnit.Flags = .{
+                .quiet = part.flags.quiet,
+                .negative = false,
+            };
             @as(unt.NumUnit, .{
                 .n = state.usage[part.opt],
                 .u = .percent,
-            }).write(writer, part.wopts, part.flags.quiet);
+            }).write(writer, part.wopts, flags);
             continue;
         }
 
         if (bit & wd.opt_mask.stats != 0) {
+            const flags: unt.NumUnit.Flags = .{
+                .quiet = part.flags.quiet,
+                .negative = false,
+            };
             unt.UnitSI(
                 typ.calc(
                     new.stats[part.opt - typ.CpuOpt.STATS_OPTS_OFF],
@@ -351,7 +359,7 @@ pub noinline fn widget(
                     w.interval,
                     part.flags,
                 ),
-            ).write(writer, part.wopts, part.flags.quiet);
+            ).write(writer, part.wopts, flags);
             continue;
         }
 

@@ -228,6 +228,61 @@ fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
     return @intCast(min);
 }
 
+fn setupWidgets(
+    reg: *umem.Region,
+    widgets: []typ.Widget,
+    mem_state: *w_mem.MemState,
+    cpu_state: *w_cpu.CpuState,
+    disk_state: *w_dysk.State,
+    net_state: *w_net.NetState,
+) !void {
+    var intervals: [4]typ.DeciSec = @splat(typ.WIDGET_INTERVAL_MAX);
+    var inited: [4]bool = @splat(false);
+    const mem_i = 0;
+    const cpu_i = 1;
+    const net_i = 2;
+    const disk_i = 3;
+
+    for (widgets) |*w| switch (w.id) {
+        .MEM => {
+            if (!inited[mem_i]) {
+                mem_state.* = .init();
+                inited[mem_i] = true;
+            }
+            intervals[mem_i] = @min(intervals[mem_i], w.interval.set);
+        },
+        .CPU => {
+            if (!inited[cpu_i]) {
+                cpu_state.* = try .init(reg);
+                inited[cpu_i] = true;
+            }
+            intervals[cpu_i] = @min(intervals[cpu_i], w.interval.set);
+        },
+        .DISK => {
+            if (!inited[disk_i]) {
+                disk_state.* = try .init(reg, widgets);
+                inited[disk_i] = true;
+            }
+            // DISK widgets perform per mountpoint updates,
+            // no need to clamp the interval.
+        },
+        .NET => {
+            if (!inited[net_i]) {
+                net_state.* = .init(widgets);
+                inited[net_i] = true;
+            }
+            intervals[net_i] = @min(intervals[net_i], w.interval.set);
+        },
+        else => {},
+    };
+    for (widgets) |*w| switch (w.id) {
+        .CPU => w.interval.set = intervals[cpu_i],
+        .MEM => w.interval.set = intervals[mem_i],
+        .NET => w.interval.set = intervals[net_i],
+        else => {},
+    };
+}
+
 pub fn main() void {
     errdefer |e| log.fatal(&.{ "main: ", @errorName(e) });
 
@@ -244,52 +299,19 @@ pub fn main() void {
         .nsec = (@rem(sleep_dsec, 10)) * (time.ns_per_s / 10),
     };
 
-    var cpu_state: w_cpu.CpuState = undefined;
     var mem_state: w_mem.MemState = undefined;
+    var cpu_state: w_cpu.CpuState = undefined;
+    var disk_state: w_dysk.State = undefined;
     var net_state: w_net.NetState = .empty;
 
-    const Info = struct {
-        cpu: Widget = .{},
-        mem: Widget = .{},
-        net: Widget = .{},
-
-        const Widget = struct {
-            inited: bool = false,
-            interval_min: typ.DeciSec = typ.WIDGET_INTERVAL_MAX,
-        };
-    };
-    var info: Info = .{};
-
-    for (widgets) |*w| switch (w.id) {
-        .CPU => {
-            if (!info.cpu.inited) {
-                cpu_state = try .init(&reg);
-                info.cpu.inited = true;
-            }
-            info.cpu.interval_min = @min(info.cpu.interval_min, w.interval.set);
-        },
-        .MEM => {
-            if (!info.mem.inited) {
-                mem_state = .init();
-                info.mem.inited = true;
-            }
-            info.mem.interval_min = @min(info.mem.interval_min, w.interval.set);
-        },
-        .NET => {
-            if (!info.net.inited) {
-                net_state = .init(widgets);
-                info.net.inited = true;
-            }
-            info.net.interval_min = @min(info.net.interval_min, w.interval.set);
-        },
-        else => {},
-    };
-    for (widgets) |*w| switch (w.id) {
-        .CPU => w.interval.set = info.cpu.interval_min,
-        .MEM => w.interval.set = info.mem.interval_min,
-        .NET => w.interval.set = info.net.interval_min,
-        else => {},
-    };
+    try setupWidgets(
+        &reg,
+        widgets,
+        &mem_state,
+        &cpu_state,
+        &disk_state,
+        &net_state,
+    );
 
     var views = try reg.allocMany([]const u8, widgets.len, .front);
     var bufs = try reg.allocMany([typ.WIDGET_BUF_MAX]u8, widgets.len, .front);
@@ -306,8 +328,8 @@ pub fn main() void {
 
         const Update = packed struct(u32) {
             net: bool = false,
-            cpu: bool = false,
             mem: bool = false,
+            cpu: bool = false,
             _: u29 = 0,
         };
         var updated: Update = .{ .net = net_state.netdev == null };
@@ -332,7 +354,7 @@ pub fn main() void {
                         }
                         w_cpu.widget(&fw, w, base, &cpu_state);
                     },
-                    .DISK => w_dysk.widget(&fw, w, base),
+                    .DISK => w_dysk.widget(&fw, w, base, &disk_state),
                     .NET => {
                         if (!updated.net) {
                             try w_net.update(&reg, &net_state.netdev.?);

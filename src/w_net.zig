@@ -425,7 +425,11 @@ pub noinline fn widget(
                 nu = unt.UnitSI(value);
             }
         }
-        nu.write(writer, part.wopts, part.flags.quiet);
+        const flags: unt.NumUnit.Flags = .{
+            .quiet = part.flags.quiet,
+            .negative = false,
+        };
+        nu.write(writer, part.wopts, flags);
     }
     wd.format.last_str.writeBytes(writer, base);
 }

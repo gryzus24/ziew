@@ -110,6 +110,11 @@ pub const NumUnit = struct {
         si_tera = 't',
     };
 
+    pub const Flags = struct {
+        quiet: bool,
+        negative: bool,
+    };
+
     pub const WriteOptions = packed struct(u8) {
         alignment: Alignment,
         width: u3,
@@ -176,9 +181,9 @@ pub const NumUnit = struct {
         self: @This(),
         writer: *uio.Writer,
         opts: WriteOptions,
-        quiet: bool,
+        flags: Flags,
     ) void {
-        // Fits in 128 bits; width(9) + dot(1) + frac(3) + unit(1),
+        // Fits in 128 bits; sign(1) + width(9) + dot(1) + frac(3) + unit(1),
         // we can use overlapping stores with an XMM register for copying.
         const HALF = 16;
 
@@ -203,6 +208,8 @@ pub const NumUnit = struct {
             width += 1;
             precision = 0;
         }
+        if (flags.negative and width > 1)
+            width -= 1;
 
         var rp: F5608 = undefined;
         var pad: u8 = undefined;
@@ -257,11 +264,15 @@ pub const NumUnit = struct {
         buf[i - 1 - nr_digits] = ' ';
         i -= nr_digits;
 
+        if (flags.negative) {
+            i -= 1;
+            buf[i] = '-';
+        }
         if (alignment == .right)
             i -= pad;
 
         var w: @Vector(HALF, u8) = undefined;
-        if (quiet and rp.u == 0) {
+        if (flags.quiet and rp.u == 0) {
             // Copying from the second half of the buffer (instead of
             // using @splat) tricks the compiler into emitting cmovs.
             w = buf[HALF..].*;

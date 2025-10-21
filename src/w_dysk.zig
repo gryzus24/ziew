@@ -5,9 +5,9 @@ const unt = @import("unit.zig");
 
 const ext = @import("util/ext.zig");
 const uio = @import("util/io.zig");
+const umem = @import("util/mem.zig");
 
-const Statfs = struct {
-    inner: ext.struct_statfs,
+const Mount = struct {
     fields: [7]u64,
     opt_mask_pct_ino: typ.OptBit,
 
@@ -42,34 +42,100 @@ const Statfs = struct {
         assert(ino_used == @intFromEnum(typ.DiskOpt.ino_used) - si_ino_off);
     }
 
-    pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        return color.firstColorGEThreshold(
-            unt.Percent(
-                self.fields[ac.opt],
-                self.fields[
-                    if (typ.optBit(ac.opt) & self.opt_mask_pct_ino != 0)
-                        Statfs.ino_total
-                    else
-                        Statfs.kb_total
-                ],
-            ).n.roundU24AndTruncate(),
-            ac.pairs.get(base),
-        );
+    fn init(opt_mask_pct_ino: typ.OptBit) @This() {
+        return .{ .fields = @splat(0), .opt_mask_pct_ino = opt_mask_pct_ino };
     }
 };
 
 // == public ==================================================================
 
-pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
+pub const State = struct {
+    mounts: [*][2]Mount,
+    curr: [*]usize,
+
+    handler: ColorHandler,
+
+    fn getCurrPrev(self: *const @This(), mount_id: u8) struct { *Mount, *Mount } {
+        const i = self.curr[mount_id];
+        return .{
+            @constCast(&self.mounts[mount_id][i]),
+            @constCast(&self.mounts[mount_id][i ^ 1]),
+        };
+    }
+
+    fn swapCurrPrev(self: *@This(), mount_id: u8) void {
+        self.curr[mount_id] ^= 1;
+    }
+
+    pub fn init(reg: *umem.Region, widgets: []typ.Widget) !@This() {
+        // Assign mount ids and count widgets.
+        var id: u8 = 0;
+        for (widgets) |*w| {
+            if (w.id == .DISK) {
+                w.data.DISK.mount_id = id;
+                id += 1;
+            }
+        }
+        const curr = try reg.allocMany(usize, id, .front);
+        @memset(curr, 0);
+
+        // Only now allocate `Mounts` - so that accesses are mostly continuous.
+        var mounts: [][2]Mount = &.{};
+        for (widgets) |*w| {
+            if (w.id == .DISK) {
+                const ret = try reg.pushVec(&mounts, .front);
+                ret[0] = .init(w.data.DISK.opt_mask.pct_ino);
+                ret[1] = .init(w.data.DISK.opt_mask.pct_ino);
+            }
+        }
+        return .{
+            .mounts = mounts.ptr,
+            .curr = curr.ptr,
+            .handler = undefined,
+        };
+    }
+
+    const ColorHandler = struct {
+        mount_id: u8 align(8),
+
+        fn init(mount_id: u8) @This() {
+            return .{ .mount_id = mount_id };
+        }
+
+        pub fn checkPairs(
+            self: *const @This(),
+            ac: color.Active,
+            base: [*]const u8,
+        ) color.Hex {
+            const state: *const State = @fieldParentPtr("handler", self);
+            const new, _ = state.getCurrPrev(self.mount_id);
+            return color.firstColorGEThreshold(
+                unt.Percent(
+                    new.fields[ac.opt],
+                    new.fields[
+                        if (typ.optBit(ac.opt) & new.opt_mask_pct_ino != 0)
+                            Mount.ino_total
+                        else
+                            Mount.kb_total
+                    ],
+                ).n.roundU24AndTruncate(),
+                ac.pairs.get(base),
+            );
+        }
+    };
+};
+
+pub noinline fn widget(
+    writer: *uio.Writer,
+    w: *const typ.Widget,
+    base: [*]const u8,
+    state: *State,
+) void {
     const wd = w.data.DISK;
 
-    var sfs: Statfs = .{
-        .inner = undefined,
-        .fields = undefined,
-        .opt_mask_pct_ino = wd.opt_mask.pct_ino,
-    };
+    var sfs: ext.struct_statfs = undefined;
     while (true) {
-        const ret = ext.sys_statfs(wd.getMountpoint(), &sfs.inner);
+        const ret = ext.sys_statfs(wd.getMountpoint(), &sfs);
         if (ret == 0) {
             @branchHint(.likely);
             break;
@@ -92,19 +158,22 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
             );
         }
     }
+    state.swapCurrPrev(wd.mount_id);
+    var new, const old = state.getCurrPrev(wd.mount_id);
 
     // zig fmt: off
-    const f = &sfs.fields;
-    f[Statfs.kb_total]  = (sfs.inner.f_bsize * sfs.inner.f_blocks) / 1024;
-    f[Statfs.kb_free]   = (sfs.inner.f_bsize * sfs.inner.f_bfree) / 1024;
-    f[Statfs.kb_avail]  = (sfs.inner.f_bsize * sfs.inner.f_bavail) / 1024;
-    f[Statfs.kb_used]   = sfs.fields[Statfs.kb_total] - sfs.fields[Statfs.kb_free];
-    f[Statfs.ino_total] = sfs.inner.f_files;
-    f[Statfs.ino_free]  = sfs.inner.f_ffree;
-    f[Statfs.ino_used]  = sfs.inner.f_files - sfs.inner.f_ffree;
+    const fields = &new.fields;
+    fields[Mount.kb_total]  = (sfs.f_bsize * sfs.f_blocks) / 1024;
+    fields[Mount.kb_free]   = (sfs.f_bsize * sfs.f_bfree) / 1024;
+    fields[Mount.kb_avail]  = (sfs.f_bsize * sfs.f_bavail) / 1024;
+    fields[Mount.kb_used]   = fields[Mount.kb_total] - fields[Mount.kb_free];
+    fields[Mount.ino_total] = sfs.f_files;
+    fields[Mount.ino_free]  = sfs.f_ffree;
+    fields[Mount.ino_used]  = sfs.f_files - sfs.f_ffree;
     // zig fmt: on
 
-    const fg, const bg = w.check(sfs, base);
+    state.handler = .init(wd.mount_id);
+    const fg, const bg = w.check(&state.handler, base);
     typ.writeWidgetBeg(writer, fg, bg);
     for (wd.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
@@ -117,23 +186,39 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
             continue;
         }
 
+        var flags: unt.NumUnit.Flags = .{
+            .quiet = part.flags.quiet,
+            .negative = false,
+        };
         var nu: unt.NumUnit = undefined;
         if (bit & wd.opt_mask.pct != 0) {
             nu = unt.Percent(
-                sfs.fields[part.opt],
-                sfs.fields[
+                new.fields[part.opt],
+                new.fields[
                     if (bit & wd.opt_mask.pct_ino != 0)
-                        Statfs.ino_total
+                        Mount.ino_total
                     else
-                        Statfs.kb_total
+                        Mount.kb_total
                 ],
             );
         } else if (bit & wd.opt_mask.size != 0) {
-            nu = unt.SizeKb(sfs.fields[part.opt - typ.DiskOpt.SIZE_OPTS_OFF]);
+            const value, flags.negative = typ.calcWithOverflow(
+                new.fields[part.opt - typ.DiskOpt.SIZE_OPTS_OFF],
+                old.fields[part.opt - typ.DiskOpt.SIZE_OPTS_OFF],
+                w.interval,
+                part.flags,
+            );
+            nu = unt.SizeKb(value);
         } else {
-            nu = unt.UnitSI(sfs.fields[part.opt - typ.DiskOpt.SI_INO_OPTS_OFF]);
+            const value, flags.negative = typ.calcWithOverflow(
+                new.fields[part.opt - typ.DiskOpt.SI_INO_OPTS_OFF],
+                old.fields[part.opt - typ.DiskOpt.SI_INO_OPTS_OFF],
+                w.interval,
+                part.flags,
+            );
+            nu = unt.UnitSI(value);
         }
-        nu.write(writer, part.wopts, part.flags.quiet);
+        nu.write(writer, part.wopts, flags);
     }
     wd.format.last_str.writeBytes(writer, base);
 }
