@@ -176,7 +176,7 @@ fn parseLine(line: []const u8, state: usize) !Parser {
 
 // == public ==================================================================
 
-pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
+pub inline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
     const wd = w.data.BAT;
 
     var buf: [1024]u8 = undefined;

@@ -12,7 +12,7 @@ const mem = std.mem;
 
 // == public ==================================================================
 
-pub noinline fn widget(
+pub inline fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     base: [*]const u8,

@@ -292,7 +292,7 @@ pub const State = struct {
     }
 };
 
-pub fn update(state: *State) error{ReadError}!void {
+pub inline fn update(state: *State) error{ReadError}!void {
     var buf: [8192]u8 = undefined;
     const n = try uio.pread(state.fd, &buf, 0);
     if (n == buf.len) log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
@@ -320,7 +320,7 @@ pub fn update(state: *State) error{ReadError}!void {
     // zig fmt: on
 }
 
-pub noinline fn widget(
+pub inline fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     base: [*]const u8,
