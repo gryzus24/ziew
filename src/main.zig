@@ -231,10 +231,10 @@ fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
 fn setupWidgets(
     reg: *umem.Region,
     widgets: []typ.Widget,
-    mem_state: *w_mem.MemState,
-    cpu_state: *w_cpu.CpuState,
+    mem_state: *w_mem.State,
+    cpu_state: *w_cpu.State,
     disk_state: *w_dysk.State,
-    net_state: *w_net.NetState,
+    net_state: *w_net.State,
 ) !void {
     var intervals: [4]typ.DeciSec = @splat(typ.WIDGET_INTERVAL_MAX);
     var inited: [4]bool = @splat(false);
@@ -299,10 +299,10 @@ pub fn main() void {
         .nsec = (@rem(sleep_dsec, 10)) * (time.ns_per_s / 10),
     };
 
-    var mem_state: w_mem.MemState = undefined;
-    var cpu_state: w_cpu.CpuState = undefined;
+    var mem_state: w_mem.State = undefined;
+    var cpu_state: w_cpu.State = undefined;
     var disk_state: w_dysk.State = undefined;
-    var net_state: w_net.NetState = .empty;
+    var net_state: w_net.State = .empty;
 
     try setupWidgets(
         &reg,

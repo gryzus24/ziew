@@ -115,33 +115,33 @@ pub const Widget = struct {
     };
 
     pub const Data = union {
-        TIME: *TimeData,
-        MEM: *MemData,
-        CPU: *CpuData,
-        DISK: *DiskData,
-        NET: *NetData,
-        BAT: *BatData,
-        READ: *ReadData,
+        TIME: *Time,
+        MEM: *Mem,
+        CPU: *Cpu,
+        DISK: *Disk,
+        NET: *Net,
+        BAT: *Bat,
+        READ: *Read,
 
-        const DATA_SIZE_MAX = 64;
+        const SIZE_MAX = 64;
 
         comptime {
             const assert = std.debug.assert;
-            assert(@sizeOf(TimeData) <= DATA_SIZE_MAX);
-            assert(@sizeOf(TimeData) <= DATA_SIZE_MAX);
-            assert(@sizeOf(MemData) <= DATA_SIZE_MAX);
-            assert(@sizeOf(CpuData) <= DATA_SIZE_MAX);
-            assert(@sizeOf(DiskData) <= DATA_SIZE_MAX);
-            assert(@sizeOf(NetData) <= DATA_SIZE_MAX);
-            assert(@sizeOf(BatData) <= DATA_SIZE_MAX);
-            assert(@sizeOf(ReadData) <= DATA_SIZE_MAX);
+            assert(@sizeOf(Time) <= SIZE_MAX);
+            assert(@sizeOf(Time) <= SIZE_MAX);
+            assert(@sizeOf(Mem) <= SIZE_MAX);
+            assert(@sizeOf(Cpu) <= SIZE_MAX);
+            assert(@sizeOf(Disk) <= SIZE_MAX);
+            assert(@sizeOf(Net) <= SIZE_MAX);
+            assert(@sizeOf(Bat) <= SIZE_MAX);
+            assert(@sizeOf(Read) <= SIZE_MAX);
         }
 
-        pub const TimeData = struct {
+        pub const Time = struct {
             format: Format,
             strf: [STRF_SIZE]u8,
 
-            const STRF_SIZE = DATA_SIZE_MAX - @sizeOf(Format);
+            const STRF_SIZE = SIZE_MAX - @sizeOf(Format);
 
             pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
                 if (arg.len >= STRF_SIZE)
@@ -159,7 +159,7 @@ pub const Widget = struct {
             }
         };
 
-        pub const MemData = struct {
+        pub const Mem = struct {
             format: Format,
             opt_mask: Masks,
 
@@ -185,7 +185,7 @@ pub const Widget = struct {
             }
         };
 
-        pub const CpuData = struct {
+        pub const Cpu = struct {
             format: Format,
             opt_mask: Masks,
 
@@ -215,7 +215,7 @@ pub const Widget = struct {
             }
         };
 
-        pub const DiskData = struct {
+        pub const Disk = struct {
             format: Format,
             mount_id: u8,
             len: u8,
@@ -231,7 +231,7 @@ pub const Widget = struct {
             };
 
             const MOUNTPOINT_SIZE =
-                DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1 - @sizeOf(Masks);
+                SIZE_MAX - @sizeOf(Format) - 1 - 1 - @sizeOf(Masks);
 
             pub fn init(
                 reg: *umem.Region,
@@ -270,7 +270,7 @@ pub const Widget = struct {
             }
         };
 
-        pub const NetData = struct {
+        pub const Net = struct {
             format: Format,
             ifr: linux.ifreq,
             opt_mask: Masks,
@@ -324,13 +324,13 @@ pub const Widget = struct {
             }
         };
 
-        pub const BatData = struct {
+        pub const Bat = struct {
             format: Format,
             ps_off: u8,
             ps_len: u8,
             path: [PATH_SIZE]u8,
 
-            pub const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
+            pub const PATH_SIZE = SIZE_MAX - @sizeOf(Format) - 1 - 1;
             pub const PS_NAME_SIZE_MAX = 12;
 
             pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
@@ -361,13 +361,13 @@ pub const Widget = struct {
             }
         };
 
-        pub const ReadData = struct {
+        pub const Read = struct {
             format: Format,
             basename_off: u8,
             basename_len: u8,
             path: [PATH_SIZE]u8,
 
-            const PATH_SIZE = DATA_SIZE_MAX - @sizeOf(Format) - 1 - 1;
+            const PATH_SIZE = SIZE_MAX - @sizeOf(Format) - 1 - 1;
 
             pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
                 const dirname = fs.path.dirname(arg) orelse

@@ -238,7 +238,7 @@ inline fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
 
 // == public ==================================================================
 
-pub const CpuState = struct {
+pub const State = struct {
     stats: [2]Stat,
     usage: [NR_USAGE_FIELDS]unt.F5608,
 
@@ -247,12 +247,12 @@ pub const CpuState = struct {
 
     comptime {
         std.debug.assert(@sizeOf(Stat) == 64);
-        std.debug.assert(@sizeOf(@FieldType(CpuState, "usage")) == 64);
+        std.debug.assert(@sizeOf(@FieldType(State, "usage")) == 64);
     }
 
     const NR_USAGE_FIELDS = @typeInfo(typ.CpuOpt.UsageOpts).@"enum".fields.len;
 
-    pub fn init(reg: *umem.Region) !CpuState {
+    pub fn init(reg: *umem.Region) !State {
         const nr_cpus = misc.nrPossibleCpus();
         const a: Stat = try .initZero(reg, nr_cpus);
         const b: Stat = try .initZero(reg, nr_cpus);
@@ -292,7 +292,7 @@ pub const CpuState = struct {
     }
 };
 
-pub fn update(state: *CpuState) error{ReadError}!void {
+pub fn update(state: *State) error{ReadError}!void {
     var buf: [8192]u8 = undefined;
     const n = try uio.pread(state.fd, &buf, 0);
     if (n == buf.len) log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
@@ -324,7 +324,7 @@ pub noinline fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     base: [*]const u8,
-    state: *const CpuState,
+    state: *const State,
 ) void {
     const wd = w.data.CPU;
     const new, const old = state.getCurrPrev();

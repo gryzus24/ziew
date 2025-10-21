@@ -223,7 +223,7 @@ pub noinline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const
         switch (opt) {
             .state, .arg => {
                 const SZ = 12;
-                const expected = @max(SZ, typ.Widget.Data.BatData.PS_NAME_SIZE_MAX);
+                const expected = @max(SZ, typ.Widget.Data.Bat.PS_NAME_SIZE_MAX);
                 comptime std.debug.assert(expected == SZ);
 
                 if (expected > writer.unusedCapacityLen()) {

@@ -238,7 +238,7 @@ fn parseProcNetDev(
 
 // == public ==================================================================
 
-pub const NetState = struct {
+pub const State = struct {
     sock: linux.fd_t,
     netdev: ?NetDev,
 
@@ -257,10 +257,10 @@ pub const NetState = struct {
         }
     };
 
-    pub const empty: NetState = .{ .sock = 0, .netdev = null };
+    pub const empty: State = .{ .sock = 0, .netdev = null };
 
-    pub fn init(widgets: []const typ.Widget) NetState {
-        var state: NetState = .{
+    pub fn init(widgets: []const typ.Widget) State {
+        var state: State = .{
             .sock = openIoctlSocket(),
             .netdev = null,
         };
@@ -288,7 +288,7 @@ pub const NetState = struct {
 
 pub fn update(
     reg: *umem.Region,
-    state: *NetState.NetDev,
+    state: *State.NetDev,
 ) error{ NoSpaceLeft, ReadError }!void {
     var buf: [4096]u8 = undefined;
     const n = try uio.pread(state.fd, &buf, 0);
@@ -305,7 +305,7 @@ pub noinline fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     base: [*]const u8,
-    state: *const NetState,
+    state: *const State,
 ) void {
     const wd = w.data.NET;
 
