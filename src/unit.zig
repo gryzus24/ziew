@@ -261,13 +261,12 @@ pub const NumUnit = struct {
         } else {
             _ = ustr.unsafeU64toa(buf[i - nr_digits .. i], n);
         }
-        buf[i - 1 - nr_digits] = ' ';
-        i -= nr_digits;
+        // Odd `nr_digits` fixup.
+        buf[i - 1 - nr_digits] = if (flags.negative) '-' else ' ';
 
-        if (flags.negative) {
+        i -= nr_digits;
+        if (flags.negative)
             i -= 1;
-            buf[i] = '-';
-        }
         if (alignment == .right)
             i -= pad;
 
