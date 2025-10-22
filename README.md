@@ -49,11 +49,10 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
               * OPTION    - widget specific option name,
               * FLAGS     - option specific flag changing what/how a value is
                             displayed.
-                              * d - show a difference since last refresh
-                                    instead of a total,
-                              * s - show an average difference per second as
-                                    opposed to "since last refresh" (implies
-                                    @d flag),
+                              * d - difference since last refresh instead of
+                                    a total,
+                              * s - average difference per second as opposed
+                                    to "since last refresh" (implies @d flag),
                               * q - do not display values equal to zero.
               * ALIGNMENT - either < for left alignment or > for right
                             alignment - reserves space for the longest
