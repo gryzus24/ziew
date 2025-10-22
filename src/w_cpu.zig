@@ -331,7 +331,7 @@ pub inline fn widget(
 
     const fg, const bg = w.check(state, base);
     typ.writeWidgetBeg(writer, fg, bg);
-    for (wd.format.parts.get(base)) |*part| {
+    for (w.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
         const bit = typ.optBit(part.opt);
@@ -402,5 +402,4 @@ pub inline fn widget(
         }
         writer.end = pos;
     }
-    wd.format.last_str.writeBytes(writer, base);
 }

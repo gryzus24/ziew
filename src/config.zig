@@ -364,7 +364,7 @@ const ParseWant = enum {
 const ParseLineResult = union(enum) {
     widget: struct {
         id: typ.Widget.Id,
-        interval: ?typ.Widget.Interval = null,
+        interval: ?typ.Interval = null,
         arg: ?Split = null,
         format: ?Split = null,
     },
@@ -586,16 +586,17 @@ pub fn parse(
                         });
                     },
                 };
+                current.format = format;
                 // zig fmt: off
                 const base = reg.head.ptr;
                 current.data = switch (current.id) {
-                    .TIME => .{ .TIME = try .init(reg, arg, format) },
+                    .TIME => .{ .TIME = try .init(reg, arg) },
                     .MEM  => .{ .MEM  = try .init(reg, format, base) },
                     .CPU  => .{ .CPU  = try .init(reg, format, base) },
                     .DISK => .{ .DISK = try .init(reg, arg, format, base) },
                     .NET  => .{ .NET  = try .init(reg, arg, format, base) },
-                    .BAT  => .{ .BAT  = try .init(reg, arg, format) },
-                    .READ => .{ .READ = try .init(reg, arg, format) },
+                    .BAT  => .{ .BAT  = try .init(reg, arg) },
+                    .READ => .{ .READ = try .init(reg, arg) },
                 };
                 // zig fmt: on
             },

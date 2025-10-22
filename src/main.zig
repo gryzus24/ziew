@@ -365,6 +365,7 @@ pub fn main() void {
                     .BAT => w_bat.widget(&fw, w, base),
                     .READ => w_read.widget(&fw, w, base),
                 }
+                w.format.last_str.writeBytes(&fw, base);
                 views[i] = typ.writeWidgetEnd(&fw);
                 w.interval.now = w.interval.set;
             }

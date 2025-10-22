@@ -108,7 +108,7 @@ pub inline fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     base: [*]const u8,
-    state: *State,
+    state: *const State,
 ) void {
     const wd = w.data.DISK;
 
@@ -153,7 +153,7 @@ pub inline fn widget(
 
     const fg, const bg = w.check(mount, base);
     typ.writeWidgetBeg(writer, fg, bg);
-    for (wd.format.parts.get(base)) |*part| {
+    for (w.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
         const opt: typ.DiskOpt = @enumFromInt(part.opt);
@@ -198,5 +198,4 @@ pub inline fn widget(
         }
         nu.write(writer, part.wopts, flags);
     }
-    wd.format.last_str.writeBytes(writer, base);
 }

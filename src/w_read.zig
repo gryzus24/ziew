@@ -48,7 +48,7 @@ pub inline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u
     var fg = w.fg.static;
     var bg = w.bg.static;
 
-    for (wd.format.parts.get(base)) |*part| {
+    for (w.format.parts.get(base)) |*part| {
         const opt: typ.ReadOpt = @enumFromInt(part.opt);
         if (opt == .content) {
             fg, pos = acceptColor(data, pos);
@@ -59,7 +59,7 @@ pub inline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u
     }
 
     typ.writeWidgetBeg(writer, fg, bg);
-    for (wd.format.parts.get(base)) |*part| {
+    for (w.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
         const opt: typ.ReadOpt = @enumFromInt(part.opt);
@@ -87,5 +87,4 @@ pub inline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u
             },
         };
     }
-    wd.format.last_str.writeBytes(writer, base);
 }

@@ -29,6 +29,15 @@ pub const UDeciSec = u32;
 
 pub const OptBit = u32;
 
+pub const Interval = struct {
+    set: DeciSec,
+    now: DeciSec,
+
+    pub fn init(set: DeciSec) @This() {
+        return .{ .set = set, .now = 0 };
+    }
+};
+
 pub const Format = struct {
     parts: umem.MemSlice(Part),
     last_str: umem.MemSlice(u8),
@@ -70,15 +79,7 @@ pub const Widget = struct {
     interval: Interval,
     fg: Color,
     bg: Color,
-
-    pub const Interval = struct {
-        set: DeciSec,
-        now: DeciSec,
-
-        pub fn init(set: DeciSec) @This() {
-            return .{ .set = set, .now = 0 };
-        }
-    };
+    format: Format,
 
     pub fn initDefault(id: Id, data: Data) @This() {
         return .{
@@ -87,6 +88,7 @@ pub const Widget = struct {
             .interval = .init(WIDGET_INTERVAL_DEFAULT),
             .fg = .{ .static = .default },
             .bg = .{ .static = .default },
+            .format = .{ .parts = .zero, .last_str = .zero },
         };
     }
 
@@ -138,17 +140,15 @@ pub const Widget = struct {
         }
 
         pub const Time = struct {
-            format: Format,
             strf: [STRF_SIZE]u8,
 
-            const STRF_SIZE = SIZE_MAX - @sizeOf(Format);
+            const STRF_SIZE = 32;
 
-            pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
                 if (arg.len >= STRF_SIZE)
                     log.fatal(&.{"TIME: strftime format too long"});
 
                 const ret = try reg.alloc(@This(), .front);
-                ret.format = format;
                 @memcpy(ret.strf[0..arg.len], arg);
                 ret.strf[arg.len] = 0;
                 return ret;
@@ -160,7 +160,6 @@ pub const Widget = struct {
         };
 
         pub const Mem = struct {
-            format: Format,
             opt_mask: Masks,
 
             const Masks = struct {
@@ -171,7 +170,6 @@ pub const Widget = struct {
 
             pub fn init(reg: *umem.Region, format: Format, base: [*]const u8) !*@This() {
                 const ret = try reg.alloc(@This(), .front);
-                ret.format = format;
                 var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
                     const opt: MemOpt = @enumFromInt(part.opt);
@@ -186,7 +184,6 @@ pub const Widget = struct {
         };
 
         pub const Cpu = struct {
-            format: Format,
             opt_mask: Masks,
 
             const Masks = struct {
@@ -198,7 +195,6 @@ pub const Widget = struct {
 
             pub fn init(reg: *umem.Region, format: Format, base: [*]const u8) !*@This() {
                 const ret = try reg.alloc(@This(), .front);
-                ret.format = format;
                 var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
                     const opt: CpuOpt = @enumFromInt(part.opt);
@@ -216,11 +212,10 @@ pub const Widget = struct {
         };
 
         pub const Disk = struct {
-            format: Format,
+            opt_mask: Masks,
             mount_id: u8,
             len: u8,
             mountpoint: [MOUNTPOINT_SIZE]u8,
-            opt_mask: Masks,
 
             const Masks = struct {
                 pct: OptBit,
@@ -231,7 +226,7 @@ pub const Widget = struct {
             };
 
             const MOUNTPOINT_SIZE =
-                SIZE_MAX - @sizeOf(Format) - 1 - 1 - @sizeOf(Masks);
+                SIZE_MAX - @sizeOf(Masks) - 1 - 1;
 
             pub fn init(
                 reg: *umem.Region,
@@ -243,7 +238,6 @@ pub const Widget = struct {
                     log.fatal(&.{"DISK: mountpoint path too long"});
 
                 const ret = try reg.alloc(@This(), .front);
-                ret.format = format;
                 ret.mount_id = 0;
                 ret.len = @intCast(arg.len);
                 @memcpy(ret.mountpoint[0..arg.len], arg);
@@ -271,7 +265,6 @@ pub const Widget = struct {
         };
 
         pub const Net = struct {
-            format: Format,
             ifr: linux.ifreq,
             opt_mask: Masks,
 
@@ -301,7 +294,6 @@ pub const Widget = struct {
                     log.fatal(&.{ "NET: interface name too long: ", arg });
 
                 const ret = try reg.alloc(@This(), .front);
-                ret.format = format;
                 @memset(ret.ifr.ifrn.name[0..], 0);
                 @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
 
@@ -325,15 +317,14 @@ pub const Widget = struct {
         };
 
         pub const Bat = struct {
-            format: Format,
             ps_off: u8,
             ps_len: u8,
             path: [PATH_SIZE]u8,
 
-            pub const PATH_SIZE = SIZE_MAX - @sizeOf(Format) - 1 - 1;
+            pub const PATH_SIZE = SIZE_MAX - 1 - 1;
             pub const PS_NAME_SIZE_MAX = 12;
 
-            pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
                 const prefix = "/sys/class/power_supply/";
                 const suffix = "/uevent\x00";
                 const avail = @min(PATH_SIZE - prefix.len - suffix.len, PS_NAME_SIZE_MAX);
@@ -343,7 +334,6 @@ pub const Widget = struct {
                     log.fatal(&.{"BAT: battery name too long"});
 
                 const ret = try reg.alloc(@This(), .front);
-                ret.format = format;
                 ret.ps_off = prefix.len;
                 ret.ps_len = @intCast(arg.len);
                 @memcpy(ret.path[0..prefix.len], prefix);
@@ -362,14 +352,13 @@ pub const Widget = struct {
         };
 
         pub const Read = struct {
-            format: Format,
             basename_off: u8,
             basename_len: u8,
             path: [PATH_SIZE]u8,
 
-            const PATH_SIZE = SIZE_MAX - @sizeOf(Format) - 1 - 1;
+            const PATH_SIZE = SIZE_MAX - 1 - 1;
 
-            pub fn init(reg: *umem.Region, arg: []const u8, format: Format) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
                 const dirname = fs.path.dirname(arg) orelse
                     log.fatal(&.{"READ: path must be absolute"});
                 const basename = fs.path.basename(arg);
@@ -390,7 +379,6 @@ pub const Widget = struct {
 
                 const ret = try reg.alloc(@This(), .front);
                 ret.* = .{
-                    .format = format,
                     .basename_off = @intCast(off),
                     .basename_len = @intCast(basename.len),
                     .path = path,
@@ -792,7 +780,7 @@ pub fn optBit(opt: u8) OptBit {
 pub inline fn calc(
     new: u64,
     old: u64,
-    interval: Widget.Interval,
+    interval: Interval,
     flags: Format.Part.Flags,
 ) u64 {
     // Might generate a cmov if there are spare registers available.
@@ -810,7 +798,7 @@ pub inline fn calc(
 pub inline fn calcWithOverflow(
     new: u64,
     old: u64,
-    interval: Widget.Interval,
+    interval: Interval,
     flags: Format.Part.Flags,
 ) struct { u64, bool } {
     var value, var of: u8 = .{ new, 0 };

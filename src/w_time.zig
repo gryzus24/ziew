@@ -26,7 +26,7 @@ pub inline fn widget(
     _ = ext.localtime_r(&ts.sec, &tm);
 
     typ.writeWidgetBeg(writer, w.fg.static, w.bg.static);
-    for (wd.format.parts.get(base)) |*part| {
+    for (w.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
         const dst = writer.buffer[writer.end..];
@@ -77,5 +77,4 @@ pub inline fn widget(
             },
         };
     }
-    wd.format.last_str.writeBytes(writer, base);
 }
