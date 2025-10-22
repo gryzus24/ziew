@@ -157,6 +157,9 @@ Every option and color configuration for each *Widget* is documented below.
       * [%]dirty     - memory waiting to get written back to disk,
       * [%]writeback - memory actively being written back to disk.
 
+    Option flag @d or @s may affect
+      all non-%-prefixed options
+
     Colors
       [+] default
       [-] conditional (only %-prefixed options supported)
