@@ -244,7 +244,7 @@ pub const State = struct {
 
     const NetDev = struct {
         ifs: [2]Interfaces,
-        curr: usize,
+        curr: u32,
         fd: linux.fd_t,
 
         fn getCurrPrev(self: *const @This()) struct { *Interfaces, *Interfaces } {

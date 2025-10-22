@@ -242,7 +242,7 @@ pub const State = struct {
     stats: [2]Stat,
     usage: [NR_USAGE_FIELDS]unt.F5608,
 
-    curr: usize,
+    curr: u32,
     fd: linux.fd_t,
 
     comptime {
