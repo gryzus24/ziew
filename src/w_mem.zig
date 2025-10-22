@@ -129,17 +129,12 @@ pub const State = struct {
         };
     }
 
-    fn getCurrPrev(self: *const @This()) struct { *Meminfo, *Meminfo } {
-        const i = self.curr;
-        return .{ @constCast(&self.meminfos[i]), @constCast(&self.meminfos[i ^ 1]) };
-    }
-
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        const new, _ = self.getCurrPrev();
+        const mi = &self.meminfos[self.curr];
         return color.firstColorGEThreshold(
             unt.Percent(
-                new.fields[ac.opt],
-                new.total(),
+                mi.fields[ac.opt],
+                mi.total(),
             ).n.roundU24AndTruncate(),
             ac.pairs.get(base),
         );
@@ -151,9 +146,7 @@ pub inline fn update(state: *State) error{ReadError}!void {
     const n = try uio.pread(state.fd, &buf, 0);
 
     state.curr ^= 1;
-    const new, _ = state.getCurrPrev();
-
-    parseProcMeminfo(buf[0..n], new);
+    parseProcMeminfo(buf[0..n], &state.meminfos[state.curr]);
 }
 
 pub inline fn widget(
@@ -163,7 +156,7 @@ pub inline fn widget(
     state: *const State,
 ) void {
     const wd = w.data.MEM;
-    const new, const old = state.getCurrPrev();
+    const new, const old = typ.constCurrPrev(Meminfo, &state.meminfos, state.curr);
 
     const fg, const bg = w.check(state, base);
     typ.writeWidgetBeg(writer, fg, bg);

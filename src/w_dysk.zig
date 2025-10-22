@@ -58,17 +58,12 @@ const MountPair = struct {
         };
     }
 
-    fn getCurrPrev(self: *const @This()) struct { *Mount, *Mount } {
-        const i = self.curr;
-        return .{ @constCast(&self.pair[i]), @constCast(&self.pair[i ^ 1]) };
-    }
-
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        const new, _ = self.getCurrPrev();
+        const mount = &self.pair[self.curr];
         return color.firstColorGEThreshold(
             unt.Percent(
-                new.fields[ac.opt],
-                new.fields[
+                mount.fields[ac.opt],
+                mount.fields[
                     if (typ.optBit(ac.opt) & self.opt_mask_pct_ino != 0)
                         Mount.ino_total
                     else
@@ -135,7 +130,7 @@ pub inline fn widget(
     }
     const mount = &state.mounts[wd.mount_id];
     mount.curr ^= 1;
-    const new, const old = mount.getCurrPrev();
+    const new, const old = typ.currPrev(Mount, &mount.pair, mount.curr);
 
     // zig fmt: off
     new.fields[Mount.kb_total]  = (sfs.f_bsize * sfs.f_blocks) / 1024;

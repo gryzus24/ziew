@@ -814,6 +814,25 @@ pub inline fn calcWithOverflow(
     return .{ value, of != 0 };
 }
 
+pub inline fn currPrev(
+    comptime T: type,
+    items: *[2]T,
+    i: usize,
+) struct { *T, *T } {
+    return .{ &items[i], &items[i ^ 1] };
+}
+
+// Yet again, make a const copy of this function to avoid the @constCast.
+// I couldn't find anything regarding "perfect forwarding" in Zig to make
+// this kind of function work without duplication and play well with ZLS.
+pub inline fn constCurrPrev(
+    comptime T: type,
+    items: *const [2]T,
+    i: usize,
+) struct { *const T, *const T } {
+    return .{ &items[i], &items[i ^ 1] };
+}
+
 // == meta functions ==========================================================
 
 pub fn MakeEnumSubset(comptime E: type, comptime new_values: []const E) type {

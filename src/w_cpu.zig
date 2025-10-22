@@ -265,13 +265,8 @@ pub const State = struct {
         };
     }
 
-    fn getCurrPrev(self: *const @This()) struct { *Stat, *Stat } {
-        const i = self.curr;
-        return .{ @constCast(&self.stats[i]), @constCast(&self.stats[i ^ 1]) };
-    }
-
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        const new, const old = self.getCurrPrev();
+        const new, const old = typ.constCurrPrev(Stat, &self.stats, self.curr);
         return color.firstColorGEThreshold(
             switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(ac.opt))) {
                 .@"%all",
@@ -294,7 +289,7 @@ pub inline fn update(state: *State) error{ReadError}!void {
     if (n == buf.len) log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
     state.curr ^= 1;
-    const new, const old = state.getCurrPrev();
+    const new, const old = typ.currPrev(Stat, &state.stats, state.curr);
 
     parseProcStat(buf[0..n], new);
 
@@ -323,7 +318,7 @@ pub inline fn widget(
     state: *const State,
 ) void {
     const wd = w.data.CPU;
-    const new, const old = state.getCurrPrev();
+    const new, const old = typ.constCurrPrev(Stat, &state.stats, state.curr);
 
     const fg, const bg = w.check(state, base);
     typ.writeWidgetBeg(writer, fg, bg);

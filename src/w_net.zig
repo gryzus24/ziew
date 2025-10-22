@@ -246,11 +246,6 @@ pub const State = struct {
         ifs: [2]Interfaces,
         curr: u32,
         fd: linux.fd_t,
-
-        fn getCurrPrev(self: *const @This()) struct { *Interfaces, *Interfaces } {
-            const i = self.curr;
-            return .{ @constCast(&self.ifs[i]), @constCast(&self.ifs[i ^ 1]) };
-        }
     };
 
     pub const empty: State = .{ .sock = 0, .netdev = null };
@@ -291,10 +286,10 @@ pub inline fn update(
     if (n == buf.len) log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
     state.curr ^= 1;
-    const new, _ = state.getCurrPrev();
-    new.freeAll();
+    const iface = &state.ifs[state.curr];
+    iface.freeAll();
 
-    try parseProcNetDev(buf[0..n], new, reg);
+    try parseProcNetDev(buf[0..n], iface, reg);
 }
 
 pub inline fn widget(
@@ -322,7 +317,7 @@ pub inline fn widget(
     var old_if: ?*IFace = null;
     var ifs_match = false;
     if (state.getNetdev(wd.opt_mask.netdev)) |ok| {
-        const new, const old = ok.getCurrPrev();
+        const new, const old = typ.constCurrPrev(Interfaces, &ok.ifs, ok.curr);
 
         const Hash = @Vector(linux.IFNAMESIZE, u8);
         const cfg_ifname: Hash = wd.ifr.ifrn.name;
