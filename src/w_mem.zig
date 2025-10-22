@@ -10,9 +10,34 @@ const ustr = @import("util/str.zig");
 
 const linux = std.os.linux;
 
+const Meminfo = struct {
+    fields: [NR_FIELDS]u64,
+
+    const NR_FIELDS = 8;
+
+    comptime {
+        const nr_pct = @typeInfo(typ.MemOpt.PercentOpts).@"enum".fields.len;
+        const nr_size = @typeInfo(typ.MemOpt.SizeOpts).@"enum".fields.len;
+        std.debug.assert(nr_pct == NR_FIELDS and NR_FIELDS == nr_size);
+    }
+
+    const zero: Meminfo = .{ .fields = @splat(0) };
+
+    // zig fmt: off
+    fn     total(self: @This()) u64 { return self.fields[0]; }
+    fn      free(self: @This()) u64 { return self.fields[1]; }
+    fn     avail(self: @This()) u64 { return self.fields[2]; }
+    fn   buffers(self: @This()) u64 { return self.fields[3]; }
+    fn    cached(self: @This()) u64 { return self.fields[4]; }
+    fn     dirty(self: @This()) u64 { return self.fields[5]; }
+    fn writeback(self: @This()) u64 { return self.fields[6]; }
+    fn      used(self: @This()) u64 { return self.fields[7]; }
+    // zig fmt: on
+};
+
 // == private =================================================================
 
-fn parseProcMeminfo(buf: []const u8, out: *State) void {
+fn parseProcMeminfo(buf: []const u8, out: *Meminfo) void {
     const KEY_LEN = "xxxxxxxx:       ".len;
     const VAL_LEN = 8;
     const UNIT_LEN = " kB".len;
@@ -76,64 +101,63 @@ test "/proc/meminfo parser" {
         \\PageTables:        17444 kB
         \\SecPageTables:      2056 kB
     ;
-    var s: State = .init();
-    parseProcMeminfo(buf, &s);
-    try t.expect(s.total() == 163245324);
-    try t.expect(s.free() == 6628464);
-    try t.expect(s.avail() == 106210048);
-    try t.expect(s.buffers() == 234640);
-    try t.expect(s.cached() == 3970504);
-    try t.expect(s.dirty() == 28);
-    try t.expect(s.writeback() == 0);
+    var mi: Meminfo = .zero;
+    parseProcMeminfo(buf, &mi);
+    try t.expect(mi.total() == 163245324);
+    try t.expect(mi.free() == 6628464);
+    try t.expect(mi.avail() == 106210048);
+    try t.expect(mi.buffers() == 234640);
+    try t.expect(mi.cached() == 3970504);
+    try t.expect(mi.dirty() == 28);
+    try t.expect(mi.writeback() == 0);
 }
 
 // == public ==================================================================
 
 pub const State = struct {
-    fields: [NR_FIELDS]u64,
-    fd: linux.fd_t,
+    meminfos: [2]Meminfo,
 
-    const NR_FIELDS = 8;
-    comptime {
-        const nr_pct = @typeInfo(typ.MemOpt.PercentOpts).@"enum".fields.len;
-        const nr_size = @typeInfo(typ.MemOpt.SizeOpts).@"enum".fields.len;
-        std.debug.assert(nr_pct == NR_FIELDS and NR_FIELDS == nr_size);
-    }
+    curr: u32,
+    fd: linux.fd_t,
 
     pub fn init() State {
         return .{
-            .fields = @splat(0),
+            .meminfos = .{ .zero, .zero },
+            .curr = 0,
             .fd = uio.open0("/proc/meminfo") catch |e|
                 log.fatal(&.{ "open: /proc/meminfo: ", @errorName(e) }),
         };
     }
 
+    fn getCurrPrev(self: *const @This()) struct { *Meminfo, *Meminfo } {
+        const i = self.curr;
+        return .{ @constCast(&self.meminfos[i]), @constCast(&self.meminfos[i ^ 1]) };
+    }
+
+    fn swapCurrPrev(self: *@This()) void {
+        self.curr ^= 1;
+    }
+
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
+        const new, _ = self.getCurrPrev();
         return color.firstColorGEThreshold(
             unt.Percent(
-                self.fields[ac.opt],
-                self.total(),
+                new.fields[ac.opt],
+                new.total(),
             ).n.roundU24AndTruncate(),
             ac.pairs.get(base),
         );
     }
-
-    // zig fmt: off
-    fn     total(self: @This()) u64 { return self.fields[0]; }
-    fn      free(self: @This()) u64 { return self.fields[1]; }
-    fn     avail(self: @This()) u64 { return self.fields[2]; }
-    fn   buffers(self: @This()) u64 { return self.fields[3]; }
-    fn    cached(self: @This()) u64 { return self.fields[4]; }
-    fn     dirty(self: @This()) u64 { return self.fields[5]; }
-    fn writeback(self: @This()) u64 { return self.fields[6]; }
-    fn      used(self: @This()) u64 { return self.fields[7]; }
-    // zig fmt: on
 };
 
 pub inline fn update(state: *State) error{ReadError}!void {
     var buf: [8192]u8 = undefined;
     const n = try uio.pread(state.fd, &buf, 0);
-    parseProcMeminfo(buf[0..n], state);
+
+    state.swapCurrPrev();
+    const new, _ = state.getCurrPrev();
+
+    parseProcMeminfo(buf[0..n], new);
 }
 
 pub inline fn widget(
@@ -143,25 +167,29 @@ pub inline fn widget(
     state: *const State,
 ) void {
     const wd = w.data.MEM;
+    const new, const old = state.getCurrPrev();
 
     const fg, const bg = w.check(state, base);
     typ.writeWidgetBeg(writer, fg, bg);
     for (w.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
-        var nu: unt.NumUnit = undefined;
-        if (typ.optBit(part.opt) & wd.opt_mask.pct != 0) {
-            nu = unt.Percent(
-                state.fields[part.opt],
-                state.total(),
-            );
-        } else {
-            nu = unt.SizeKb(state.fields[part.opt - typ.MemOpt.SIZE_OPTS_OFF]);
-        }
-        const flags: unt.NumUnit.Flags = .{
+        var flags: unt.NumUnit.Flags = .{
             .quiet = part.flags.quiet,
             .negative = false,
         };
+        var nu: unt.NumUnit = undefined;
+        if (typ.optBit(part.opt) & wd.opt_mask.pct != 0) {
+            nu = unt.Percent(new.fields[part.opt], new.total());
+        } else {
+            const value, flags.negative = typ.calcWithOverflow(
+                new.fields[part.opt - typ.MemOpt.SIZE_OPTS_OFF],
+                old.fields[part.opt - typ.MemOpt.SIZE_OPTS_OFF],
+                w.interval,
+                part.flags,
+            );
+            nu = unt.SizeKb(value);
+        }
         nu.write(writer, part.wopts, flags);
     }
 }
