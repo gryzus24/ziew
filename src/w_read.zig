@@ -5,7 +5,6 @@ const typ = @import("type.zig");
 
 const uio = @import("util/io.zig");
 
-const linux = std.os.linux;
 const mem = std.mem;
 
 // == private =================================================================
