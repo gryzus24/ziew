@@ -51,6 +51,9 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                             displayed.
                               * d - show a difference since last refresh
                                     instead of a total,
+                              * s - show an average difference per second as
+                                    opposed to "since last refresh" (implies
+                                    @d flag),
                               * q - do not display values equal to zero.
               * ALIGNMENT - either < for left alignment or > for right
                             alignment - reserves space for the longest
@@ -185,7 +188,7 @@ Every option and color configuration for each *Widget* is documented below.
       * blkbars   - same as above, but needs more space, as it uses actual
                     block characters with more granularity.
 
-    Option flag @d may affect
+    Option flag @d or @s may affect
       intr, ctxt, forks, running, blocked, softirq
 
     Colors
@@ -221,6 +224,9 @@ Every option and color configuration for each *Widget* is documented below.
       * [%]ino_total - number of filesystem inodes,
       * [%]ino_free  - number of free filesystem inodes,
       * [%]ino_used  - number of used filesystem inodes (ino_total - ino_free).
+
+    Option flag @d or @s may affect
+      total, free, available, used, and all ino_* options
 
     Colors
       [+] default
@@ -261,7 +267,7 @@ Every option and color configuration for each *Widget* is documented below.
                   * tx_errs      - transmission errors
                   * tx_drop      - transmission packet drops
 
-    Option flag @d may affect
+    Option flag @d or @s may affect
       all rx_* and tx_* options
 
     Colors
