@@ -251,10 +251,6 @@ pub const State = struct {
             const i = self.curr;
             return .{ @constCast(&self.ifs[i]), @constCast(&self.ifs[i ^ 1]) };
         }
-
-        fn swapCurrPrev(self: *@This()) void {
-            self.curr ^= 1;
-        }
     };
 
     pub const empty: State = .{ .sock = 0, .netdev = null };
@@ -294,7 +290,7 @@ pub inline fn update(
     const n = try uio.pread(state.fd, &buf, 0);
     if (n == buf.len) log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
-    state.swapCurrPrev();
+    state.curr ^= 1;
     const new, _ = state.getCurrPrev();
     new.freeAll();
 

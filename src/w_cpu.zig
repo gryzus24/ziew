@@ -270,10 +270,6 @@ pub const State = struct {
         return .{ @constCast(&self.stats[i]), @constCast(&self.stats[i ^ 1]) };
     }
 
-    fn swapCurrPrev(self: *@This()) void {
-        self.curr ^= 1;
-    }
-
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         const new, const old = self.getCurrPrev();
         return color.firstColorGEThreshold(
@@ -297,7 +293,7 @@ pub inline fn update(state: *State) error{ReadError}!void {
     const n = try uio.pread(state.fd, &buf, 0);
     if (n == buf.len) log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
-    state.swapCurrPrev();
+    state.curr ^= 1;
     const new, const old = state.getCurrPrev();
 
     parseProcStat(buf[0..n], new);

@@ -134,10 +134,6 @@ pub const State = struct {
         return .{ @constCast(&self.meminfos[i]), @constCast(&self.meminfos[i ^ 1]) };
     }
 
-    fn swapCurrPrev(self: *@This()) void {
-        self.curr ^= 1;
-    }
-
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         const new, _ = self.getCurrPrev();
         return color.firstColorGEThreshold(
@@ -154,7 +150,7 @@ pub inline fn update(state: *State) error{ReadError}!void {
     var buf: [8192]u8 = undefined;
     const n = try uio.pread(state.fd, &buf, 0);
 
-    state.swapCurrPrev();
+    state.curr ^= 1;
     const new, _ = state.getCurrPrev();
 
     parseProcMeminfo(buf[0..n], new);

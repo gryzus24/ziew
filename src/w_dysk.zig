@@ -63,10 +63,6 @@ const MountPair = struct {
         return .{ @constCast(&self.pair[i]), @constCast(&self.pair[i ^ 1]) };
     }
 
-    fn swapCurrPrev(self: *@This()) void {
-        self.curr ^= 1;
-    }
-
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         const new, _ = self.getCurrPrev();
         return color.firstColorGEThreshold(
@@ -138,7 +134,7 @@ pub inline fn widget(
         }
     }
     const mount = &state.mounts[wd.mount_id];
-    mount.swapCurrPrev();
+    mount.curr ^= 1;
     const new, const old = mount.getCurrPrev();
 
     // zig fmt: off
