@@ -232,7 +232,7 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             prec = field[cur..field.len];
         }
 
-        const opt: u8 = blk: for (typ.WID__OPT_NAMES[@intFromEnum(wid)], 0..) |name, j| {
+        const opt: u8 = blk: for (typ.WID__OPTION_NAMES[@intFromEnum(wid)], 0..) |name, j| {
             if (mem.eql(u8, option, name)) break :blk @intCast(j);
         } else {
             return .fail("unknown option", split.opt);
@@ -335,8 +335,8 @@ const ColorOptResult = union(enum) {
 
 fn strColorOpt(wid: typ.Widget.Id.ActiveColorSupported, str: []const u8) ColorOptResult {
     for (
-        typ.WID__OPTS_SUPPORTING_COLOR[@intFromEnum(wid)],
-        typ.WID__OPT_NAMES[@intFromEnum(wid)],
+        typ.WID__OPTIONS_SUPPORTING_COLOR[@intFromEnum(wid)],
+        typ.WID__OPTION_NAMES[@intFromEnum(wid)],
         0..,
     ) |color_supported, name, j| {
         if (mem.eql(u8, str, name)) {

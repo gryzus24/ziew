@@ -661,33 +661,33 @@ pub fn strWid(str: []const u8) ?Widget.Id {
     return null;
 }
 
-const WID_OPT_TYPE = &.{
+const OptionTypes = &.{
     Options.Time, Options.Mem, Options.Cpu,  Options.Disk,
     Options.Net,  Options.Bat, Options.Read,
 };
 
 comptime {
-    if (Widget.NR_WIDGETS != WID_OPT_TYPE.len)
-        @compileError("Adjust WID_OPT_TYPE");
+    if (Widget.NR_WIDGETS != OptionTypes.len)
+        @compileError("Adjust OptionTypes");
 }
 
 // == public ==================================================================
 
 /// Names of options supported by widgets' formats keyed by
-/// @intFromEnum(Widget.Tag).
-pub const WID__OPT_NAMES: [Widget.NR_WIDGETS][]const [:0]const u8 = blk: {
+/// @intFromEnum(Widget.Id).
+pub const WID__OPTION_NAMES: [Widget.NR_WIDGETS][]const [:0]const u8 = blk: {
     var w: [Widget.NR_WIDGETS][]const [:0]const u8 = undefined;
-    for (WID_OPT_TYPE, 0..) |T, i| {
+    for (OptionTypes, 0..) |T, i| {
         w[i] = meta.fieldNames(T);
     }
     break :blk w;
 };
 
 /// Particular widgets' format option state of color support keyed by
-/// @intFromEnum(Widget.Tag).
-pub const WID__OPTS_SUPPORTING_COLOR: [Widget.NR_WIDGETS][]const bool = blk: {
+/// @intFromEnum(Widget.Id).
+pub const WID__OPTIONS_SUPPORTING_COLOR: [Widget.NR_WIDGETS][]const bool = blk: {
     var w: [Widget.NR_WIDGETS][]const bool = undefined;
-    for (WID_OPT_TYPE, 0..) |T, i| {
+    for (OptionTypes, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
         var supporting_color: [len]bool = @splat(false);
         for (enums.values(T.ColorSupported)) |v| {
