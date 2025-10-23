@@ -172,10 +172,10 @@ pub const Widget = struct {
                 const ret = try reg.alloc(@This(), .front);
                 var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
-                    const opt: MemOpt = @enumFromInt(part.opt);
+                    const opt: Options.Mem = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
 
-                    if (opt.checkCastTo(MemOpt.PercentOpts)) |_|
+                    if (opt.checkCastTo(Options.Mem.Percent)) |_|
                         opt_mask.pct |= bit;
                 }
                 ret.opt_mask = opt_mask;
@@ -197,12 +197,12 @@ pub const Widget = struct {
                 const ret = try reg.alloc(@This(), .front);
                 var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
-                    const opt: CpuOpt = @enumFromInt(part.opt);
+                    const opt: Options.Cpu = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
 
-                    if (opt.checkCastTo(CpuOpt.UsageOpts)) |_| {
+                    if (opt.checkCastTo(Options.Cpu.Usage)) |_| {
                         opt_mask.usage |= bit;
-                    } else if (opt.checkCastTo(CpuOpt.StatsOpts)) |_| {
+                    } else if (opt.checkCastTo(Options.Cpu.Stats)) |_| {
                         opt_mask.stats |= bit;
                     }
                 }
@@ -244,14 +244,14 @@ pub const Widget = struct {
                 ret.mountpoint[arg.len] = 0;
                 var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
-                    const opt: DiskOpt = @enumFromInt(part.opt);
+                    const opt: Options.Disk = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
 
-                    if (opt.checkCastTo(DiskOpt.PercentOpts)) |_| {
+                    if (opt.checkCastTo(Options.Disk.Percent)) |_| {
                         opt_mask.pct |= bit;
-                        if (opt.checkCastTo(DiskOpt.PercentInoOpts)) |_|
+                        if (opt.checkCastTo(Options.Disk.PercentIno)) |_|
                             opt_mask.pct_ino |= bit;
-                    } else if (opt.checkCastTo(DiskOpt.SizeOpts)) |_| {
+                    } else if (opt.checkCastTo(Options.Disk.Size)) |_| {
                         opt_mask.size |= bit;
                     }
                 }
@@ -274,7 +274,7 @@ pub const Widget = struct {
                 netdev: OptBit,
                 netdev_size: OptBit,
 
-                const Flags = PackedFlagsFromEnum(NetOpt, OptBit);
+                const Flags = PackedFlagsFromEnum(Options.Net, OptBit);
 
                 const zero: Masks = .{
                     .enabled = @bitCast(@as(OptBit, 0)),
@@ -299,14 +299,14 @@ pub const Widget = struct {
 
                 var opt_mask: Masks = .zero;
                 for (format.parts.get(base)) |*part| {
-                    const opt: NetOpt = @enumFromInt(part.opt);
+                    const opt: Options.Net = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
 
-                    if (opt.checkCastTo(NetOpt.StringOpts)) |_| {
+                    if (opt.checkCastTo(Options.Net.String)) |_| {
                         opt_mask.string |= bit;
-                    } else if (opt.checkCastTo(NetOpt.NetDevOpts)) |_| {
+                    } else if (opt.checkCastTo(Options.Net.NetDev)) |_| {
                         opt_mask.netdev |= bit;
-                        if (opt.checkCastTo(NetOpt.NetDevSizeOpts)) |_|
+                        if (opt.checkCastTo(Options.Net.NetDevSize)) |_|
                             opt_mask.netdev_size |= bit;
                     }
                 }
@@ -432,223 +432,225 @@ pub const Widget = struct {
     };
 };
 
-pub const TimeOpt = enum(u8) {
-    time,
-    @"1",
-    @"2",
-    @"3",
-    @"4",
-    @"5",
-    @"6",
-    @"7",
-    @"8",
-    @"9",
-    arg,
+pub const Options = struct {
+    pub const Time = enum(u8) {
+        time,
+        @"1",
+        @"2",
+        @"3",
+        @"4",
+        @"5",
+        @"6",
+        @"7",
+        @"8",
+        @"9",
+        arg,
 
-    pub const ColorSupported = enum(u8) {};
-};
+        pub const ColorSupported = enum(u8) {};
+    };
 
-pub const MemOpt = enum(u8) {
-    @"%total",
-    @"%free",
-    @"%available",
-    @"%buffers",
-    @"%cached",
-    @"%dirty",
-    @"%writeback",
-    @"%used",
+    pub const Mem = enum(u8) {
+        @"%total",
+        @"%free",
+        @"%available",
+        @"%buffers",
+        @"%cached",
+        @"%dirty",
+        @"%writeback",
+        @"%used",
 
-    total,
-    free,
-    available,
-    buffers,
-    cached,
-    dirty,
-    writeback,
-    used,
+        total,
+        free,
+        available,
+        buffers,
+        cached,
+        dirty,
+        writeback,
+        used,
 
-    pub const SIZE_OPTS_OFF = @intFromEnum(MemOpt.total);
+        pub const SIZE_OFF = @intFromEnum(Mem.total);
 
-    pub const PercentOpts = MakeEnumSubset(@This(), &.{
-        .@"%total",  .@"%free",  .@"%available", .@"%buffers",
-        .@"%cached", .@"%dirty", .@"%writeback", .@"%used",
-    });
+        pub const Percent = MakeEnumSubset(@This(), &.{
+            .@"%total",  .@"%free",  .@"%available", .@"%buffers",
+            .@"%cached", .@"%dirty", .@"%writeback", .@"%used",
+        });
 
-    pub const SizeOpts = MakeEnumSubset(@This(), &.{
-        .total,  .free,  .available, .buffers,
-        .cached, .dirty, .writeback, .used,
-    });
+        pub const Size = MakeEnumSubset(@This(), &.{
+            .total,  .free,  .available, .buffers,
+            .cached, .dirty, .writeback, .used,
+        });
 
-    pub const ColorSupported = PercentOpts;
+        pub const ColorSupported = Percent;
 
-    pub fn checkCastTo(self: @This(), comptime T: type) ?T {
-        return enums.fromInt(T, @intFromEnum(self));
-    }
-};
+        pub fn checkCastTo(self: @This(), comptime T: type) ?T {
+            return enums.fromInt(T, @intFromEnum(self));
+        }
+    };
 
-pub const CpuOpt = enum(u8) {
-    @"%all",
-    @"%user",
-    @"%sys",
-    @"%iowait",
-    all,
-    user,
-    sys,
-    iowait,
+    pub const Cpu = enum(u8) {
+        @"%all",
+        @"%user",
+        @"%sys",
+        @"%iowait",
+        all,
+        user,
+        sys,
+        iowait,
 
-    intr,
-    softirq,
-    blocked,
-    running,
-    forks,
-    ctxt,
+        intr,
+        softirq,
+        blocked,
+        running,
+        forks,
+        ctxt,
 
-    brlbars,
-    blkbars,
+        brlbars,
+        blkbars,
 
-    pub const STATS_OPTS_OFF = @intFromEnum(CpuOpt.intr);
+        pub const STATS_OFF = @intFromEnum(Cpu.intr);
 
-    pub const UsageOpts = MakeEnumSubset(@This(), &.{
-        .@"%all", .@"%user", .@"%sys", .@"%iowait",
-        .all,     .user,     .sys,     .iowait,
-    });
+        pub const Usage = MakeEnumSubset(@This(), &.{
+            .@"%all", .@"%user", .@"%sys", .@"%iowait",
+            .all,     .user,     .sys,     .iowait,
+        });
 
-    pub const StatsOpts = MakeEnumSubset(@This(), &.{
-        .intr, .softirq, .blocked, .running, .forks, .ctxt,
-    });
+        pub const Stats = MakeEnumSubset(@This(), &.{
+            .intr, .softirq, .blocked, .running, .forks, .ctxt,
+        });
 
-    pub const SpecialOpts = MakeEnumSubset(@This(), &.{
-        .brlbars, .blkbars,
-    });
+        pub const Special = MakeEnumSubset(@This(), &.{
+            .brlbars, .blkbars,
+        });
 
-    pub const ColorSupported = MakeEnumSubset(@This(), &.{
-        .@"%all", .@"%user", .@"%sys", .@"%iowait",
-        .blocked, .running,  .forks,
-    });
+        pub const ColorSupported = MakeEnumSubset(@This(), &.{
+            .@"%all", .@"%user", .@"%sys", .@"%iowait",
+            .blocked, .running,  .forks,
+        });
 
-    pub fn castTo(self: @This(), comptime T: type) T {
-        return @enumFromInt(@intFromEnum(self));
-    }
+        pub fn castTo(self: @This(), comptime T: type) T {
+            return @enumFromInt(@intFromEnum(self));
+        }
 
-    pub fn checkCastTo(self: @This(), comptime T: type) ?T {
-        return enums.fromInt(T, @intFromEnum(self));
-    }
-};
+        pub fn checkCastTo(self: @This(), comptime T: type) ?T {
+            return enums.fromInt(T, @intFromEnum(self));
+        }
+    };
 
-pub const DiskOpt = enum(u8) {
-    @"%total",
-    @"%free",
-    @"%available",
-    @"%used",
-    @"%ino_total",
-    @"%ino_free",
-    @"%ino_used",
-    total,
-    free,
-    available,
-    used,
-    ino_total,
-    ino_free,
-    ino_used,
+    pub const Disk = enum(u8) {
+        @"%total",
+        @"%free",
+        @"%available",
+        @"%used",
+        @"%ino_total",
+        @"%ino_free",
+        @"%ino_used",
+        total,
+        free,
+        available,
+        used,
+        ino_total,
+        ino_free,
+        ino_used,
 
-    arg,
+        arg,
 
-    // Distance from %total.
-    pub const SIZE_OPTS_OFF = @intFromEnum(DiskOpt.total);
-    // Distance from %ino_total.
-    pub const SI_INO_OPTS_OFF = 7;
+        // Distance from %total.
+        pub const SIZE_OFF = @intFromEnum(Disk.total);
+        // Distance from %ino_total.
+        pub const SI_INO_OFF = 7;
 
-    pub const PercentOpts = MakeEnumSubset(@This(), &.{
-        .@"%total",     .@"%free",     .@"%available", .@"%used",
-        .@"%ino_total", .@"%ino_free", .@"%ino_used",
-    });
+        pub const Percent = MakeEnumSubset(@This(), &.{
+            .@"%total",     .@"%free",     .@"%available", .@"%used",
+            .@"%ino_total", .@"%ino_free", .@"%ino_used",
+        });
 
-    pub const PercentInoOpts = MakeEnumSubset(@This(), &.{
-        .@"%ino_total", .@"%ino_free", .@"%ino_used",
-    });
+        pub const PercentIno = MakeEnumSubset(@This(), &.{
+            .@"%ino_total", .@"%ino_free", .@"%ino_used",
+        });
 
-    pub const SizeOpts = MakeEnumSubset(@This(), &.{
-        .total, .free, .available, .used,
-    });
+        pub const Size = MakeEnumSubset(@This(), &.{
+            .total, .free, .available, .used,
+        });
 
-    pub const ColorSupported = PercentOpts;
+        pub const ColorSupported = Percent;
 
-    pub fn checkCastTo(self: @This(), comptime T: type) ?T {
-        return enums.fromInt(T, @intFromEnum(self));
-    }
-};
+        pub fn checkCastTo(self: @This(), comptime T: type) ?T {
+            return enums.fromInt(T, @intFromEnum(self));
+        }
+    };
 
-pub const NetOpt = enum(u8) {
-    arg,
-    inet,
-    flags,
-    state,
+    pub const Net = enum(u8) {
+        arg,
+        inet,
+        flags,
+        state,
 
-    rx_bytes,
-    rx_pkts,
-    rx_errs,
-    rx_drop,
-    rx_fifo,
-    rx_frame,
-    rx_compressed,
-    rx_multicast,
-    tx_bytes,
-    tx_pkts,
-    tx_errs,
-    tx_drop,
-    tx_fifo,
-    tx_colls,
-    tx_carrier,
-    tx_compressed,
+        rx_bytes,
+        rx_pkts,
+        rx_errs,
+        rx_drop,
+        rx_fifo,
+        rx_frame,
+        rx_compressed,
+        rx_multicast,
+        tx_bytes,
+        tx_pkts,
+        tx_errs,
+        tx_drop,
+        tx_fifo,
+        tx_colls,
+        tx_carrier,
+        tx_compressed,
 
-    pub const NETDEV_OPTS_OFF = @intFromEnum(NetOpt.rx_bytes);
+        pub const NETDEV_OFF = @intFromEnum(Net.rx_bytes);
 
-    pub const StringOpts = MakeEnumSubset(@This(), &.{
-        .arg, .inet, .flags, .state,
-    });
+        pub const String = MakeEnumSubset(@This(), &.{
+            .arg, .inet, .flags, .state,
+        });
 
-    pub const NetDevOpts = MakeEnumSubset(@This(), &.{
-        .rx_bytes, .rx_pkts,  .rx_errs,       .rx_drop,
-        .rx_fifo,  .rx_frame, .rx_compressed, .rx_multicast,
-        .tx_bytes, .tx_pkts,  .tx_errs,       .tx_drop,
-        .tx_fifo,  .tx_colls, .tx_carrier,    .tx_compressed,
-    });
+        pub const NetDev = MakeEnumSubset(@This(), &.{
+            .rx_bytes, .rx_pkts,  .rx_errs,       .rx_drop,
+            .rx_fifo,  .rx_frame, .rx_compressed, .rx_multicast,
+            .tx_bytes, .tx_pkts,  .tx_errs,       .tx_drop,
+            .tx_fifo,  .tx_colls, .tx_carrier,    .tx_compressed,
+        });
 
-    pub const NetDevSizeOpts = MakeEnumSubset(@This(), &.{
-        .rx_bytes, .tx_bytes,
-    });
+        pub const NetDevSize = MakeEnumSubset(@This(), &.{
+            .rx_bytes, .tx_bytes,
+        });
 
-    pub const ColorSupported = MakeEnumSubset(@This(), &.{
-        .state,
-    });
+        pub const ColorSupported = MakeEnumSubset(@This(), &.{
+            .state,
+        });
 
-    pub fn castTo(self: @This(), comptime T: type) T {
-        return @enumFromInt(@intFromEnum(self));
-    }
+        pub fn castTo(self: @This(), comptime T: type) T {
+            return @enumFromInt(@intFromEnum(self));
+        }
 
-    pub fn checkCastTo(self: @This(), comptime T: type) ?T {
-        return enums.fromInt(T, @intFromEnum(self));
-    }
-};
+        pub fn checkCastTo(self: @This(), comptime T: type) ?T {
+            return enums.fromInt(T, @intFromEnum(self));
+        }
+    };
 
-pub const BatOpt = enum(u8) {
-    state,
-    @"%fulldesign",
-    @"%fullnow",
-    arg,
+    pub const Bat = enum(u8) {
+        state,
+        @"%fulldesign",
+        @"%fullnow",
+        arg,
 
-    pub const ColorSupported = MakeEnumSubset(@This(), &.{
-        .@"%fulldesign", .@"%fullnow", .state,
-    });
-};
+        pub const ColorSupported = MakeEnumSubset(@This(), &.{
+            .@"%fulldesign", .@"%fullnow", .state,
+        });
+    };
 
-pub const ReadOpt = enum(u8) {
-    arg,
-    basename,
-    content,
-    raw,
+    pub const Read = enum(u8) {
+        arg,
+        basename,
+        content,
+        raw,
 
-    pub const ColorSupported = enum(u8) {};
+        pub const ColorSupported = enum(u8) {};
+    };
 };
 
 pub fn strWid(str: []const u8) ?Widget.Id {
@@ -660,7 +662,8 @@ pub fn strWid(str: []const u8) ?Widget.Id {
 }
 
 const WID_OPT_TYPE = &.{
-    TimeOpt, MemOpt, CpuOpt, DiskOpt, NetOpt, BatOpt, ReadOpt,
+    Options.Time, Options.Mem, Options.Cpu,  Options.Disk,
+    Options.Net,  Options.Bat, Options.Read,
 };
 
 comptime {

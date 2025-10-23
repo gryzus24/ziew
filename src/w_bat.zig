@@ -55,9 +55,9 @@ const Battery = struct {
 
     comptime {
         const assert = std.debug.assert;
-        assert(state == @intFromEnum(typ.BatOpt.state));
-        assert(full_design == @intFromEnum(typ.BatOpt.@"%fulldesign"));
-        assert(full_now == @intFromEnum(typ.BatOpt.@"%fullnow"));
+        assert(state == @intFromEnum(typ.Options.Bat.state));
+        assert(full_design == @intFromEnum(typ.Options.Bat.@"%fulldesign"));
+        assert(full_now == @intFromEnum(typ.Options.Bat.@"%fullnow"));
     }
 
     const State = enum(u8) {
@@ -85,7 +85,7 @@ const Battery = struct {
     };
 
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        return switch (@as(typ.BatOpt.ColorSupported, @enumFromInt(ac.opt))) {
+        return switch (@as(typ.Options.Bat.ColorSupported, @enumFromInt(ac.opt))) {
             .state => color.firstColorEQThreshold(
                 @intCast(self.fields[Battery.state]),
                 ac.pairs.get(base),
@@ -219,7 +219,7 @@ pub inline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u
     for (w.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
-        const opt: typ.BatOpt = @enumFromInt(part.opt);
+        const opt: typ.Options.Bat = @enumFromInt(part.opt);
         switch (opt) {
             .state, .arg => {
                 const SZ = 12;

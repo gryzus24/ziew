@@ -85,13 +85,13 @@ const Stat = struct {
 
     comptime {
         const assert = std.debug.assert;
-        const off = typ.CpuOpt.STATS_OPTS_OFF;
-        assert(intr == @intFromEnum(typ.CpuOpt.intr) - off);
-        assert(softirq == @intFromEnum(typ.CpuOpt.softirq) - off);
-        assert(blocked == @intFromEnum(typ.CpuOpt.blocked) - off);
-        assert(running == @intFromEnum(typ.CpuOpt.running) - off);
-        assert(forks == @intFromEnum(typ.CpuOpt.forks) - off);
-        assert(ctxt == @intFromEnum(typ.CpuOpt.ctxt) - off);
+        const off = typ.Options.Cpu.STATS_OFF;
+        assert(intr == @intFromEnum(typ.Options.Cpu.intr) - off);
+        assert(softirq == @intFromEnum(typ.Options.Cpu.softirq) - off);
+        assert(blocked == @intFromEnum(typ.Options.Cpu.blocked) - off);
+        assert(running == @intFromEnum(typ.Options.Cpu.running) - off);
+        assert(forks == @intFromEnum(typ.Options.Cpu.forks) - off);
+        assert(ctxt == @intFromEnum(typ.Options.Cpu.ctxt) - off);
     }
 
     fn initZero(reg: *umem.Region, nr_possible_cpus: u32) !@This() {
@@ -250,7 +250,7 @@ pub const State = struct {
         std.debug.assert(@sizeOf(@FieldType(State, "usage")) == 64);
     }
 
-    const NR_USAGE_FIELDS = @typeInfo(typ.CpuOpt.UsageOpts).@"enum".fields.len;
+    const NR_USAGE_FIELDS = @typeInfo(typ.Options.Cpu.Usage).@"enum".fields.len;
 
     pub fn init(reg: *umem.Region) !State {
         const nr_cpus = misc.nrPossibleCpus();
@@ -268,7 +268,7 @@ pub const State = struct {
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         const new, const old = typ.constCurrPrev(Stat, &self.stats, self.curr);
         return color.firstColorGEThreshold(
-            switch (@as(typ.CpuOpt.ColorSupported, @enumFromInt(ac.opt))) {
+            switch (@as(typ.Options.Cpu.ColorSupported, @enumFromInt(ac.opt))) {
                 .@"%all",
                 .@"%user",
                 .@"%sys",
@@ -300,14 +300,14 @@ pub inline fn update(state: *State) error{ReadError}!void {
 
     // zig fmt: off
     const u = &state.usage;
-    u[@intFromEnum(typ.CpuOpt.@"%all")]    = delta.all;
-    u[@intFromEnum(typ.CpuOpt.@"%user")]   = delta.user;
-    u[@intFromEnum(typ.CpuOpt.@"%sys")]    = delta.sys;
-    u[@intFromEnum(typ.CpuOpt.@"%iowait")] = delta.iowait;
-    u[@intFromEnum(typ.CpuOpt.all)]        = deltaN.all;
-    u[@intFromEnum(typ.CpuOpt.user)]       = deltaN.user;
-    u[@intFromEnum(typ.CpuOpt.sys)]        = deltaN.sys;
-    u[@intFromEnum(typ.CpuOpt.iowait)]     = deltaN.iowait;
+    u[@intFromEnum(typ.Options.Cpu.@"%all")]    = delta.all;
+    u[@intFromEnum(typ.Options.Cpu.@"%user")]   = delta.user;
+    u[@intFromEnum(typ.Options.Cpu.@"%sys")]    = delta.sys;
+    u[@intFromEnum(typ.Options.Cpu.@"%iowait")] = delta.iowait;
+    u[@intFromEnum(typ.Options.Cpu.all)]        = deltaN.all;
+    u[@intFromEnum(typ.Options.Cpu.user)]       = deltaN.user;
+    u[@intFromEnum(typ.Options.Cpu.sys)]        = deltaN.sys;
+    u[@intFromEnum(typ.Options.Cpu.iowait)]     = deltaN.iowait;
     // zig fmt: on
 }
 
@@ -345,8 +345,8 @@ pub inline fn widget(
             };
             unt.UnitSI(
                 typ.calc(
-                    new.stats[part.opt - typ.CpuOpt.STATS_OPTS_OFF],
-                    old.stats[part.opt - typ.CpuOpt.STATS_OPTS_OFF],
+                    new.stats[part.opt - typ.Options.Cpu.STATS_OFF],
+                    old.stats[part.opt - typ.Options.Cpu.STATS_OFF],
                     w.interval,
                     part.flags,
                 ),
@@ -363,8 +363,8 @@ pub inline fn widget(
         const buffer = writer.buffer;
         var pos = writer.end;
 
-        const opt: typ.CpuOpt = @enumFromInt(part.opt);
-        switch (opt.castTo(typ.CpuOpt.SpecialOpts)) {
+        const opt: typ.Options.Cpu = @enumFromInt(part.opt);
+        switch (opt.castTo(typ.Options.Cpu.Special)) {
             .brlbars => {
                 var left: u32 = 0;
                 var right: u32 = 0;

@@ -16,8 +16,8 @@ const Meminfo = struct {
     const NR_FIELDS = 8;
 
     comptime {
-        const nr_pct = @typeInfo(typ.MemOpt.PercentOpts).@"enum".fields.len;
-        const nr_size = @typeInfo(typ.MemOpt.SizeOpts).@"enum".fields.len;
+        const nr_pct = @typeInfo(typ.Options.Mem.Percent).@"enum".fields.len;
+        const nr_size = @typeInfo(typ.Options.Mem.Size).@"enum".fields.len;
         std.debug.assert(nr_pct == NR_FIELDS and NR_FIELDS == nr_size);
     }
 
@@ -172,8 +172,8 @@ pub inline fn widget(
             nu = unt.Percent(new.fields[part.opt], new.total());
         } else {
             const value, flags.negative = typ.calcWithOverflow(
-                new.fields[part.opt - typ.MemOpt.SIZE_OPTS_OFF],
-                old.fields[part.opt - typ.MemOpt.SIZE_OPTS_OFF],
+                new.fields[part.opt - typ.Options.Mem.SIZE_OFF],
+                old.fields[part.opt - typ.Options.Mem.SIZE_OFF],
                 w.interval,
                 part.flags,
             );

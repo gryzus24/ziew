@@ -20,25 +20,25 @@ const Mount = struct {
 
     comptime {
         const assert = std.debug.assert;
-        assert(kb_total == @intFromEnum(typ.DiskOpt.@"%total"));
-        assert(kb_free == @intFromEnum(typ.DiskOpt.@"%free"));
-        assert(kb_avail == @intFromEnum(typ.DiskOpt.@"%available"));
-        assert(kb_used == @intFromEnum(typ.DiskOpt.@"%used"));
-        assert(ino_total == @intFromEnum(typ.DiskOpt.@"%ino_total"));
-        assert(ino_free == @intFromEnum(typ.DiskOpt.@"%ino_free"));
-        assert(ino_used == @intFromEnum(typ.DiskOpt.@"%ino_used"));
-        const size_off = typ.DiskOpt.SIZE_OPTS_OFF;
-        assert(kb_total == @intFromEnum(typ.DiskOpt.total) - size_off);
-        assert(kb_free == @intFromEnum(typ.DiskOpt.free) - size_off);
-        assert(kb_avail == @intFromEnum(typ.DiskOpt.available) - size_off);
-        assert(kb_used == @intFromEnum(typ.DiskOpt.used) - size_off);
-        assert(ino_total == @intFromEnum(typ.DiskOpt.ino_total) - size_off);
-        assert(ino_free == @intFromEnum(typ.DiskOpt.ino_free) - size_off);
-        assert(ino_used == @intFromEnum(typ.DiskOpt.ino_used) - size_off);
-        const si_ino_off = typ.DiskOpt.SI_INO_OPTS_OFF;
-        assert(ino_total == @intFromEnum(typ.DiskOpt.ino_total) - si_ino_off);
-        assert(ino_free == @intFromEnum(typ.DiskOpt.ino_free) - si_ino_off);
-        assert(ino_used == @intFromEnum(typ.DiskOpt.ino_used) - si_ino_off);
+        assert(kb_total == @intFromEnum(typ.Options.Disk.@"%total"));
+        assert(kb_free == @intFromEnum(typ.Options.Disk.@"%free"));
+        assert(kb_avail == @intFromEnum(typ.Options.Disk.@"%available"));
+        assert(kb_used == @intFromEnum(typ.Options.Disk.@"%used"));
+        assert(ino_total == @intFromEnum(typ.Options.Disk.@"%ino_total"));
+        assert(ino_free == @intFromEnum(typ.Options.Disk.@"%ino_free"));
+        assert(ino_used == @intFromEnum(typ.Options.Disk.@"%ino_used"));
+        const size_off = typ.Options.Disk.SIZE_OFF;
+        assert(kb_total == @intFromEnum(typ.Options.Disk.total) - size_off);
+        assert(kb_free == @intFromEnum(typ.Options.Disk.free) - size_off);
+        assert(kb_avail == @intFromEnum(typ.Options.Disk.available) - size_off);
+        assert(kb_used == @intFromEnum(typ.Options.Disk.used) - size_off);
+        assert(ino_total == @intFromEnum(typ.Options.Disk.ino_total) - size_off);
+        assert(ino_free == @intFromEnum(typ.Options.Disk.ino_free) - size_off);
+        assert(ino_used == @intFromEnum(typ.Options.Disk.ino_used) - size_off);
+        const si_ino_off = typ.Options.Disk.SI_INO_OFF;
+        assert(ino_total == @intFromEnum(typ.Options.Disk.ino_total) - si_ino_off);
+        assert(ino_free == @intFromEnum(typ.Options.Disk.ino_free) - si_ino_off);
+        assert(ino_used == @intFromEnum(typ.Options.Disk.ino_used) - si_ino_off);
     }
 
     const zero: Mount = .{ .fields = @splat(0) };
@@ -147,7 +147,7 @@ pub inline fn widget(
     for (w.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
-        const opt: typ.DiskOpt = @enumFromInt(part.opt);
+        const opt: typ.Options.Disk = @enumFromInt(part.opt);
         const bit = typ.optBit(part.opt);
 
         if (opt == .arg) {
@@ -172,16 +172,16 @@ pub inline fn widget(
             );
         } else if (bit & wd.opt_mask.size != 0) {
             const value, flags.negative = typ.calcWithOverflow(
-                new.fields[part.opt - typ.DiskOpt.SIZE_OPTS_OFF],
-                old.fields[part.opt - typ.DiskOpt.SIZE_OPTS_OFF],
+                new.fields[part.opt - typ.Options.Disk.SIZE_OFF],
+                old.fields[part.opt - typ.Options.Disk.SIZE_OFF],
                 w.interval,
                 part.flags,
             );
             nu = unt.SizeKb(value);
         } else {
             const value, flags.negative = typ.calcWithOverflow(
-                new.fields[part.opt - typ.DiskOpt.SI_INO_OPTS_OFF],
-                old.fields[part.opt - typ.DiskOpt.SI_INO_OPTS_OFF],
+                new.fields[part.opt - typ.Options.Disk.SI_INO_OFF],
+                old.fields[part.opt - typ.Options.Disk.SI_INO_OFF],
                 w.interval,
                 part.flags,
             );
