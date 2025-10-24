@@ -197,11 +197,9 @@ pub const Widget = struct {
             mountpoint: [MOUNTPOINT_SIZE]u8,
 
             const Masks = struct {
-                pct: OptBit,
-                pct_ino: OptBit,
-                size: OptBit,
+                ino: OptBit,
 
-                const zero: Masks = .{ .pct = 0, .pct_ino = 0, .size = 0 };
+                const zero: Masks = .{ .ino = 0 };
             };
 
             const MOUNTPOINT_SIZE =
@@ -226,13 +224,8 @@ pub const Widget = struct {
                     const opt: Options.Disk = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
 
-                    if (opt.checkCastTo(Options.Disk.Percent)) |_| {
-                        opt_mask.pct |= bit;
-                        if (opt.checkCastTo(Options.Disk.PercentIno)) |_|
-                            opt_mask.pct_ino |= bit;
-                    } else if (opt.checkCastTo(Options.Disk.Size)) |_| {
-                        opt_mask.size |= bit;
-                    }
+                    if (opt.checkCastTo(Options.Disk.Ino)) |_|
+                        opt_mask.ino |= bit;
                 }
                 ret.opt_mask = opt_mask;
                 return ret;
@@ -494,13 +487,6 @@ pub const Options = struct {
     };
 
     pub const Disk = enum(u8) {
-        @"%total",
-        @"%free",
-        @"%available",
-        @"%used",
-        @"%ino_total",
-        @"%ino_free",
-        @"%ino_used",
         total,
         free,
         available,
@@ -511,25 +497,15 @@ pub const Options = struct {
 
         arg,
 
-        // Distance from %total.
-        pub const SIZE_OFF = @intFromEnum(Disk.total);
-        // Distance from %ino_total.
-        pub const SI_INO_OFF = 7;
-
-        pub const Percent = MakeEnumSubset(@This(), &.{
-            .@"%total",     .@"%free",     .@"%available", .@"%used",
-            .@"%ino_total", .@"%ino_free", .@"%ino_used",
+        pub const Ino = MakeEnumSubset(@This(), &.{
+            .ino_total, .ino_free, .ino_used,
         });
 
-        pub const PercentIno = MakeEnumSubset(@This(), &.{
-            .@"%ino_total", .@"%ino_free", .@"%ino_used",
+        pub const ColorSupported = enum(u8) {};
+        pub const ColorSupportedWithPercentPrefix = MakeEnumSubset(@This(), &.{
+            .total,     .free,     .available, .used,
+            .ino_total, .ino_free, .ino_used,
         });
-
-        pub const Size = MakeEnumSubset(@This(), &.{
-            .total, .free, .available, .used,
-        });
-
-        pub const ColorSupported = Percent;
 
         pub fn checkCastTo(self: @This(), comptime T: type) ?T {
             return enums.fromInt(T, @intFromEnum(self));

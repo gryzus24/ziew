@@ -20,25 +20,13 @@ const Mount = struct {
 
     comptime {
         const assert = std.debug.assert;
-        assert(kb_total == @intFromEnum(typ.Options.Disk.@"%total"));
-        assert(kb_free == @intFromEnum(typ.Options.Disk.@"%free"));
-        assert(kb_avail == @intFromEnum(typ.Options.Disk.@"%available"));
-        assert(kb_used == @intFromEnum(typ.Options.Disk.@"%used"));
-        assert(ino_total == @intFromEnum(typ.Options.Disk.@"%ino_total"));
-        assert(ino_free == @intFromEnum(typ.Options.Disk.@"%ino_free"));
-        assert(ino_used == @intFromEnum(typ.Options.Disk.@"%ino_used"));
-        const size_off = typ.Options.Disk.SIZE_OFF;
-        assert(kb_total == @intFromEnum(typ.Options.Disk.total) - size_off);
-        assert(kb_free == @intFromEnum(typ.Options.Disk.free) - size_off);
-        assert(kb_avail == @intFromEnum(typ.Options.Disk.available) - size_off);
-        assert(kb_used == @intFromEnum(typ.Options.Disk.used) - size_off);
-        assert(ino_total == @intFromEnum(typ.Options.Disk.ino_total) - size_off);
-        assert(ino_free == @intFromEnum(typ.Options.Disk.ino_free) - size_off);
-        assert(ino_used == @intFromEnum(typ.Options.Disk.ino_used) - size_off);
-        const si_ino_off = typ.Options.Disk.SI_INO_OFF;
-        assert(ino_total == @intFromEnum(typ.Options.Disk.ino_total) - si_ino_off);
-        assert(ino_free == @intFromEnum(typ.Options.Disk.ino_free) - si_ino_off);
-        assert(ino_used == @intFromEnum(typ.Options.Disk.ino_used) - si_ino_off);
+        assert(kb_total == @intFromEnum(typ.Options.Disk.total));
+        assert(kb_free == @intFromEnum(typ.Options.Disk.free));
+        assert(kb_avail == @intFromEnum(typ.Options.Disk.available));
+        assert(kb_used == @intFromEnum(typ.Options.Disk.used));
+        assert(ino_total == @intFromEnum(typ.Options.Disk.ino_total));
+        assert(ino_free == @intFromEnum(typ.Options.Disk.ino_free));
+        assert(ino_used == @intFromEnum(typ.Options.Disk.ino_used));
     }
 
     const zero: Mount = .{ .fields = @splat(0) };
@@ -48,13 +36,13 @@ const MountPair = struct {
     pair: [2]Mount,
 
     curr: u8,
-    opt_mask_pct_ino: typ.OptBit,
+    opt_mask_ino: typ.OptBit,
 
-    fn init(opt_mask_pct_ino: typ.OptBit) @This() {
+    fn init(opt_mask_ino: typ.OptBit) @This() {
         return .{
             .pair = .{ .zero, .zero },
             .curr = 0,
-            .opt_mask_pct_ino = opt_mask_pct_ino,
+            .opt_mask_ino = opt_mask_ino,
         };
     }
 
@@ -64,7 +52,7 @@ const MountPair = struct {
             unt.Percent(
                 mount.fields[ac.opt],
                 mount.fields[
-                    if (typ.optBit(ac.opt) & self.opt_mask_pct_ino != 0)
+                    if (typ.optBit(ac.opt) & self.opt_mask_ino != 0)
                         Mount.ino_total
                     else
                         Mount.kb_total
@@ -88,7 +76,7 @@ pub const State = struct {
                 w.data.DISK.mount_id = id;
                 id += 1;
                 const ret = try reg.pushVec(&mounts, .front);
-                ret.* = .init(w.data.DISK.opt_mask.pct_ino);
+                ret.* = .init(w.data.DISK.opt_mask.ino);
             }
         }
         return .{ .mounts = mounts };
@@ -130,16 +118,16 @@ pub inline fn widget(
     }
     const mount = &state.mounts[wd.mount_id];
     mount.curr ^= 1;
-    const new, const old = typ.currPrev(Mount, &mount.pair, mount.curr);
+    const curr, const prev = typ.currPrev(Mount, &mount.pair, mount.curr);
 
     // zig fmt: off
-    new.fields[Mount.kb_total]  = (sfs.f_bsize * sfs.f_blocks) / 1024;
-    new.fields[Mount.kb_free]   = (sfs.f_bsize * sfs.f_bfree) / 1024;
-    new.fields[Mount.kb_avail]  = (sfs.f_bsize * sfs.f_bavail) / 1024;
-    new.fields[Mount.kb_used]   = new.fields[Mount.kb_total] - new.fields[Mount.kb_free];
-    new.fields[Mount.ino_total] = sfs.f_files;
-    new.fields[Mount.ino_free]  = sfs.f_ffree;
-    new.fields[Mount.ino_used]  = sfs.f_files - sfs.f_ffree;
+    curr.fields[Mount.kb_total]  = (sfs.f_bsize * sfs.f_blocks) / 1024;
+    curr.fields[Mount.kb_free]   = (sfs.f_bsize * sfs.f_bfree) / 1024;
+    curr.fields[Mount.kb_avail]  = (sfs.f_bsize * sfs.f_bavail) / 1024;
+    curr.fields[Mount.kb_used]   = curr.fields[Mount.kb_total] - curr.fields[Mount.kb_free];
+    curr.fields[Mount.ino_total] = sfs.f_files;
+    curr.fields[Mount.ino_free]  = sfs.f_ffree;
+    curr.fields[Mount.ino_used]  = sfs.f_files - sfs.f_ffree;
     // zig fmt: on
 
     const fg, const bg = w.check(mount, base);
@@ -160,32 +148,27 @@ pub inline fn widget(
             .negative = false,
         };
         var nu: unt.NumUnit = undefined;
-        if (bit & wd.opt_mask.pct != 0) {
+        if (part.flags.pct) {
             nu = unt.Percent(
-                new.fields[part.opt],
-                new.fields[
-                    if (bit & wd.opt_mask.pct_ino != 0)
+                curr.fields[part.opt],
+                curr.fields[
+                    if (bit & wd.opt_mask.ino != 0)
                         Mount.ino_total
                     else
                         Mount.kb_total
                 ],
             );
-        } else if (bit & wd.opt_mask.size != 0) {
-            const value, flags.negative = typ.calcWithOverflow(
-                new.fields[part.opt - typ.Options.Disk.SIZE_OFF],
-                old.fields[part.opt - typ.Options.Disk.SIZE_OFF],
-                w.interval,
-                part.flags,
-            );
-            nu = unt.SizeKb(value);
         } else {
             const value, flags.negative = typ.calcWithOverflow(
-                new.fields[part.opt - typ.Options.Disk.SI_INO_OFF],
-                old.fields[part.opt - typ.Options.Disk.SI_INO_OFF],
+                curr.fields[part.opt],
+                prev.fields[part.opt],
                 w.interval,
                 part.flags,
             );
-            nu = unt.UnitSI(value);
+            nu = if (bit & wd.opt_mask.ino != 0)
+                unt.UnitSI(value)
+            else
+                unt.SizeKb(value);
         }
         nu.write(writer, part.wopts, flags);
     }
