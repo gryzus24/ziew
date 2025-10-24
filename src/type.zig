@@ -448,10 +448,6 @@ pub const Options = struct {
     };
 
     pub const Cpu = enum(u8) {
-        @"%all",
-        @"%user",
-        @"%sys",
-        @"%iowait",
         all,
         user,
         sys,
@@ -470,8 +466,7 @@ pub const Options = struct {
         pub const STATS_OFF = @intFromEnum(Cpu.intr);
 
         pub const Usage = MakeEnumSubset(@This(), &.{
-            .@"%all", .@"%user", .@"%sys", .@"%iowait",
-            .all,     .user,     .sys,     .iowait,
+            .all, .user, .sys, .iowait,
         });
 
         pub const Stats = MakeEnumSubset(@This(), &.{
@@ -483,8 +478,10 @@ pub const Options = struct {
         });
 
         pub const ColorSupported = MakeEnumSubset(@This(), &.{
-            .@"%all", .@"%user", .@"%sys", .@"%iowait",
-            .blocked, .running,  .forks,
+            .blocked, .running, .forks,
+        });
+        pub const ColorSupportedWithPercentPrefix = MakeEnumSubset(@This(), &.{
+            .all, .user, .sys, .iowait,
         });
 
         pub fn castTo(self: @This(), comptime T: type) T {

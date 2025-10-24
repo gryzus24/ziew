@@ -240,17 +240,17 @@ inline fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
 
 pub const State = struct {
     stats: [2]Stat,
-    usage: [NR_USAGE_FIELDS]unt.F5608,
+    usage_pct: [NR_USAGE_FIELDS]unt.F5608,
+    usage_abs: [NR_USAGE_FIELDS]unt.F5608,
 
     curr: u32,
     fd: linux.fd_t,
 
-    comptime {
-        std.debug.assert(@sizeOf(Stat) == 64);
-        std.debug.assert(@sizeOf(@FieldType(State, "usage")) == 64);
-    }
-
     const NR_USAGE_FIELDS = @typeInfo(typ.Options.Cpu.Usage).@"enum".fields.len;
+
+    comptime {
+        std.debug.assert(NR_USAGE_FIELDS == 4);
+    }
 
     pub fn init(reg: *umem.Region) !State {
         const nr_cpus = misc.nrPossibleCpus();
@@ -258,7 +258,8 @@ pub const State = struct {
         const b: Stat = try .initZero(reg, nr_cpus);
         return .{
             .stats = .{ a, b },
-            .usage = @splat(.{ .u = 0 }),
+            .usage_pct = @splat(.init(0)),
+            .usage_abs = @splat(.init(0)),
             .curr = 0,
             .fd = uio.open0("/proc/stat") catch |e|
                 log.fatal(&.{ "open: /proc/stat: ", @errorName(e) }),
@@ -268,15 +269,16 @@ pub const State = struct {
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         const new, const old = typ.constCurrPrev(Stat, &self.stats, self.curr);
         return color.firstColorGEThreshold(
-            switch (@as(typ.Options.Cpu.ColorSupported, @enumFromInt(ac.opt))) {
-                .@"%all",
-                .@"%user",
-                .@"%sys",
-                .@"%iowait",
-                => self.usage[ac.opt].roundU24AndTruncate(),
+            switch (@as(typ.Options.Cpu, @enumFromInt(ac.opt))) {
+                .all,
+                .user,
+                .sys,
+                .iowait,
+                => self.usage_pct[ac.opt].roundU24AndTruncate(),
                 .blocked => new.stats[Stat.blocked],
                 .running => new.stats[Stat.running],
                 .forks => new.stats[Stat.forks] - old.stats[Stat.forks],
+                else => unreachable,
             },
             ac.pairs.get(base),
         );
@@ -299,15 +301,15 @@ pub inline fn update(state: *State) error{ReadError}!void {
     const deltaN = new_cpu.deltaN(old_cpu, @intCast(new.nr_cpux_entries));
 
     // zig fmt: off
-    const u = &state.usage;
-    u[@intFromEnum(typ.Options.Cpu.@"%all")]    = delta.all;
-    u[@intFromEnum(typ.Options.Cpu.@"%user")]   = delta.user;
-    u[@intFromEnum(typ.Options.Cpu.@"%sys")]    = delta.sys;
-    u[@intFromEnum(typ.Options.Cpu.@"%iowait")] = delta.iowait;
-    u[@intFromEnum(typ.Options.Cpu.all)]        = deltaN.all;
-    u[@intFromEnum(typ.Options.Cpu.user)]       = deltaN.user;
-    u[@intFromEnum(typ.Options.Cpu.sys)]        = deltaN.sys;
-    u[@intFromEnum(typ.Options.Cpu.iowait)]     = deltaN.iowait;
+    state.usage_pct[@intFromEnum(typ.Options.Cpu.all)]    = delta.all;
+    state.usage_pct[@intFromEnum(typ.Options.Cpu.user)]   = delta.user;
+    state.usage_pct[@intFromEnum(typ.Options.Cpu.sys)]    = delta.sys;
+    state.usage_pct[@intFromEnum(typ.Options.Cpu.iowait)] = delta.iowait;
+
+    state.usage_abs[@intFromEnum(typ.Options.Cpu.all)]    = deltaN.all;
+    state.usage_abs[@intFromEnum(typ.Options.Cpu.user)]   = deltaN.user;
+    state.usage_abs[@intFromEnum(typ.Options.Cpu.sys)]    = deltaN.sys;
+    state.usage_abs[@intFromEnum(typ.Options.Cpu.iowait)] = deltaN.iowait;
     // zig fmt: on
 }
 
@@ -325,24 +327,23 @@ pub inline fn widget(
     for (w.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
+        const flags: unt.NumUnit.Flags = .{
+            .quiet = part.flags.quiet,
+            .negative = false,
+        };
+
         const bit = typ.optBit(part.opt);
         if (bit & wd.opt_mask.usage != 0) {
-            const flags: unt.NumUnit.Flags = .{
-                .quiet = part.flags.quiet,
-                .negative = false,
-            };
-            @as(unt.NumUnit, .{
-                .n = state.usage[part.opt],
-                .u = .percent,
-            }).write(writer, part.wopts, flags);
+            const n = if (part.flags.pct)
+                state.usage_pct[part.opt]
+            else
+                state.usage_abs[part.opt];
+            @as(unt.NumUnit, .{ .n = n, .u = .percent })
+                .write(writer, part.wopts, flags);
             continue;
         }
 
         if (bit & wd.opt_mask.stats != 0) {
-            const flags: unt.NumUnit.Flags = .{
-                .quiet = part.flags.quiet,
-                .negative = false,
-            };
             unt.UnitSI(
                 typ.calc(
                     new.stats[part.opt - typ.Options.Cpu.STATS_OFF],

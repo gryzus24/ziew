@@ -347,7 +347,7 @@ const ColorOptResult = union(enum) {
 
 fn strColorOpt(wid: typ.Widget.Id.ActiveColorSupported, str: []const u8) ColorOptResult {
     var pct = false;
-    if (wid == .MEM)
+    if (wid == .MEM or wid == .CPU)
         pct = acceptPrefix(str, '%');
 
     const i: u8 = @intFromBool(pct);
