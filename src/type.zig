@@ -786,16 +786,15 @@ pub inline fn calc(
     interval: Interval,
     flags: Format.Part.Flags,
 ) u64 {
-    // Might generate a cmov if there are spare registers available.
-    var value = new;
+    var r = new;
     if (flags.diff)
-        value -= old;
+        r -= old;
     if (flags.persec) {
         if (!flags.diff) unreachable;
         const span: UDeciSec = @intCast(interval.set - interval.now);
-        value = value * 10 / span;
+        r = r * 10 / span;
     }
-    return value;
+    return r;
 }
 
 pub inline fn calcWithOverflow(
@@ -804,17 +803,16 @@ pub inline fn calcWithOverflow(
     interval: Interval,
     flags: Format.Part.Flags,
 ) struct { u64, bool } {
-    var value, var of: u8 = .{ new, 0 };
-    if (flags.diff) {
-        value, of = @subWithOverflow(value, old);
-        if (of != 0)
-            value = 0 -% value;
-        if (flags.persec) {
-            const span: UDeciSec = @intCast(interval.set - interval.now);
-            value = value * 10 / span;
-        }
+    const d: i64 = @bitCast(new -% old);
+    var r, var neg = .{ @abs(d), d < 0 };
+    if (!flags.diff)
+        r, neg = .{ new, false };
+    if (flags.persec) {
+        if (!flags.diff) unreachable;
+        const span: UDeciSec = @intCast(interval.set - interval.now);
+        r = r * 10 / span;
     }
-    return .{ value, of != 0 };
+    return .{ r, neg };
 }
 
 pub inline fn currPrev(
