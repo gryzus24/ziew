@@ -350,9 +350,7 @@ pub inline fn widget(
     for (w.format.parts.get(base)) |*part| {
         part.str.writeBytes(writer, base);
 
-        const opt: typ.Options.Net = @enumFromInt(part.opt);
         const bit = typ.optBit(part.opt);
-
         if (bit & wd.opt_mask.string != 0) {
             const SZ = 16;
             const expected = @max(wd.ifr.ifrn.name.len, INET_BUF_SIZE);
@@ -363,7 +361,7 @@ pub inline fn widget(
                 break;
             }
             const dst = writer.buffer[writer.end..];
-            writer.end += switch (opt.castTo(typ.Options.Net.String)) {
+            writer.end += switch (@as(typ.Options.Net.String, @enumFromInt(part.opt))) {
                 .arg => advance: {
                     const V = @Vector(SZ, u8);
                     const name: V = wd.ifr.ifrn.name;

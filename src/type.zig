@@ -476,10 +476,11 @@ pub const Options = struct {
         pub const ColorSupportedWithPercentPrefix = MakeEnumSubset(@This(), &.{
             .all, .user, .sys, .iowait,
         });
-
-        pub fn castTo(self: @This(), comptime T: type) T {
-            return @enumFromInt(@intFromEnum(self));
-        }
+        pub const ColorAdjacent = MakeEnumSubset(@This(), &.{
+            .blocked, .running, .forks,
+            .all,     .user,    .sys,
+            .iowait,
+        });
 
         pub fn checkCastTo(self: @This(), comptime T: type) ?T {
             return enums.fromInt(T, @intFromEnum(self));
@@ -557,10 +558,6 @@ pub const Options = struct {
         });
         pub const ColorSupportedWithPercentPrefix = enum(u8) {};
 
-        pub fn castTo(self: @This(), comptime T: type) T {
-            return @enumFromInt(@intFromEnum(self));
-        }
-
         pub fn checkCastTo(self: @This(), comptime T: type) ?T {
             return enums.fromInt(T, @intFromEnum(self));
         }
@@ -577,6 +574,9 @@ pub const Options = struct {
         });
         pub const ColorSupportedWithPercentPrefix = MakeEnumSubset(@This(), &.{
             .fulldesign, .fullnow,
+        });
+        pub const ColorAdjacent = MakeEnumSubset(@This(), &.{
+            .state, .fulldesign, .fullnow,
         });
     };
 

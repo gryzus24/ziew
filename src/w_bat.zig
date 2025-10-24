@@ -85,7 +85,7 @@ const Battery = struct {
     };
 
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        return switch (@as(typ.Options.Bat, @enumFromInt(ac.opt))) {
+        return switch (@as(typ.Options.Bat.ColorAdjacent, @enumFromInt(ac.opt))) {
             .state => color.firstColorEQThreshold(
                 @intCast(self.fields[Battery.state]),
                 ac.pairs.get(base),
@@ -97,7 +97,6 @@ const Battery = struct {
                 ).n.roundU24AndTruncate(),
                 ac.pairs.get(base),
             ),
-            else => unreachable,
         };
     }
 };

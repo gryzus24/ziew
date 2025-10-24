@@ -269,7 +269,7 @@ pub const State = struct {
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         const curr, const prev = typ.constCurrPrev(Stat, &self.stats, self.curr);
         return color.firstColorGEThreshold(
-            switch (@as(typ.Options.Cpu, @enumFromInt(ac.opt))) {
+            switch (@as(typ.Options.Cpu.ColorAdjacent, @enumFromInt(ac.opt))) {
                 .all,
                 .user,
                 .sys,
@@ -278,7 +278,6 @@ pub const State = struct {
                 .blocked => curr.stats[Stat.blocked],
                 .running => curr.stats[Stat.running],
                 .forks => curr.stats[Stat.forks] - prev.stats[Stat.forks],
-                else => unreachable,
             },
             ac.pairs.get(base),
         );
@@ -364,8 +363,7 @@ pub inline fn widget(
         const buffer = writer.buffer;
         var pos = writer.end;
 
-        const opt: typ.Options.Cpu = @enumFromInt(part.opt);
-        switch (opt.castTo(typ.Options.Cpu.Special)) {
+        switch (@as(typ.Options.Cpu.Special, @enumFromInt(part.opt))) {
             .brlbars => {
                 var left: u32 = 0;
                 var right: u32 = 0;
