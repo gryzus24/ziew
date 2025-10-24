@@ -293,11 +293,14 @@ Every option and color configuration for each *Widget* is documented below.
       format "FORMAT"
 
     FORMAT options
-      * arg         - the <BATTERY> name as specified in the argument,
-      * %fulldesign - charge relative to the designed battery capacity,
-      * %fullnow    - charge relative to the current battery capacity,
-      * state       - battery state: "Discharging", "Charging", "Full",
-                      or "Not-charging".
+      * arg            - the <BATTERY> name as specified in the argument,
+      * [%]fulldesign,
+        [%]fullnow     - charge relative to the designed/current battery
+                         capacity, or, if %-prefix is omitted, actual
+                         designed/current capacity (in power supply dependent
+                         units - typically mWh or mAh),
+      * state          - battery state: "Discharging", "Charging", "Full",
+                         or "Not-charging".
 
     Colors
       [+] default
