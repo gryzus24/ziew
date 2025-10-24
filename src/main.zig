@@ -338,32 +338,33 @@ pub fn main() void {
             w.interval.now -= sleep_dsec;
             if (w.interval.now <= 0) {
                 var fw: uio.Writer = .fixed(&bufs[i]);
+                const parts = w.format.parts.get(base);
                 switch (w.id) {
-                    .TIME => w_time.widget(&fw, w, base),
+                    .TIME => w_time.widget(&fw, w, parts, base),
                     .MEM => {
                         if (!updated.mem) {
                             try w_mem.update(&mem_state);
                             updated.mem = true;
                         }
-                        w_mem.widget(&fw, w, base, &mem_state);
+                        w_mem.widget(&fw, w, parts, base, &mem_state);
                     },
                     .CPU => {
                         if (!updated.cpu) {
                             try w_cpu.update(&cpu_state);
                             updated.cpu = true;
                         }
-                        w_cpu.widget(&fw, w, base, &cpu_state);
+                        w_cpu.widget(&fw, w, parts, base, &cpu_state);
                     },
-                    .DISK => w_dysk.widget(&fw, w, base, &disk_state),
+                    .DISK => w_dysk.widget(&fw, w, parts, base, &disk_state),
                     .NET => {
                         if (!updated.net) {
                             try w_net.update(&reg, &net_state.netdev.?);
                             updated.net = true;
                         }
-                        w_net.widget(&fw, w, base, &net_state);
+                        w_net.widget(&fw, w, parts, base, &net_state);
                     },
-                    .BAT => w_bat.widget(&fw, w, base),
-                    .READ => w_read.widget(&fw, w, base),
+                    .BAT => w_bat.widget(&fw, w, parts, base),
+                    .READ => w_read.widget(&fw, w, parts, base),
                 }
                 w.format.last_str.writeBytes(&fw, base);
                 views[i] = typ.writeWidgetEnd(&fw);

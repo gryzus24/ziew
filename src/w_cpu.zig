@@ -315,6 +315,7 @@ pub inline fn update(state: *State) error{ReadError}!void {
 pub inline fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
+    parts: []const typ.Format.Part,
     base: [*]const u8,
     state: *const State,
 ) void {
@@ -323,34 +324,32 @@ pub inline fn widget(
 
     const fg, const bg = w.check(state, base);
     typ.writeWidgetBeg(writer, fg, bg);
-    for (w.format.parts.get(base)) |*part| {
+    for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        const flags: unt.NumUnit.Flags = .{
-            .quiet = part.flags.quiet,
-            .negative = false,
-        };
-
         const bit = typ.optBit(part.opt);
-        if (bit & wd.opt_mask.usage != 0) {
-            const n = if (part.flags.pct)
-                state.usage_pct[part.opt]
+        if (bit & (wd.opt_mask.usage | wd.opt_mask.stats) != 0) {
+            const nu: unt.NumUnit = if (bit & wd.opt_mask.usage != 0)
+                .{
+                    .n = if (part.flags.pct)
+                        state.usage_pct[part.opt]
+                    else
+                        state.usage_abs[part.opt],
+                    .u = .percent,
+                }
             else
-                state.usage_abs[part.opt];
-            @as(unt.NumUnit, .{ .n = n, .u = .percent })
-                .write(writer, part.wopts, flags);
-            continue;
-        }
-
-        if (bit & wd.opt_mask.stats != 0) {
-            unt.UnitSI(
-                typ.calc(
-                    curr.stats[part.opt - typ.Options.Cpu.STATS_OFF],
-                    prev.stats[part.opt - typ.Options.Cpu.STATS_OFF],
-                    w.interval,
-                    part.flags,
-                ),
-            ).write(writer, part.wopts, flags);
+                unt.UnitSI(
+                    typ.calc(
+                        curr.stats[part.opt - typ.Options.Cpu.STATS_OFF],
+                        prev.stats[part.opt - typ.Options.Cpu.STATS_OFF],
+                        w.interval,
+                        part.flags,
+                    ),
+                );
+            nu.write(writer, part.wopts, .{
+                .quiet = part.flags.quiet,
+                .negative = false,
+            });
             continue;
         }
 

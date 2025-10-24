@@ -672,34 +672,39 @@ pub fn writeWidgetBeg(writer: *uio.Writer, fg: color.Hex, bg: color.Hex) void {
     if (WIDGET_BUF_MAX < 64)
         @compileError("typ.WIDGET_BUF_MAX < 64");
 
+    const headers: [4][]const u8 = .{
+        \\{"full_text":"
+        [0..],
+        \\{"color":"#XXXXXX","full_text":"
+        [0..],
+        \\{"background":"#XXXXXX","full_text":"
+        [0..],
+        \\{"color":"#XXXXXX","background":"#XXXXXX","full_text":"
+        [0..],
+    };
+
     const dst = writer.buffer[writer.end..];
     switch (fg.use | @shlExact(bg.use, 1)) {
         0 => {
-            const s = "{\"full_text\":\"";
+            const s = headers[0];
             dst[0..16].* = (s ++ .{ undefined, undefined }).*;
             writer.end += s.len;
         },
         1 => {
-            const s =
-                \\{"color":"#XXXXXX","full_text":"
-            ;
-            dst[0..32].* = s.*;
+            const s = headers[1];
+            dst[0..32].* = s[0..].*;
             dst[11..17].* = fg.hex;
             writer.end += s.len;
         },
         2 => {
-            const s =
-                \\{"background":"#XXXXXX","full_text":"
-            ;
-            dst[0..37].* = s.*;
+            const s = headers[2];
+            dst[0..37].* = s[0..].*;
             dst[16..22].* = bg.hex;
             writer.end += s.len;
         },
         3 => {
-            const s =
-                \\{"color":"#XXXXXX","background":"#XXXXXX","full_text":"
-            ;
-            dst[0..55].* = s.*;
+            const s = headers[3];
+            dst[0..55].* = s[0..].*;
             dst[11..17].* = fg.hex;
             dst[34..40].* = bg.hex;
             writer.end += s.len;

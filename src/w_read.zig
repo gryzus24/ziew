@@ -31,7 +31,12 @@ fn openAndRead(path: [*:0]const u8, buf: []u8) ![]const u8 {
 
 // == public ==================================================================
 
-pub inline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
+pub inline fn widget(
+    writer: *uio.Writer,
+    w: *const typ.Widget,
+    parts: []const typ.Format.Part,
+    base: [*]const u8,
+) void {
     const wd = w.data.READ;
 
     var buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
@@ -48,7 +53,7 @@ pub inline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u
     var fg = w.fg.static;
     var bg = w.bg.static;
 
-    for (w.format.parts.get(base)) |*part| {
+    for (parts) |*part| {
         const opt: typ.Options.Read = @enumFromInt(part.opt);
         if (opt == .content) {
             fg, pos = acceptColor(data, pos);

@@ -86,6 +86,7 @@ pub const State = struct {
 pub inline fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
+    parts: []const typ.Format.Part,
     base: [*]const u8,
     state: *const State,
 ) void {
@@ -132,7 +133,7 @@ pub inline fn widget(
 
     const fg, const bg = w.check(mount, base);
     typ.writeWidgetBeg(writer, fg, bg);
-    for (w.format.parts.get(base)) |*part| {
+    for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
         const opt: typ.Options.Disk = @enumFromInt(part.opt);

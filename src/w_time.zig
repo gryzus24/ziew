@@ -15,6 +15,7 @@ const mem = std.mem;
 pub inline fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
+    parts: []const typ.Format.Part,
     base: [*]const u8,
 ) void {
     const wd = w.data.TIME;
@@ -26,7 +27,7 @@ pub inline fn widget(
     _ = ext.localtime_r(&ts.sec, &tm);
 
     typ.writeWidgetBeg(writer, w.fg.static, w.bg.static);
-    for (w.format.parts.get(base)) |*part| {
+    for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
         const dst = writer.buffer[writer.end..];

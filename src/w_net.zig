@@ -295,6 +295,7 @@ pub inline fn update(
 pub inline fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
+    parts: []const typ.Format.Part,
     base: [*]const u8,
     state: *const State,
 ) void {
@@ -347,7 +348,7 @@ pub inline fn widget(
 
     const fg, const bg = w.check(&ch, base);
     typ.writeWidgetBeg(writer, fg, bg);
-    for (w.format.parts.get(base)) |*part| {
+    for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
         const bit = typ.optBit(part.opt);

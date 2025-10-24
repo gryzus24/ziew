@@ -176,7 +176,12 @@ fn parseLine(line: []const u8, state: usize) !Parser {
 
 // == public ==================================================================
 
-pub inline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u8) void {
+pub inline fn widget(
+    writer: *uio.Writer,
+    w: *const typ.Widget,
+    parts: []const typ.Format.Part,
+    base: [*]const u8,
+) void {
     const wd = w.data.BAT;
 
     var buf: [1024]u8 = undefined;
@@ -216,7 +221,7 @@ pub inline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u
 
     const fg, const bg = w.check(&bat, base);
     typ.writeWidgetBeg(writer, fg, bg);
-    for (w.format.parts.get(base)) |*part| {
+    for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
         const opt: typ.Options.Bat = @enumFromInt(part.opt);
