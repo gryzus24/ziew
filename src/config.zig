@@ -169,13 +169,18 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
                 .no_close => return .fail("no closing brace", e.field),
             },
         };
-
         // Is last_str?
-        if (split.part.end == str.len) {
+        if (split.part.end == str.len)
             break;
-        }
 
+        var i: usize = 0;
         const field = str[split.opt.beg..split.opt.end];
+
+        var pct_prefix = false;
+        if (field.len > 0 and field[0] == '%') {
+            pct_prefix = true;
+            i = 1;
+        }
 
         const Flags = packed struct {
             at: bool = false,
@@ -190,8 +195,7 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
         var specs: []const u8 = "";
         var prec: []const u8 = "";
 
-        var cur: usize = 0;
-        var i: usize = 0;
+        var cur = i;
         while (i < field.len) : (i += 1) switch (field[i]) {
             '@' => {
                 if (want.at) {
@@ -241,6 +245,7 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
         var ptr = try reg.pushVec(&parts, .front);
         ptr.* = .initDefault(.zero, opt);
 
+        ptr.flags.pct = pct_prefix;
         for (flags) |ch| switch (ch | 0x20) {
             'd' => ptr.flags.diff = true,
             's' => {
@@ -313,6 +318,10 @@ fn acceptInterval(str: []const u8) ?typ.DeciSec {
     return ret;
 }
 
+fn acceptPrefix(str: []const u8, prefix: u8) bool {
+    return (str.len > 0 and str[0] == prefix);
+}
+
 const ColorIdentifier = enum { fg, bg };
 
 fn strColorIdentifier(str: []const u8) ?ColorIdentifier {
@@ -326,7 +335,10 @@ fn strColorIdentifier(str: []const u8) ?ColorIdentifier {
 }
 
 const ColorOptResult = union(enum) {
-    opt: u8,
+    ok: struct {
+        opt: u8,
+        pct: bool,
+    },
     err: struct {
         str: []const u8,
         what: enum { unknown, unsupported },
@@ -334,20 +346,24 @@ const ColorOptResult = union(enum) {
 };
 
 fn strColorOpt(wid: typ.Widget.Id.ActiveColorSupported, str: []const u8) ColorOptResult {
+    var pct = false;
+    if (wid == .MEM)
+        pct = acceptPrefix(str, '%');
+
+    const i: u8 = @intFromBool(pct);
     for (
         typ.WID__OPTIONS_SUPPORTING_COLOR[@intFromEnum(wid)],
         typ.WID__OPTION_NAMES[@intFromEnum(wid)],
         0..,
-    ) |color_supported, name, j| {
-        if (mem.eql(u8, str, name)) {
-            return if (color_supported)
-                .{ .opt = @intCast(j) }
-            else
-                .{ .err = .{ .str = str, .what = .unsupported } };
+    ) |support, name, opt| {
+        if (mem.eql(u8, str[i..], name)) {
+            if ((support.no_pct and !pct) or (support.pct and pct)) {
+                return .{ .ok = .{ .opt = @intCast(opt), .pct = pct } };
+            }
+            return .{ .err = .{ .str = str, .what = .unsupported } };
         }
-    } else {
-        return .{ .err = .{ .str = str, .what = .unknown } };
     }
+    return .{ .err = .{ .str = str, .what = .unknown } };
 }
 
 const ParseWant = enum {
@@ -591,7 +607,7 @@ pub fn parse(
                 const base = reg.head.ptr;
                 current.data = switch (current.id) {
                     .TIME => .{ .TIME = try .init(reg, arg) },
-                    .MEM  => .{ .MEM  = try .init(reg, format, base) },
+                    .MEM  => .{ .MEM  = undefined },
                     .CPU  => .{ .CPU  = try .init(reg, format, base) },
                     .DISK => .{ .DISK = try .init(reg, arg, format, base) },
                     .NET  => .{ .NET  = try .init(reg, arg, format, base) },
@@ -627,8 +643,8 @@ pub fn parse(
                                 active.opt,
                             );
                         const name = line[active.opt.beg..active.opt.end];
-                        const opt = switch (strColorOpt(wid, name)) {
-                            .opt => |o| o,
+                        const opt, const opt_pct = switch (strColorOpt(wid, name)) {
+                            .ok => |ok| .{ ok.opt, ok.pct },
                             .err => |e| switch (e.what) {
                                 .unknown => {
                                     return .fail(
@@ -666,6 +682,7 @@ pub fn parse(
                                 current.fg = .{
                                     .active = .{
                                         .opt = opt,
+                                        .pct = opt_pct,
                                         .pairs = .{
                                             .off = @intCast(sp.off),
                                             .len = @intCast(active.pairs.len),
@@ -677,6 +694,7 @@ pub fn parse(
                                 current.bg = .{
                                     .active = .{
                                         .opt = opt,
+                                        .pct = opt_pct,
                                         .pairs = .{
                                             .off = @intCast(sp.off),
                                             .len = @intCast(active.pairs.len),

@@ -49,12 +49,14 @@ pub const Format = struct {
         flags: Flags,
 
         const Flags = packed struct(u16) {
+            pct: bool,
             diff: bool,
             persec: bool,
             quiet: bool,
-            _: u13,
+            _: u12,
 
             pub const default: Flags = .{
+                .pct = false,
                 .diff = false,
                 .persec = false,
                 .quiet = false,
@@ -118,7 +120,7 @@ pub const Widget = struct {
 
     pub const Data = union {
         TIME: *Time,
-        MEM: *Mem,
+        MEM: usize, // unused
         CPU: *Cpu,
         DISK: *Disk,
         NET: *Net,
@@ -130,8 +132,7 @@ pub const Widget = struct {
         comptime {
             const assert = std.debug.assert;
             assert(@sizeOf(Time) <= SIZE_MAX);
-            assert(@sizeOf(Time) <= SIZE_MAX);
-            assert(@sizeOf(Mem) <= SIZE_MAX);
+            // Mem
             assert(@sizeOf(Cpu) <= SIZE_MAX);
             assert(@sizeOf(Disk) <= SIZE_MAX);
             assert(@sizeOf(Net) <= SIZE_MAX);
@@ -159,29 +160,7 @@ pub const Widget = struct {
             }
         };
 
-        pub const Mem = struct {
-            opt_mask: Masks,
-
-            const Masks = struct {
-                pct: OptBit,
-
-                const zero: Masks = .{ .pct = 0 };
-            };
-
-            pub fn init(reg: *umem.Region, format: Format, base: [*]const u8) !*@This() {
-                const ret = try reg.alloc(@This(), .front);
-                var opt_mask: Masks = .zero;
-                for (format.parts.get(base)) |*part| {
-                    const opt: Options.Mem = @enumFromInt(part.opt);
-                    const bit = optBit(part.opt);
-
-                    if (opt.checkCastTo(Options.Mem.Percent)) |_|
-                        opt_mask.pct |= bit;
-                }
-                ret.opt_mask = opt_mask;
-                return ret;
-            }
-        };
+        pub const Mem = void;
 
         pub const Cpu = struct {
             opt_mask: Masks,
@@ -447,18 +426,10 @@ pub const Options = struct {
         arg,
 
         pub const ColorSupported = enum(u8) {};
+        pub const ColorSupportedWithPercentPrefix = enum(u8) {};
     };
 
     pub const Mem = enum(u8) {
-        @"%total",
-        @"%free",
-        @"%available",
-        @"%buffers",
-        @"%cached",
-        @"%dirty",
-        @"%writeback",
-        @"%used",
-
         total,
         free,
         available,
@@ -468,19 +439,8 @@ pub const Options = struct {
         writeback,
         used,
 
-        pub const SIZE_OFF = @intFromEnum(Mem.total);
-
-        pub const Percent = MakeEnumSubset(@This(), &.{
-            .@"%total",  .@"%free",  .@"%available", .@"%buffers",
-            .@"%cached", .@"%dirty", .@"%writeback", .@"%used",
-        });
-
-        pub const Size = MakeEnumSubset(@This(), &.{
-            .total,  .free,  .available, .buffers,
-            .cached, .dirty, .writeback, .used,
-        });
-
-        pub const ColorSupported = Percent;
+        pub const ColorSupported = enum(u8) {};
+        pub const ColorSupportedWithPercentPrefix = Mem;
 
         pub fn checkCastTo(self: @This(), comptime T: type) ?T {
             return enums.fromInt(T, @intFromEnum(self));
@@ -677,23 +637,31 @@ comptime {
 /// @intFromEnum(Widget.Id).
 pub const WID__OPTION_NAMES: [Widget.NR_WIDGETS][]const [:0]const u8 = blk: {
     var w: [Widget.NR_WIDGETS][]const [:0]const u8 = undefined;
-    for (OptionTypes, 0..) |T, i| {
-        w[i] = meta.fieldNames(T);
-    }
+    for (OptionTypes, 0..) |T, i| w[i] = meta.fieldNames(T);
     break :blk w;
+};
+
+const OptionColorSupport = struct {
+    no_pct: bool,
+    pct: bool,
+
+    const none: OptionColorSupport = .{ .no_pct = false, .pct = false };
 };
 
 /// Particular widgets' format option state of color support keyed by
 /// @intFromEnum(Widget.Id).
-pub const WID__OPTIONS_SUPPORTING_COLOR: [Widget.NR_WIDGETS][]const bool = blk: {
-    var w: [Widget.NR_WIDGETS][]const bool = undefined;
+pub const WID__OPTIONS_SUPPORTING_COLOR: [Widget.NR_WIDGETS][]const OptionColorSupport = blk: {
+    var w: [Widget.NR_WIDGETS][]const OptionColorSupport = undefined;
     for (OptionTypes, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
-        var supporting_color: [len]bool = @splat(false);
-        for (enums.values(T.ColorSupported)) |v| {
-            supporting_color[@intFromEnum(v)] = true;
+        var support: [len]OptionColorSupport = @splat(.none);
+        for (enums.values(T.ColorSupported)) |v|
+            support[@intFromEnum(v)].no_pct = true;
+        if (@hasDecl(T, "ColorSupportedWithPercentPrefix")) {
+            for (enums.values(T.ColorSupportedWithPercentPrefix)) |v|
+                support[@intFromEnum(v)].pct = true;
         }
-        const final = supporting_color;
+        const final = support;
         w[i] = &final;
     }
     break :blk w;

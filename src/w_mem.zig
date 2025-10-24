@@ -16,9 +16,7 @@ const Meminfo = struct {
     const NR_FIELDS = 8;
 
     comptime {
-        const nr_pct = @typeInfo(typ.Options.Mem.Percent).@"enum".fields.len;
-        const nr_size = @typeInfo(typ.Options.Mem.Size).@"enum".fields.len;
-        std.debug.assert(nr_pct == NR_FIELDS and NR_FIELDS == nr_size);
+        std.debug.assert(NR_FIELDS == @typeInfo(typ.Options.Mem).@"enum".fields.len);
     }
 
     const zero: Meminfo = .{ .fields = @splat(0) };
@@ -155,8 +153,7 @@ pub inline fn widget(
     base: [*]const u8,
     state: *const State,
 ) void {
-    const wd = w.data.MEM;
-    const new, const old = typ.constCurrPrev(Meminfo, &state.meminfos, state.curr);
+    const curr, const prev = typ.constCurrPrev(Meminfo, &state.meminfos, state.curr);
 
     const fg, const bg = w.check(state, base);
     typ.writeWidgetBeg(writer, fg, bg);
@@ -168,16 +165,13 @@ pub inline fn widget(
             .negative = false,
         };
         var nu: unt.NumUnit = undefined;
-        if (typ.optBit(part.opt) & wd.opt_mask.pct != 0) {
-            nu = unt.Percent(new.fields[part.opt], new.total());
+        if (part.flags.pct) {
+            nu = unt.Percent(curr.fields[part.opt], curr.total());
         } else {
-            const value, flags.negative = typ.calcWithOverflow(
-                new.fields[part.opt - typ.Options.Mem.SIZE_OFF],
-                old.fields[part.opt - typ.Options.Mem.SIZE_OFF],
-                w.interval,
-                part.flags,
-            );
-            nu = unt.SizeKb(value);
+            const new, const old = .{ curr.fields[part.opt], prev.fields[part.opt] };
+            const result, flags.negative =
+                typ.calcWithOverflow(new, old, w.interval, part.flags);
+            nu = unt.SizeKb(result);
         }
         nu.write(writer, part.wopts, flags);
     }

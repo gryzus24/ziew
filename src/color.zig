@@ -17,6 +17,7 @@ pub const Hex = struct {
 
 pub const Active = struct {
     opt: u8,
+    pct: bool,
     pairs: umem.MemSlice(Pair),
 
     pub const Pair = struct {
