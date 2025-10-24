@@ -224,13 +224,13 @@ const BLKBARS: [9][3]u8 = .{
     "⠀".*, "▁".*, "▂".*, "▃".*, "▄".*, "▅".*, "▆".*, "▇".*, "█".*,
 };
 
-inline fn barIntensity(new: Cpu, old: Cpu, comptime range: comptime_int) u32 {
+inline fn barIntensity(curr: Cpu, prev: Cpu, comptime range: comptime_int) u32 {
     if (range <= 1) @compileError("range <= 1");
     const step = comptime unt.F5608.init(100).div(range - 1).u;
     const off = step - 1;
     const u_max = (range - 1) * step;
 
-    const pct = new.delta(old).all;
+    const pct = curr.delta(prev).all;
     const u = @min(pct.u, u_max);
     const q, _ = udiv.cMultShiftDivMod(u + off, step, u_max + off);
     return @intCast(q);
@@ -267,7 +267,7 @@ pub const State = struct {
     }
 
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        const new, const old = typ.constCurrPrev(Stat, &self.stats, self.curr);
+        const curr, const prev = typ.constCurrPrev(Stat, &self.stats, self.curr);
         return color.firstColorGEThreshold(
             switch (@as(typ.Options.Cpu, @enumFromInt(ac.opt))) {
                 .all,
@@ -275,9 +275,9 @@ pub const State = struct {
                 .sys,
                 .iowait,
                 => self.usage_pct[ac.opt].roundU24AndTruncate(),
-                .blocked => new.stats[Stat.blocked],
-                .running => new.stats[Stat.running],
-                .forks => new.stats[Stat.forks] - old.stats[Stat.forks],
+                .blocked => curr.stats[Stat.blocked],
+                .running => curr.stats[Stat.running],
+                .forks => curr.stats[Stat.forks] - prev.stats[Stat.forks],
                 else => unreachable,
             },
             ac.pairs.get(base),
@@ -291,14 +291,14 @@ pub inline fn update(state: *State) error{ReadError}!void {
     if (n == buf.len) log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
     state.curr ^= 1;
-    const new, const old = typ.currPrev(Stat, &state.stats, state.curr);
+    const curr, const prev = typ.currPrev(Stat, &state.stats, state.curr);
 
-    parseProcStat(buf[0..n], new);
+    parseProcStat(buf[0..n], curr);
 
-    const new_cpu = new.entries[0];
-    const old_cpu = old.entries[0];
-    const delta = new_cpu.delta(old_cpu);
-    const deltaN = new_cpu.deltaN(old_cpu, @intCast(new.nr_cpux_entries));
+    const curr_cpu = curr.entries[0];
+    const prev_cpu = prev.entries[0];
+    const delta = curr_cpu.delta(prev_cpu);
+    const deltaN = curr_cpu.deltaN(prev_cpu, @intCast(curr.nr_cpux_entries));
 
     // zig fmt: off
     state.usage_pct[@intFromEnum(typ.Options.Cpu.all)]    = delta.all;
@@ -320,7 +320,7 @@ pub inline fn widget(
     state: *const State,
 ) void {
     const wd = w.data.CPU;
-    const new, const old = typ.constCurrPrev(Stat, &state.stats, state.curr);
+    const curr, const prev = typ.constCurrPrev(Stat, &state.stats, state.curr);
 
     const fg, const bg = w.check(state, base);
     typ.writeWidgetBeg(writer, fg, bg);
@@ -346,8 +346,8 @@ pub inline fn widget(
         if (bit & wd.opt_mask.stats != 0) {
             unt.UnitSI(
                 typ.calc(
-                    new.stats[part.opt - typ.Options.Cpu.STATS_OFF],
-                    old.stats[part.opt - typ.Options.Cpu.STATS_OFF],
+                    curr.stats[part.opt - typ.Options.Cpu.STATS_OFF],
+                    prev.stats[part.opt - typ.Options.Cpu.STATS_OFF],
                     w.interval,
                     part.flags,
                 ),
@@ -355,7 +355,7 @@ pub inline fn widget(
             continue;
         }
 
-        const needed = new.nr_cpux_entries * @max(BRLBARS[0][0].len, BLKBARS[0].len);
+        const needed = curr.nr_cpux_entries * @max(BRLBARS[0][0].len, BLKBARS[0].len);
         if (writer.unusedCapacityLen() < needed) {
             @branchHint(.unlikely);
             break;
@@ -370,24 +370,24 @@ pub inline fn widget(
                 var left: u32 = 0;
                 var right: u32 = 0;
 
-                for (1..1 + new.nr_cpux_entries) |i| {
+                for (1..1 + curr.nr_cpux_entries) |i| {
                     if (i & 1 == 1) {
-                        left = barIntensity(new.entries[i], old.entries[i], BRLBARS.len);
+                        left = barIntensity(curr.entries[i], prev.entries[i], BRLBARS.len);
                     } else {
-                        right = barIntensity(new.entries[i], old.entries[i], BRLBARS[0].len);
+                        right = barIntensity(curr.entries[i], prev.entries[i], BRLBARS[0].len);
                         buffer[pos..][0..3].* = BRLBARS[left][right];
                         pos += 3;
                     }
                 }
-                if (new.nr_cpux_entries & 1 == 1) {
+                if (curr.nr_cpux_entries & 1 == 1) {
                     buffer[pos..][0..3].* = BRLBARS[left][0];
                     pos += 3;
                 }
             },
             .blkbars => {
-                for (1..1 + new.nr_cpux_entries) |i| {
+                for (1..1 + curr.nr_cpux_entries) |i| {
                     buffer[pos..][0..3].* =
-                        BLKBARS[barIntensity(new.entries[i], old.entries[i], BLKBARS.len)];
+                        BLKBARS[barIntensity(curr.entries[i], prev.entries[i], BLKBARS.len)];
                     pos += 3;
                 }
             },
