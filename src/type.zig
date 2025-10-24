@@ -555,6 +555,7 @@ pub const Options = struct {
         pub const ColorSupported = MakeEnumSubset(@This(), &.{
             .state,
         });
+        pub const ColorSupportedWithPercentPrefix = enum(u8) {};
 
         pub fn castTo(self: @This(), comptime T: type) T {
             return @enumFromInt(@intFromEnum(self));
@@ -567,12 +568,15 @@ pub const Options = struct {
 
     pub const Bat = enum(u8) {
         state,
-        @"%fulldesign",
-        @"%fullnow",
+        fulldesign,
+        fullnow,
         arg,
 
         pub const ColorSupported = MakeEnumSubset(@This(), &.{
-            .@"%fulldesign", .@"%fullnow", .state,
+            .state,
+        });
+        pub const ColorSupportedWithPercentPrefix = MakeEnumSubset(@This(), &.{
+            .fulldesign, .fullnow,
         });
     };
 
@@ -583,6 +587,7 @@ pub const Options = struct {
         raw,
 
         pub const ColorSupported = enum(u8) {};
+        pub const ColorSupportedWithPercentPrefix = enum(u8) {};
     };
 };
 
@@ -630,10 +635,8 @@ pub const WID__OPTIONS_SUPPORTING_COLOR: [Widget.NR_WIDGETS][]const OptionColorS
         var support: [len]OptionColorSupport = @splat(.none);
         for (enums.values(T.ColorSupported)) |v|
             support[@intFromEnum(v)].no_pct = true;
-        if (@hasDecl(T, "ColorSupportedWithPercentPrefix")) {
-            for (enums.values(T.ColorSupportedWithPercentPrefix)) |v|
-                support[@intFromEnum(v)].pct = true;
-        }
+        for (enums.values(T.ColorSupportedWithPercentPrefix)) |v|
+            support[@intFromEnum(v)].pct = true;
         const final = support;
         w[i] = &final;
     }

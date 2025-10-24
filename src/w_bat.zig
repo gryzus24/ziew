@@ -56,8 +56,8 @@ const Battery = struct {
     comptime {
         const assert = std.debug.assert;
         assert(state == @intFromEnum(typ.Options.Bat.state));
-        assert(full_design == @intFromEnum(typ.Options.Bat.@"%fulldesign"));
-        assert(full_now == @intFromEnum(typ.Options.Bat.@"%fullnow"));
+        assert(full_design == @intFromEnum(typ.Options.Bat.fulldesign));
+        assert(full_now == @intFromEnum(typ.Options.Bat.fullnow));
     }
 
     const State = enum(u8) {
@@ -85,18 +85,19 @@ const Battery = struct {
     };
 
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        return switch (@as(typ.Options.Bat.ColorSupported, @enumFromInt(ac.opt))) {
+        return switch (@as(typ.Options.Bat, @enumFromInt(ac.opt))) {
             .state => color.firstColorEQThreshold(
                 @intCast(self.fields[Battery.state]),
                 ac.pairs.get(base),
             ),
-            .@"%fulldesign", .@"%fullnow" => color.firstColorGEThreshold(
+            .fulldesign, .fullnow => color.firstColorGEThreshold(
                 unt.Percent(
                     self.fields[Battery.now],
                     self.fields[ac.opt],
                 ).n.roundU24AndTruncate(),
                 ac.pairs.get(base),
             ),
+            else => unreachable,
         };
     }
 };
@@ -240,13 +241,18 @@ pub inline fn widget(writer: *uio.Writer, w: *const typ.Widget, base: [*]const u
                         wd.path[wd.ps_off..].ptr[0..SZ].*;
                 writer.end += SZ;
             },
-            .@"%fulldesign", .@"%fullnow" => {
+            .fulldesign, .fullnow => {
                 const flags: unt.NumUnit.Flags = .{
                     .quiet = part.flags.quiet,
                     .negative = false,
                 };
-                unt.Percent(bat.fields[Battery.now], bat.fields[part.opt])
-                    .write(writer, part.wopts, flags);
+                var nu: unt.NumUnit = undefined;
+                if (part.flags.pct) {
+                    nu = unt.Percent(bat.fields[Battery.now], bat.fields[part.opt]);
+                } else {
+                    nu = unt.UnitSI(bat.fields[part.opt]);
+                }
+                nu.write(writer, part.wopts, flags);
             },
         }
     }
