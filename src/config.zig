@@ -236,8 +236,14 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             prec = field[cur..field.len];
         }
 
-        const opt: u8 = blk: for (typ.WID__OPTION_NAMES[@intFromEnum(wid)], 0..) |name, j| {
-            if (mem.eql(u8, option, name)) break :blk @intCast(j);
+        const opt: u8 = blk: for (
+            typ.WID__OPTIONS_PERCENT_PREFIX_ALLOWED[@intFromEnum(wid)],
+            typ.WID__OPTION_NAMES[@intFromEnum(wid)],
+            0..,
+        ) |pct_prefix_allowed, name, j| {
+            // An implication in the wild!
+            if ((!pct_prefix or pct_prefix_allowed) and mem.eql(u8, option, name))
+                break :blk @intCast(j);
         } else {
             return .fail("unknown option", split.opt);
         };
@@ -349,7 +355,7 @@ fn strColorOpt(wid: typ.Widget.Id.ActiveColorSupported, str: []const u8) ColorOp
     const pct = acceptPrefix(str, '%');
     const i: u8 = @intFromBool(pct);
     for (
-        typ.WID__OPTIONS_SUPPORTING_COLOR[@intFromEnum(wid)],
+        typ.WID__OPTIONS_COLOR_SUPPORT[@intFromEnum(wid)],
         typ.WID__OPTION_NAMES[@intFromEnum(wid)],
         0..,
     ) |support, name, opt| {
@@ -810,6 +816,9 @@ test parse {
 
     r = try testParse("CPU 1 format \"{5all}\"\n", &reg, &scratch);
     try testDiag(r, "unknown option", 1, .{ .beg = 15, .end = 19 });
+
+    r = try testParse("DISK 777 arg / format \"{%arg}\"\n", &reg, &scratch);
+    try testDiag(r, "unknown option", 1, .{ .beg = 24, .end = 28 });
 
     // NOTE: underlining could be more precise.
     r = try testParse("CPU 1 format \"{%all:W}\"\n", &reg, &scratch);

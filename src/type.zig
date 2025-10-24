@@ -418,6 +418,7 @@ pub const Options = struct {
         @"9",
         arg,
 
+        pub const PercentPrefixAllowed = enum(u8) {};
         pub const ColorSupported = enum(u8) {};
         pub const ColorSupportedWithPercentPrefix = enum(u8) {};
     };
@@ -432,8 +433,9 @@ pub const Options = struct {
         writeback,
         used,
 
+        pub const PercentPrefixAllowed = Mem;
         pub const ColorSupported = enum(u8) {};
-        pub const ColorSupportedWithPercentPrefix = Mem;
+        pub const ColorSupportedWithPercentPrefix = PercentPrefixAllowed;
 
         pub fn checkCastTo(self: @This(), comptime T: type) ?T {
             return enums.fromInt(T, @intFromEnum(self));
@@ -470,12 +472,13 @@ pub const Options = struct {
             .brlbars, .blkbars,
         });
 
+        pub const PercentPrefixAllowed = MakeEnumSubset(@This(), &.{
+            .all, .user, .sys, .iowait,
+        });
         pub const ColorSupported = MakeEnumSubset(@This(), &.{
             .blocked, .running, .forks,
         });
-        pub const ColorSupportedWithPercentPrefix = MakeEnumSubset(@This(), &.{
-            .all, .user, .sys, .iowait,
-        });
+        pub const ColorSupportedWithPercentPrefix = PercentPrefixAllowed;
         pub const ColorAdjacent = MakeEnumSubset(@This(), &.{
             .blocked, .running, .forks,
             .all,     .user,    .sys,
@@ -502,11 +505,12 @@ pub const Options = struct {
             .ino_total, .ino_free, .ino_used,
         });
 
-        pub const ColorSupported = enum(u8) {};
-        pub const ColorSupportedWithPercentPrefix = MakeEnumSubset(@This(), &.{
+        pub const PercentPrefixAllowed = MakeEnumSubset(@This(), &.{
             .total,     .free,     .available, .used,
             .ino_total, .ino_free, .ino_used,
         });
+        pub const ColorSupported = enum(u8) {};
+        pub const ColorSupportedWithPercentPrefix = PercentPrefixAllowed;
 
         pub fn checkCastTo(self: @This(), comptime T: type) ?T {
             return enums.fromInt(T, @intFromEnum(self));
@@ -553,6 +557,7 @@ pub const Options = struct {
             .rx_bytes, .tx_bytes,
         });
 
+        pub const PercentPrefixAllowed = enum(u8) {};
         pub const ColorSupported = MakeEnumSubset(@This(), &.{
             .state,
         });
@@ -569,12 +574,13 @@ pub const Options = struct {
         fullnow,
         arg,
 
+        pub const PercentPrefixAllowed = MakeEnumSubset(@This(), &.{
+            .fulldesign, .fullnow,
+        });
         pub const ColorSupported = MakeEnumSubset(@This(), &.{
             .state,
         });
-        pub const ColorSupportedWithPercentPrefix = MakeEnumSubset(@This(), &.{
-            .fulldesign, .fullnow,
-        });
+        pub const ColorSupportedWithPercentPrefix = PercentPrefixAllowed;
         pub const ColorAdjacent = MakeEnumSubset(@This(), &.{
             .state, .fulldesign, .fullnow,
         });
@@ -586,6 +592,7 @@ pub const Options = struct {
         content,
         raw,
 
+        pub const PercentPrefixAllowed = enum(u8) {};
         pub const ColorSupported = enum(u8) {};
         pub const ColorSupportedWithPercentPrefix = enum(u8) {};
     };
@@ -611,11 +618,22 @@ comptime {
 
 // == public ==================================================================
 
-/// Names of options supported by widgets' formats keyed by
-/// @intFromEnum(Widget.Id).
 pub const WID__OPTION_NAMES: [Widget.NR_WIDGETS][]const [:0]const u8 = blk: {
     var w: [Widget.NR_WIDGETS][]const [:0]const u8 = undefined;
     for (OptionTypes, 0..) |T, i| w[i] = meta.fieldNames(T);
+    break :blk w;
+};
+
+pub const WID__OPTIONS_PERCENT_PREFIX_ALLOWED: [Widget.NR_WIDGETS][]const bool = blk: {
+    var w: [Widget.NR_WIDGETS][]const bool = undefined;
+    for (OptionTypes, 0..) |T, i| {
+        const len = @typeInfo(T).@"enum".fields.len;
+        var allow: [len]bool = @splat(false);
+        for (enums.values(T.PercentPrefixAllowed)) |v|
+            allow[@intFromEnum(v)] = true;
+        const final = allow;
+        w[i] = &final;
+    }
     break :blk w;
 };
 
@@ -626,9 +644,7 @@ const OptionColorSupport = struct {
     const none: OptionColorSupport = .{ .no_pct = false, .pct = false };
 };
 
-/// Particular widgets' format option state of color support keyed by
-/// @intFromEnum(Widget.Id).
-pub const WID__OPTIONS_SUPPORTING_COLOR: [Widget.NR_WIDGETS][]const OptionColorSupport = blk: {
+pub const WID__OPTIONS_COLOR_SUPPORT: [Widget.NR_WIDGETS][]const OptionColorSupport = blk: {
     var w: [Widget.NR_WIDGETS][]const OptionColorSupport = undefined;
     for (OptionTypes, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
