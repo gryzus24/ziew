@@ -49,6 +49,8 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
               * OPTION    - widget specific option name,
               * FLAGS     - option specific flag changing what/how a value is
                             displayed.
+                              * a - use an abbreviated notation, i.e. replace
+                                    the decimal point with the unit symbol,
                               * d - difference since last refresh instead of
                                     a total,
                               * s - average difference per second as opposed
