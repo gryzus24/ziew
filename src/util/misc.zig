@@ -24,16 +24,11 @@ pub fn nrPossibleCpus() u32 {
 }
 
 pub inline fn nrDigits(n: u64) u8 {
-    // zig fmt: off
-    var r = (
-        1 +
+    var r = 1 +
         @as(u8, @intFromBool(n >= 10)) +
         @as(u8, @intFromBool(n >= 100)) +
         @as(u8, @intFromBool(n >= 1000)) +
-        @as(u8, @intFromBool(n >= 10000))
-    );
-    // zig fmt: on
-
+        @as(u8, @intFromBool(n >= 10000));
     if (r < 5) {
         @branchHint(.likely);
         return r;
@@ -45,3 +40,14 @@ pub inline fn nrDigits(n: u64) u8 {
     }
     return r;
 }
+
+// zig fmt: off
+pub fn gcd(n: u32, m: u32) u32 {
+    var a, var b = .{ n, m };
+    if (a == 0 or b == 0) return @max(a, b);
+    while (true) {
+        a %= b; if (a == 0) return b;
+        b %= a; if (b == 0) return a;
+    }
+}
+// zig fmt: on

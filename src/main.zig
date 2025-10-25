@@ -4,6 +4,7 @@ const log = @import("log.zig");
 const typ = @import("type.zig");
 
 const ext = @import("util/ext.zig");
+const misc = @import("util/misc.zig");
 const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");
@@ -17,7 +18,6 @@ const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
 
 const linux = std.os.linux;
-const math = std.math;
 const mem = std.mem;
 const os = std.os;
 const posix = std.posix;
@@ -55,7 +55,10 @@ fn readArgs() Args {
 
     for (1..argv.len) |i| {
         const arg = argv[i];
-        const len = mem.len(arg);
+        const a: u32 = 0 + @intFromBool(arg[0] != 0);
+        const b: u32 = a + @intFromBool(arg[a] != 0);
+        const c: u32 = b + @intFromBool(arg[b] != 0);
+        const len = c;
         if (len == 1 or (len == 2 and arg[0] == '-')) {
             switch (arg[len - 1]) {
                 'c' => {
@@ -217,7 +220,7 @@ fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
         const interval: typ.UDeciSec = @intCast(w.interval.set);
         if (interval != typ.WIDGET_INTERVAL_MAX) {
             min = @min(min, interval);
-            gcd = math.gcd(if (gcd == 0) interval else gcd, interval);
+            gcd = misc.gcd(if (gcd == 0) interval else gcd, interval);
         }
     }
     if (gcd < min) {
