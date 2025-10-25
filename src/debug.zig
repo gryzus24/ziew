@@ -36,17 +36,32 @@ pub fn debugFixedPoint() !void {
 }
 
 pub fn debugNumUnit() !void {
-    var buf: [1024]u8 = undefined;
+    var buf: [4096]u8 = undefined;
     var writer = fs.File.stderr().writer(&buf);
     const stderr = &writer.interface;
 
-    const values: [10]u64 = .{ 9, 94, 948, 9489, 94899, 948999, 10240 - 45, 10240 - 44, 10240 - 1, 10240 };
-    const values_width: [10]u8 = .{ 1, 2, 3, 4, 2, 3, 2, 2, 2, 2 };
-    const width_max = 8;
+    const values: [14]struct { u64, u8 } = .{
+        .{ 9, 1 },
+        .{ 94, 2 },
+        .{ 948, 3 },
+        .{ 9489, 1 },
+        .{ 94899, 2 },
+        .{ 948999, 3 },
+        .{ 99, 2 },
+        .{ 999, 3 },
+        .{ 1000, 4 },
+        .{ 1001, 4 },
+        .{ 10240 - 45, 2 },
+        .{ 10240 - 44, 2 },
+        .{ 10240 - 1, 2 },
+        .{ 10240, 2 },
+    };
+    const width_max: usize = 8;
     const precision_max = 3;
 
-    uio.writeStr(stderr, "\n");
-    for (values, values_width) |val, valw| {
+    _ = try stderr.write("\n");
+    for (values) |e| {
+        const val, const valw = e;
         const nu = unt.SizeKb(val);
 
         try stderr.print("V {}\n", .{val});
@@ -56,23 +71,30 @@ pub fn debugNumUnit() !void {
                 const w: u8 = @intCast(width);
                 var p: u8 = @intCast(precision);
                 if (p == precision_max + 1)
-                    p = unt.PRECISION_AUTO_VALUE;
+                    p = unt.PRECISION_VALUE_AUTO;
 
                 var o: unt.NumUnit.WriteOptions = .default;
                 o.alignment = .right;
                 o.setWidth(w);
                 o.setPrecision(p);
 
-                uio.writeStr(stderr, "|");
-                nu.write(stderr, o, false);
-                uio.writeStr(stderr, "|");
+                _ = try stderr.write("|");
+                nu.write(stderr, o, .{ .negative = false, .quiet = false, .abbreviate = false });
+                _ = try stderr.write("|");
 
-                for (0..(width_max - @max(w, valw))) |_| {
-                    uio.writeStr(stderr, " ");
+                for (0..(width_max - @min(@max(w, valw), unt.PRECISION_VALUE_AUTO))) |_| {
+                    _ = try stderr.write(" ");
                 }
-                uio.writeStr(stderr, "\t");
+                _ = try stderr.write("|");
+                nu.write(stderr, o, .{ .negative = false, .quiet = false, .abbreviate = true });
+                _ = try stderr.write("|");
+
+                for (0..(width_max - @min(@max(w, valw), unt.PRECISION_VALUE_AUTO))) |_| {
+                    _ = try stderr.write(" ");
+                }
+                _ = try stderr.write("\t");
             }
-            uio.writeStr(stderr, "\n");
+            _ = try stderr.write("\n");
         }
         try stderr.flush();
     }

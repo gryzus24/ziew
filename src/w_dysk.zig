@@ -145,8 +145,9 @@ pub inline fn widget(
         }
 
         var flags: unt.NumUnit.Flags = .{
-            .quiet = part.flags.quiet,
             .negative = false,
+            .quiet = part.flags.quiet,
+            .abbreviate = part.flags.abbreviate,
         };
         var nu: unt.NumUnit = undefined;
         if (part.flags.pct) {

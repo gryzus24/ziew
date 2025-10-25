@@ -247,8 +247,9 @@ pub inline fn widget(
             },
             .fulldesign, .fullnow => {
                 const flags: unt.NumUnit.Flags = .{
-                    .quiet = part.flags.quiet,
                     .negative = false,
+                    .quiet = part.flags.quiet,
+                    .abbreviate = part.flags.abbreviate,
                 };
                 var nu: unt.NumUnit = undefined;
                 if (part.flags.pct) {

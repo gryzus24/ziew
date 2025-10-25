@@ -416,8 +416,9 @@ pub inline fn widget(
             }
         }
         const flags: unt.NumUnit.Flags = .{
-            .quiet = part.flags.quiet,
             .negative = false,
+            .quiet = part.flags.quiet,
+            .abbreviate = part.flags.abbreviate,
         };
         nu.write(writer, part.wopts, flags);
     }

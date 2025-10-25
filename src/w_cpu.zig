@@ -347,8 +347,9 @@ pub inline fn widget(
                     ),
                 );
             nu.write(writer, part.wopts, .{
-                .quiet = part.flags.quiet,
                 .negative = false,
+                .quiet = part.flags.quiet,
+                .abbreviate = part.flags.abbreviate,
             });
             continue;
         }

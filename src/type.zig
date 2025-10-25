@@ -53,13 +53,15 @@ pub const Format = struct {
             diff: bool,
             persec: bool,
             quiet: bool,
-            _: u12,
+            abbreviate: bool,
+            _: u11,
 
             pub const default: Flags = .{
                 .pct = false,
                 .diff = false,
                 .persec = false,
                 .quiet = false,
+                .abbreviate = false,
                 ._ = 0,
             };
         };

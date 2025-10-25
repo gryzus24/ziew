@@ -111,8 +111,9 @@ pub const NumUnit = struct {
     };
 
     pub const Flags = struct {
-        quiet: bool,
         negative: bool,
+        quiet: bool,
+        abbreviate: bool,
     };
 
     pub const WriteOptions = packed struct(u8) {
@@ -145,9 +146,13 @@ pub const NumUnit = struct {
         };
     };
 
-    fn autoRoundPadPrecision(self: @This(), width: u8) struct { F5608, u8, u2, u8 } {
+    fn autoRoundPadPrecision(
+        self: @This(),
+        width: u8,
+        disregard_separator: bool,
+    ) struct { F5608, u8, u2, u8 } {
         const nr_digits = misc.nrDigits(self.n.whole());
-        const digit_space = width - 1;
+        const digit_space = width - @intFromBool(!disregard_separator);
 
         // Do we have space for the fractional part?
         if (digit_space > nr_digits) {
@@ -165,15 +170,19 @@ pub const NumUnit = struct {
             // hit zero. Otherwise, there is no need to worry about inserting
             // padding here as enough `digit_space` results in `round` returning
             // itself making the `nr_digits == rp_nr_digits` check always true.
-            return .{ self.n.roundU24(p - 1), @intFromBool(p == 1), p - 1, rp_nr_digits };
+            return .{
+                self.n.roundU24(p - 1),
+                @intFromBool(!disregard_separator and p == 1),
+                p - 1,
+                rp_nr_digits,
+            };
         }
 
-        // I guess we do not, let's round and not forget about the one cell
-        // of padding filling the preemptively allocated space for a '.' in
-        // the fractional part.
+        // I guess we do not, let's round and not forget about the one cell of
+        // padding filling the preemptively allocated space for the separator.
         const r0 = self.n.roundU24(0);
         const r0_nr_digits = misc.nrDigits(r0.whole());
-        const pad = @intFromBool(r0_nr_digits == digit_space);
+        const pad = @intFromBool(!disregard_separator and r0_nr_digits == digit_space);
         return .{ r0, pad, 0, r0_nr_digits };
     }
 
@@ -183,7 +192,7 @@ pub const NumUnit = struct {
         opts: WriteOptions,
         flags: Flags,
     ) void {
-        // Fits in 128 bits; sign(1) + width(9) + dot(1) + frac(3) + unit(1),
+        // Fits in 128 bits; sign(1) + width(9) + sep(1) + frac(3) + unit(1),
         // we can use overlapping stores with an XMM register for copying.
         const HALF = 16;
 
@@ -204,10 +213,14 @@ pub const NumUnit = struct {
         var width: u8 = opts.width;
         var precision: u8 = opts.precision;
 
-        if (self.u == .si_one) {
-            width += 1;
+        if (self.u == .si_one)
             precision = 0;
-        }
+
+        // Increment `width` to keep everything aligned with values
+        // requiring unit symbols. Otherwise, whitespace would have
+        // to be used in unit's place - which is ugly and wasteful.
+        if (self.u == .si_one)
+            width += 1;
         if (flags.negative and width > 1)
             width -= 1;
 
@@ -215,7 +228,8 @@ pub const NumUnit = struct {
         var pad: u8 = undefined;
         var nr_digits: u8 = undefined;
         if (precision == PRECISION_VALUE_AUTO) {
-            rp, pad, precision, nr_digits = self.autoRoundPadPrecision(width);
+            rp, pad, precision, nr_digits =
+                self.autoRoundPadPrecision(width, flags.abbreviate);
         } else {
             rp = self.n.roundU24(@intCast(precision));
             nr_digits = misc.nrDigits(rp.whole());
@@ -227,10 +241,17 @@ pub const NumUnit = struct {
 
         if (alignment == .left)
             i -= pad;
-        if (self.u != .si_one)
-            i -= 1;
 
-        buf[i] = @intFromEnum(self.u);
+        // Store preemptively to avoid branching.
+        var u: u8 = @intFromEnum(self.u);
+        buf[i - 1] = u;
+
+        if (!flags.abbreviate)
+            u = '.';
+
+        // Should we accept the preemptively stored unit?
+        if (self.u != .si_one and (!flags.abbreviate or precision == 0))
+            i -= 1;
 
         if (precision > PRECISION_DIGITS_MAX) unreachable;
         if (precision == PRECISION_DIGITS_MAX) {
@@ -238,14 +259,14 @@ pub const NumUnit = struct {
             const n = (rp.frac() * 1000) >> F5608.FRAC_SHIFT;
             const q, const r = udiv.cMultShiftDivMod(n, 100, n_max);
             buf[i - 2 ..][0..2].* = ustr.digits2_lut(r);
-            buf[i - 4 ..][0..2].* = .{ '.', '0' | @as(u8, @intCast(q)) };
+            buf[i - 4 ..][0..2].* = .{ u, '0' | @as(u8, @intCast(q)) };
             i -= 4;
         } else if (precision != 0) {
             const p2 = precision == 2;
             const n = (rp.frac() * @as(u8, if (p2) 100 else 10)) >> F5608.FRAC_SHIFT;
             buf[i - 2 ..][0..2].* = ustr.digits2_lut(n);
-            buf[i - 1 - precision] = '.';
             i -= 1 + precision;
+            buf[i] = u;
         }
 
         const n = rp.whole();
@@ -261,12 +282,13 @@ pub const NumUnit = struct {
         } else {
             _ = ustr.unsafeU64toa(buf[i - nr_digits .. i], n);
         }
-        // Odd `nr_digits` fixup.
-        buf[i - 1 - nr_digits] = if (flags.negative) '-' else ' ';
-
         i -= nr_digits;
+
+        // Odd `nr_digits` fixup.
+        buf[i - 1] = if (flags.negative) '-' else ' ';
         if (flags.negative)
             i -= 1;
+
         if (alignment == .right)
             i -= pad;
 

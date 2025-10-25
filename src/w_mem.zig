@@ -162,8 +162,9 @@ pub inline fn widget(
         part.str.writeBytes(writer, base);
 
         var flags: unt.NumUnit.Flags = .{
-            .quiet = part.flags.quiet,
             .negative = false,
+            .quiet = part.flags.quiet,
+            .abbreviate = part.flags.abbreviate,
         };
         var nu: unt.NumUnit = undefined;
         if (part.flags.pct) {
