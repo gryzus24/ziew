@@ -90,8 +90,8 @@ pub const Widget = struct {
             .id = id,
             .data = data,
             .interval = .init(WIDGET_INTERVAL_DEFAULT),
-            .fg = .{ .static = .default },
-            .bg = .{ .static = .default },
+            .fg = .{ .static = .empty },
+            .bg = .{ .static = .empty },
             .format = .{ .parts = .zero, .last_str = .zero },
         };
     }
@@ -401,7 +401,7 @@ pub const Widget = struct {
             _ = other;
             _ = active;
             _ = base;
-            return .default;
+            return .empty;
         }
     };
 };
@@ -686,7 +686,7 @@ pub fn writeWidgetBeg(writer: *uio.Writer, fg: color.Hex, bg: color.Hex) void {
     };
 
     const dst = writer.buffer[writer.end..];
-    switch (fg.use | @shlExact(bg.use, 1)) {
+    switch (@intFromEnum(fg.tag) | @intFromEnum(bg.tag)) {
         0 => {
             const s = headers[0];
             dst[0..16].* = (s ++ .{ undefined, undefined }).*;
@@ -700,13 +700,13 @@ pub fn writeWidgetBeg(writer: *uio.Writer, fg: color.Hex, bg: color.Hex) void {
         },
         2 => {
             const s = headers[2];
-            dst[0..37].* = s[0..].*;
+            dst[0..40].* = (s ++ .{ undefined, undefined, undefined }).*;
             dst[16..22].* = bg.hex;
             writer.end += s.len;
         },
         3 => {
             const s = headers[3];
-            dst[0..55].* = s[0..].*;
+            dst[0..56].* = (s ++ .{undefined}).*;
             dst[11..17].* = fg.hex;
             dst[34..40].* = bg.hex;
             writer.end += s.len;

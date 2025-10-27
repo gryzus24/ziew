@@ -9,17 +9,21 @@ const mem = std.mem;
 
 // == private =================================================================
 
-fn acceptColor(buf: []const u8, i: usize) struct { color.Hex, usize } {
+fn acceptColor(
+    buf: []const u8,
+    i: usize,
+    tag: color.Hex.Tag,
+) struct { color.Hex, usize } {
     var j = i;
     while (j < buf.len and buf[j] <= ' ') : (j += 1) {}
-    if (j == buf.len or buf[j] != '#') return .{ .default, j };
+    if (j == buf.len or buf[j] != '#') return .{ .empty, j };
 
     const k = j;
     while (j < buf.len and buf[j] > ' ') : (j += 1) {}
     if (color.acceptHex(buf[k..j])) |ok| {
-        return .{ .init(ok), j };
+        return .{ .init(tag, ok), j };
     }
-    return .{ .default, j };
+    return .{ .empty, j };
 }
 
 fn openAndRead(path: [*:0]const u8, buf: []u8) ![]const u8 {
@@ -56,8 +60,8 @@ pub inline fn widget(
     for (parts) |*part| {
         const opt: typ.Options.Read = @enumFromInt(part.opt);
         if (opt == .content) {
-            fg, pos = acceptColor(data, pos);
-            bg, pos = acceptColor(data, pos);
+            fg, pos = acceptColor(data, pos, .fg);
+            bg, pos = acceptColor(data, pos, .bg);
             if (pos < data.len and data[pos] <= ' ') pos += 1;
             break;
         }

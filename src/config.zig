@@ -472,13 +472,17 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
                 };
                 if (thresh > 100) return .fail("threshold too big (0..100)", split);
 
+                const tag: color.Hex.Tag = switch (result.color.type) {
+                    .fg => .fg,
+                    .bg => .bg,
+                };
                 const hex = field[sep + 1 ..];
                 if (color.acceptHex(hex)) |ok| {
                     const ptr = try tmp.pushVec(&result.color.data.?.active.pairs, .front);
-                    ptr.* = .init(thresh, ok);
+                    ptr.* = .init(tag, ok, thresh);
                 } else if (hex.len == 0 or mem.eql(u8, hex, "default")) {
                     const ptr = try tmp.pushVec(&result.color.data.?.active.pairs, .front);
-                    ptr.* = .initDefault(thresh);
+                    ptr.* = .initEmpty(thresh);
                 } else {
                     return .fail("bad hex", .{ .beg = split.beg + sep + 1, .end = split.end });
                 }
@@ -635,8 +639,8 @@ pub fn parse(
                 };
                 switch (data) {
                     .hex => |hex| switch (co.type) {
-                        .fg => current.fg = .{ .static = .init(hex) },
-                        .bg => current.bg = .{ .static = .init(hex) },
+                        .fg => current.fg = .{ .static = .init(.fg, hex) },
+                        .bg => current.bg = .{ .static = .init(.bg, hex) },
                     },
                     .active => |active| {
                         const wid = current.id.checkCastTo(typ.Widget.Id.ActiveColorSupported) orelse

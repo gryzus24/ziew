@@ -5,13 +5,19 @@ const umem = @import("util/mem.zig");
 
 pub const Hex = struct {
     _priv: u8 = undefined,
-    use: u8,
+    tag: Tag,
     hex: [6]u8,
 
-    pub const default: Hex = .{ .use = 0, .hex = @splat(0) };
+    pub const Tag = enum(u8) {
+        empty,
+        fg,
+        bg,
+    };
 
-    pub fn init(hex: [6]u8) @This() {
-        return .{ .use = 1, .hex = hex };
+    pub const empty: Hex = .{ .tag = .empty, .hex = @splat(0) };
+
+    pub fn init(tag: Tag, hex: [6]u8) @This() {
+        return .{ .tag = tag, .hex = hex };
     }
 };
 
@@ -23,14 +29,14 @@ pub const Active = struct {
     pub const Pair = struct {
         inner: Hex,
 
-        pub fn init(_thresh: u8, hex: [6]u8) @This() {
-            var ret: Hex = .init(hex);
+        pub fn init(tag: Hex.Tag, hex: [6]u8, _thresh: u8) @This() {
+            var ret: Hex = .init(tag, hex);
             ret._priv = _thresh;
             return .{ .inner = ret };
         }
 
-        pub fn initDefault(_thresh: u8) @This() {
-            var ret: Hex = .default;
+        pub fn initEmpty(_thresh: u8) @This() {
+            var ret: Hex = .empty;
             ret._priv = _thresh;
             return .{ .inner = ret };
         }
@@ -80,12 +86,12 @@ pub inline fn firstColorGEThreshold(value: u64, pairs: []const Active.Pair) Hex 
     if (i != 0)
         return pairs[i - 1].inner;
 
-    return .default;
+    return .empty;
 }
 
 pub inline fn firstColorEQThreshold(value: u8, pairs: []const Active.Pair) Hex {
     for (pairs) |pair| {
         if (pair.thresh() == value) return pair.inner;
     }
-    return .default;
+    return .empty;
 }
