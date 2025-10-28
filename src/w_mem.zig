@@ -161,20 +161,18 @@ pub inline fn widget(
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        var flags: unt.NumUnit.Flags = .{
-            .negative = false,
-            .quiet = part.flags.quiet,
-            .abbreviate = part.flags.abbreviate,
-        };
+        var negative = false;
         var nu: unt.NumUnit = undefined;
+
         if (part.flags.pct) {
             nu = unt.Percent(curr.fields[part.opt], curr.total());
         } else {
             const new, const old = .{ curr.fields[part.opt], prev.fields[part.opt] };
-            const result, flags.negative =
+            const result, negative =
                 typ.calcWithOverflow(new, old, w.interval, part.flags);
             nu = unt.SizeKb(result);
         }
-        nu.write(writer, part.wopts, flags);
+        const wopts = part.wopts.copyAndSetNegative(negative);
+        nu.write(writer, wopts);
     }
 }

@@ -246,18 +246,11 @@ pub inline fn widget(
                 writer.end += SZ;
             },
             .fulldesign, .fullnow => {
-                const flags: unt.NumUnit.Flags = .{
-                    .negative = false,
-                    .quiet = part.flags.quiet,
-                    .abbreviate = part.flags.abbreviate,
-                };
-                var nu: unt.NumUnit = undefined;
-                if (part.flags.pct) {
-                    nu = unt.Percent(bat.fields[Battery.now], bat.fields[part.opt]);
-                } else {
-                    nu = unt.UnitSI(bat.fields[part.opt]);
-                }
-                nu.write(writer, part.wopts, flags);
+                const nu = if (part.flags.pct)
+                    unt.Percent(bat.fields[Battery.now], bat.fields[part.opt])
+                else
+                    unt.UnitSI(bat.fields[part.opt]);
+                nu.write(writer, part.wopts);
             },
         }
     }

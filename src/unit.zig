@@ -110,18 +110,33 @@ pub const NumUnit = struct {
         si_tera = 't',
     };
 
-    pub const Flags = struct {
-        negative: bool,
-        quiet: bool,
-        abbreviate: bool,
-    };
-
-    pub const WriteOptions = packed struct(u8) {
+    pub const WriteOptions = packed struct(u16) {
         alignment: Alignment,
         width: u3,
         precision: u3,
+        flags: Flags,
 
         pub const Alignment = enum(u2) { none, right, left };
+
+        pub const Flags = packed struct(u8) {
+            negative: bool,
+            abbreviate: bool,
+            quiet: bool,
+            _: u5 = undefined,
+
+            pub const default: Flags = .{
+                .negative = false,
+                .abbreviate = false,
+                .quiet = false,
+            };
+        };
+
+        pub const default: WriteOptions = .{
+            .alignment = .none,
+            .width = 4,
+            .precision = PRECISION_VALUE_AUTO,
+            .flags = .default,
+        };
 
         pub fn setWidth(self: *@This(), w: u8) void {
             if (w == 0) {
@@ -139,11 +154,11 @@ pub const NumUnit = struct {
             }
         }
 
-        pub const default: WriteOptions = .{
-            .alignment = .none,
-            .width = 4,
-            .precision = PRECISION_VALUE_AUTO,
-        };
+        pub fn copyAndSetNegative(self: @This(), negative: bool) @This() {
+            var copy = self;
+            copy.flags.negative = negative;
+            return copy;
+        }
     };
 
     fn autoRoundPadPrecision(
@@ -186,12 +201,7 @@ pub const NumUnit = struct {
         return .{ r0, pad, 0, r0_nr_digits };
     }
 
-    pub fn write(
-        self: @This(),
-        writer: *uio.Writer,
-        opts: WriteOptions,
-        flags: Flags,
-    ) void {
+    pub fn write(self: @This(), writer: *uio.Writer, opts: WriteOptions) void {
         // Fits in 128 bits; sign(1) + width(9) + sep(1) + frac(3) + unit(1),
         // we can use overlapping stores with an XMM register for copying.
         const HALF = 16;
@@ -210,6 +220,8 @@ pub const NumUnit = struct {
         }
 
         const alignment = opts.alignment;
+        const flags = opts.flags;
+
         var width: u8 = opts.width;
         var precision: u8 = opts.precision;
 

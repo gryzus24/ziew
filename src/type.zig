@@ -45,24 +45,23 @@ pub const Format = struct {
     pub const Part = struct {
         str: umem.MemSlice(u8),
         opt: u8,
-        wopts: unt.NumUnit.WriteOptions,
         flags: Flags,
+        wopts: unt.NumUnit.WriteOptions,
 
-        const Flags = packed struct(u16) {
+        comptime {
+            std.debug.assert(@sizeOf(Part) == 8);
+        }
+
+        const Flags = packed struct(u8) {
             pct: bool,
             diff: bool,
             persec: bool,
-            quiet: bool,
-            abbreviate: bool,
-            _: u11,
+            _: u5 = undefined,
 
             pub const default: Flags = .{
                 .pct = false,
                 .diff = false,
                 .persec = false,
-                .quiet = false,
-                .abbreviate = false,
-                ._ = 0,
             };
         };
 
@@ -70,8 +69,8 @@ pub const Format = struct {
             return .{
                 .str = str,
                 .opt = opt,
-                .wopts = .default,
                 .flags = .default,
+                .wopts = .default,
             };
         }
     };

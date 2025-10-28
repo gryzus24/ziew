@@ -144,12 +144,9 @@ pub inline fn widget(
             continue;
         }
 
-        var flags: unt.NumUnit.Flags = .{
-            .negative = false,
-            .quiet = part.flags.quiet,
-            .abbreviate = part.flags.abbreviate,
-        };
+        var negative = false;
         var nu: unt.NumUnit = undefined;
+
         if (part.flags.pct) {
             nu = unt.Percent(
                 curr.fields[part.opt],
@@ -161,7 +158,7 @@ pub inline fn widget(
                 ],
             );
         } else {
-            const value, flags.negative = typ.calcWithOverflow(
+            const value, negative = typ.calcWithOverflow(
                 curr.fields[part.opt],
                 prev.fields[part.opt],
                 w.interval,
@@ -172,6 +169,7 @@ pub inline fn widget(
             else
                 unt.SizeKb(value);
         }
-        nu.write(writer, part.wopts, flags);
+        const wopts = part.wopts.copyAndSetNegative(negative);
+        nu.write(writer, wopts);
     }
 }

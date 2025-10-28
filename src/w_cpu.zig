@@ -346,11 +346,7 @@ pub inline fn widget(
                         part.flags,
                     ),
                 );
-            nu.write(writer, part.wopts, .{
-                .negative = false,
-                .quiet = part.flags.quiet,
-                .abbreviate = part.flags.abbreviate,
-            });
+            nu.write(writer, part.wopts);
             continue;
         }
 

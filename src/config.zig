@@ -253,13 +253,15 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
 
         ptr.flags.pct = pct_prefix;
         for (flags) |ch| switch (ch | 0x20) {
-            'a' => ptr.flags.abbreviate = true,
-            'd' => ptr.flags.diff = true,
+            'd' => {
+                ptr.flags.diff = true;
+            },
             's' => {
                 ptr.flags.diff = true;
                 ptr.flags.persec = true;
             },
-            'q' => ptr.flags.quiet = true,
+            'a' => ptr.wopts.flags.abbreviate = true,
+            'q' => ptr.wopts.flags.quiet = true,
             else => {},
         };
 
