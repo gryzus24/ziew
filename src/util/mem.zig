@@ -42,9 +42,9 @@ pub fn memcpyZ(dst: []u8, src: []const u8) ?[:0]const u8 {
     return dst[0..src.len :0];
 }
 
-pub const TRACE_ALLOCATIONS = false;
+pub const TRACE_ALLOCATIONS = @import("config").mem_trace_allocations;
 
-pub const OOM_CHECK = true;
+pub const OOM_CHECK = !@import("config").mem_no_oom_check;
 
 /// Region of address space that grows in both directions; from lower to higher
 /// address - front - and from higher to lower (stack-like) - back.
