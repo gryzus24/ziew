@@ -35,55 +35,40 @@ const WRITE_FAIL_CHECK = true;
 
 const Args = struct {
     config_path: ?[*:0]const u8 = null,
+
+    fn get(i: usize) ?struct { [*:0]const u8, usize } {
+        return if (i < os.argv.len) .{ os.argv[i], i } else null;
+    }
+
+    fn read() @This() {
+        var args: Args = .{};
+        var i: usize = 0;
+
+        next: switch (enum { arg, c, h, v }.arg) {
+            .arg => {
+                const arg, i = Args.get(i + 1) orelse return args;
+                const len = mem.len(arg);
+                if (len == 1 or (len == 2 and arg[0] == '-')) {
+                    if (arg[len - 1] == 'c') continue :next .c;
+                    if (arg[len - 1] == 'h') continue :next .h;
+                    if (arg[len - 1] == 'v') continue :next .v;
+                }
+                _ = uio.sys_writev(2, .{ "unknown option: '", arg[0..len], "'\n" });
+                continue :next .h;
+            },
+            .c => {
+                if (Args.get(i + 1)) |ok| {
+                    args.config_path, i = ok;
+                    continue :next .arg;
+                }
+                _ = uio.sys_write(2, "required argument: c <path>\n");
+            },
+            .h => _ = uio.sys_write(2, "usage: ziew [c <config file>] [h] [v]\n"),
+            .v => _ = uio.sys_write(2, "ziew 0.0.12\n"),
+        }
+        linux.exit(0);
+    }
 };
-
-fn showHelpAndExit() noreturn {
-    _ = uio.sys_write(2, "usage: ziew [c <config file>] [h] [v]\n");
-    linux.exit(0);
-}
-
-fn showVersionAndExit() noreturn {
-    _ = uio.sys_write(2, "ziew 0.0.12\n");
-    linux.exit(0);
-}
-
-fn readArgs() Args {
-    const argv = os.argv;
-
-    var args: Args = .{};
-    var get_config_path = false;
-
-    for (1..argv.len) |i| {
-        const arg = argv[i];
-        const a: u32 = 0 + @intFromBool(arg[0] != 0);
-        const b: u32 = a + @intFromBool(arg[a] != 0);
-        const c: u32 = b + @intFromBool(arg[b] != 0);
-        const len = c;
-        if (len == 1 or (len == 2 and arg[0] == '-')) {
-            switch (arg[len - 1]) {
-                'c' => {
-                    get_config_path = true;
-                    continue;
-                },
-                'h' => showHelpAndExit(),
-                'v' => showVersionAndExit(),
-                else => {
-                    _ = uio.sys_write(2, "unknown option\n");
-                    showHelpAndExit();
-                },
-            }
-        }
-        if (get_config_path) {
-            args.config_path = argv[i];
-            get_config_path = false;
-        }
-    }
-    if (get_config_path) {
-        _ = uio.sys_write(2, "required argument: c <path>\n");
-        showHelpAndExit();
-    }
-    return args;
-}
 
 fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     @branchHint(.cold);
@@ -291,7 +276,7 @@ pub fn main() void {
 
     var reg: umem.Region = .init(&g_bss, "main");
 
-    const args = readArgs();
+    const args: Args = .read();
     const widgets = loadConfig(&reg, args.config_path);
 
     setupSignals();
