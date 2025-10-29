@@ -404,3 +404,9 @@ pub fn main() void {
     }
     unreachable;
 }
+
+test "all tests" {
+    _ = @import("config.zig");
+    _ = @import("w_mem.zig");
+    _ = @import("w_cpu.zig");
+}

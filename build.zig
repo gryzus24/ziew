@@ -56,4 +56,11 @@ pub fn build(b: *std.Build) !void {
     } else {
         b.installArtifact(exe);
     }
+
+    const module_tests = b.addTest(.{
+        .root_module = module,
+    });
+    const tests_run = b.addRunArtifact(module_tests);
+    const tests_step = b.step("test", "Run tests");
+    tests_step.dependOn(&tests_run.step);
 }
