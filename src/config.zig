@@ -829,6 +829,9 @@ test parse {
     r = try testParse("CPU 1 format \"{5all}\"\n", &reg, &scratch);
     try testDiag(r, "unknown option", 1, .{ .beg = 15, .end = 19 });
 
+    r = try testParse("CPU 1 format \"{%all}--{iowait } \"\n", &reg, &scratch);
+    try testDiag(r, "unknown option", 1, .{ .beg = 23, .end = 30 });
+
     r = try testParse("DISK 777 arg / format \"{%arg}\"\n", &reg, &scratch);
     try testDiag(r, "unknown option", 1, .{ .beg = 24, .end = 28 });
 
