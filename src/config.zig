@@ -16,7 +16,6 @@ const w_net = @import("w_net.zig");
 const w_read = @import("w_read.zig");
 const w_time = @import("w_time.zig");
 
-const enums = std.enums;
 const fmt = std.fmt;
 const mem = std.mem;
 
@@ -36,42 +35,41 @@ const Split = struct {
 const Splitter = struct {
     buf: []const u8,
     i: usize,
-    want: enum { char, ws, quote },
 
     fn init(buf: []const u8) @This() {
-        return .{ .buf = buf, .i = 0, .want = .char };
+        return .{ .buf = buf, .i = 0 };
     }
 
     fn next(self: *@This()) ?Split {
         if (self.i == self.buf.len) return null;
 
-        var beg: usize = 0;
-        while (self.i < self.buf.len) : (self.i += 1) switch (self.buf[self.i]) {
-            ' ', '\t' => {
-                if (self.want == .ws) {
-                    self.want = .char;
-                    self.i += 1;
-                    return .{ .beg = beg, .end = self.i - 1 };
-                }
+        var beg = self.i;
+        while (beg < self.buf.len and
+            ustr.isWhitespace(self.buf[beg])) : (beg += 1)
+        {}
+        self.i = beg;
+
+        next: switch (enum { out, in, ret_inclusive, ret_exclusive }.out) {
+            .out => {
+                const c, self.i = accept(self.buf, self.i) orelse
+                    continue :next .ret_inclusive;
+                if (ustr.isWhitespace(c))
+                    continue :next .ret_exclusive;
+                if (c != '"')
+                    continue :next .out;
+                beg += 1;
+                continue :next .in;
             },
-            '"' => {
-                if (self.want == .char) {
-                    self.want = .quote;
-                    beg = self.i + 1;
-                } else if (self.want == .quote) {
-                    self.want = .char;
-                    self.i += 1;
-                    return .{ .beg = beg, .end = self.i - 1 };
-                }
+            .in => {
+                const c, self.i = accept(self.buf, self.i) orelse
+                    continue :next .ret_inclusive;
+                if (c == '"')
+                    continue :next .ret_exclusive;
+                continue :next .in;
             },
-            else => {
-                if (self.want == .char) {
-                    self.want = .ws;
-                    beg = self.i;
-                }
-            },
-        };
-        return .{ .beg = beg, .end = self.i };
+            .ret_inclusive => return .{ .beg = beg, .end = self.i },
+            .ret_exclusive => return .{ .beg = beg, .end = self.i - 1 },
+        }
     }
 };
 

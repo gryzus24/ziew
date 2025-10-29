@@ -16,16 +16,22 @@ pub fn repr(str: ?[]const u8) void {
     }
 }
 
+// Not necessarily whitespace, but it's
+// fine if we can ignore the NUL byte.
+pub fn isWhitespace(c: u8) bool {
+    return c <= ' ';
+}
+
 pub fn trimWhitespace(str: []const u8) []const u8 {
     // This is the smallest (in terms of code size)
-    // whitespace trimming loop I could come up with.
+    // "whitespace" trimming loop I could come up with.
     var a: usize = 0;
     var b: usize = str.len;
     var t: usize = 0;
     while (a < b and t != b - a) {
         t = b - a;
-        a += @intFromBool(str[a] <= ' ');
-        b -= @intFromBool(str[b - 1] <= ' ');
+        a += @intFromBool(isWhitespace(str[a]));
+        b -= @intFromBool(isWhitespace(str[b - 1]));
     }
     return str[a..b];
 }
