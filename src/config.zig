@@ -22,6 +22,10 @@ const mem = std.mem;
 
 // == private =================================================================
 
+fn accept(buf: []const u8, i: usize) ?struct { u8, usize } {
+    return if (i < buf.len) .{ buf[i], i + 1 } else null;
+}
+
 const Split = struct {
     beg: usize,
     end: usize,
@@ -75,7 +79,7 @@ const FormatSplitter = struct {
     buf: []const u8,
     i: usize,
 
-    pub const FormatSplit = union(enum) {
+    const FormatSplit = union(enum) {
         ok: struct {
             part: Split,
             opt: Split,
@@ -85,7 +89,7 @@ const FormatSplitter = struct {
             field: Split,
         },
 
-        const FailType = enum { no_open, no_close };
+        const FailType = enum(u8) { no_close = 2, no_open = 3 };
 
         fn init(i: usize) @This() {
             return .{
@@ -109,38 +113,39 @@ const FormatSplitter = struct {
         if (self.i == self.buf.len) return null;
 
         var r: FormatSplit = .init(self.i);
-        var want: enum { opened, closed } = .opened;
-
-        while (self.i < self.buf.len) : (self.i += 1) switch (self.buf[self.i]) {
-            '{' => {
-                switch (want) {
-                    .opened => {
-                        want = .closed;
-                        r.ok.part.end = self.i;
-                        r.ok.opt.beg = self.i + 1;
-                    },
-                    .closed => {
-                        return .fail(.no_close, .{ .beg = r.ok.opt.beg, .end = self.i + 1 });
-                    },
-                }
-            },
-            '}' => {
-                return switch (want) {
-                    .opened => .fail(.no_open, .{ .beg = r.ok.part.beg, .end = self.i + 1 }),
-                    .closed => blk: {
-                        r.ok.opt.end = self.i;
-                        self.i += 1;
-                        break :blk r;
-                    },
+        next: switch (enum(u8) { open, close, no_close, no_open }.open) {
+            .open => {
+                const c, self.i = accept(self.buf, self.i) orelse {
+                    r.ok.part.end = self.i;
+                    return r;
                 };
+                if (c == '{') {
+                    r.ok.part.end = self.i - 1;
+                    r.ok.opt.beg = self.i;
+                    continue :next .close;
+                }
+                if (c == '}')
+                    continue :next .no_open;
+                continue :next .open;
             },
-            else => {},
-        };
-        if (want == .opened) {
-            r.ok.part.end = self.i;
-            return r;
+            .close => {
+                const c, self.i = accept(self.buf, self.i) orelse
+                    continue :next .no_close;
+                if (c == '}') {
+                    r.ok.opt.end = self.i - 1;
+                    return r;
+                }
+                continue :next .close;
+            },
+            .no_close => return .fail(.no_close, .{
+                .beg = r.ok.part.end,
+                .end = self.i,
+            }),
+            .no_open => return .fail(.no_open, .{
+                .beg = r.ok.opt.beg,
+                .end = self.i,
+            }),
         }
-        return .fail(.no_close, .{ .beg = r.ok.part.end, .end = self.i });
     }
 };
 
