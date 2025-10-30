@@ -185,59 +185,45 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             i = 1;
         }
 
-        const Flags = packed struct {
-            at: bool = false,
-            colon: bool = false,
-            dot: bool = false,
+        const Option = struct {
+            parts: [4][]const u8,
+
+            const name = 0;
+            const flags = 1;
+            const specs = 2;
+            const prec = 3;
         };
 
-        var want: Flags = .{ .at = true, .colon = true };
-
-        var option: []const u8 = "";
-        var flags: []const u8 = "";
-        var specs: []const u8 = "";
-        var prec: []const u8 = "";
+        var part: usize = Option.name;
+        var option: Option = .{ .parts = @splat("") };
 
         var cur = i;
         while (i < field.len) : (i += 1) switch (field[i]) {
-            '@' => {
-                if (want.at) {
-                    want.at = false;
-                    option = field[cur..i];
-                    cur = i + 1;
+            '@', ':', '.' => |c| {
+                const prev = part;
+                switch (c) {
+                    '@' => {
+                        if (part == Option.name)
+                            part = Option.flags;
+                    },
+                    ':' => {
+                        if (part == Option.name or part == Option.flags)
+                            part = Option.specs;
+                    },
+                    '.' => {
+                        if (part == Option.specs)
+                            part = Option.prec;
+                    },
+                    else => unreachable,
                 }
-            },
-            ':' => {
-                if (want.colon) {
-                    if (want.at) {
-                        option = field[cur..i];
-                    } else {
-                        flags = field[cur..i];
-                    }
-                    want = .{ .dot = true };
-                    cur = i + 1;
-                }
-            },
-            '.' => {
-                if (want.dot) {
-                    want.dot = false;
-                    specs = field[cur..i];
+                if (prev != part) {
+                    option.parts[prev] = field[cur..i];
                     cur = i + 1;
                 }
             },
             else => {},
         };
-        if (want.colon) {
-            if (want.at) {
-                option = field[cur..field.len];
-            } else {
-                flags = field[cur..field.len];
-            }
-        } else if (want.dot) {
-            specs = field[cur..field.len];
-        } else {
-            prec = field[cur..field.len];
-        }
+        option.parts[part] = field[cur..field.len];
 
         const opt: u8 = blk: for (
             typ.WID__OPTIONS_PERCENT_PREFIX_ALLOWED[@intFromEnum(wid)],
@@ -245,7 +231,8 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             0..,
         ) |pct_prefix_allowed, name, j| {
             // An implication in the wild!
-            if ((!pct_prefix or pct_prefix_allowed) and mem.eql(u8, option, name))
+            if ((!pct_prefix or pct_prefix_allowed) and
+                mem.eql(u8, option.parts[Option.name], name))
                 break :blk @intCast(j);
         } else {
             return .fail("unknown option", split.opt);
@@ -255,7 +242,7 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
         ptr.* = .initDefault(.zero, opt);
 
         ptr.flags.pct = pct_prefix;
-        for (flags) |ch| switch (ch | 0x20) {
+        for (option.parts[Option.flags]) |ch| switch (ch | 0x20) {
             'd' => {
                 ptr.flags.diff = true;
             },
@@ -268,8 +255,8 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             else => {},
         };
 
-        if (specs.len < 3) {
-            for (specs) |ch| switch (ch) {
+        if (option.parts[Option.specs].len < 3) {
+            for (option.parts[Option.specs]) |ch| switch (ch) {
                 '<' => ptr.wopts.alignment = .left,
                 '>' => ptr.wopts.alignment = .right,
                 '0'...'9' => ptr.wopts.setWidth(ch & 0x0f),
@@ -279,16 +266,15 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
             return .fail("excessive specifiers", split.opt);
         }
 
-        if (prec.len == 1) {
-            ptr.wopts.setPrecision(prec[0] & 0x0f);
+        if (option.parts[Option.prec].len == 1) {
+            ptr.wopts.setPrecision(option.parts[Option.prec][0] & 0x0f);
         }
-        if (prec.len > 1) {
+        if (option.parts[Option.prec].len > 1) {
             return .fail("excessive precision", split.opt);
         }
     }
 
     // Second pass - string copying and reference fixup.
-
     fields = .init(str);
     for (parts) |*part| {
         const s = switch (fields.next().?) {
