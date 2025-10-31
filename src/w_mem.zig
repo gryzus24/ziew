@@ -35,7 +35,7 @@ const Meminfo = struct {
 
 // == private =================================================================
 
-fn parseProcMeminfo(buf: []const u8, out: *Meminfo) void {
+inline fn parseProcMeminfo(buf: []const u8, out: *Meminfo) void {
     const KEY_LEN = "xxxxxxxx:       ".len;
     const VAL_LEN = 8;
     const UNIT_LEN = " kB".len;

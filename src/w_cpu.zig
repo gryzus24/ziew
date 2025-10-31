@@ -108,7 +108,7 @@ const Stat = struct {
 
 // == private =================================================================
 
-fn parseProcStat(buf: []const u8, out: *Stat) void {
+inline fn parseProcStat(buf: []const u8, out: *Stat) void {
     var cpu: usize = 0;
     var i = "cpu  ".len;
     while (true) {
