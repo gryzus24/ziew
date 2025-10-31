@@ -128,7 +128,7 @@ fn parseProcStat(buf: []const u8, out: *Stat) void {
         // zig fmt: on
 
         // cpuXX  41208 ... 1061 0 [0] 0\n
-        i += 4;
+        i += "0 0\n".len;
         // cpuXX  41208 ... 1061 0 0 0\n[c] (best case)
         while (buf[i] <= '9') : (i += 1) {}
         if (buf[i] == 'i') break;
@@ -144,12 +144,21 @@ fn parseProcStat(buf: []const u8, out: *Stat) void {
     i += "intr ".len;
     out.stats[Stat.intr], _ = ustr.atou64ForwardUntil(buf, i, ' ');
 
-    i = buf.len - 1 - " 0 0 0 0 0 0 0 0 0 0 0\n".len;
-    while (buf[i] != 'q') : (i -= 1) {}
-    // i at: softir[q] 123456 2345 ...
+    const Block = @Vector(32, u8);
 
-    out.stats[Stat.softirq], _ = ustr.atou64ForwardUntil(buf, i + "q ".len, ' ');
-    i -= "\nsoftirq".len;
+    // We have some numbers to skip, use this opportunity to align the pointer.
+    i = buf.len & ~@as(usize, 31);
+    while (true) : (i -= 32) {
+        const block: Block = buf[i - 32 ..][0..32].*;
+        const mask: u32 = @bitCast(block == @as(Block, @splat('\n')));
+        if (mask != 0) {
+            i -= @clz(mask);
+            i += "softirq ".len;
+            break;
+        }
+    }
+    out.stats[Stat.softirq], _ = ustr.atou64ForwardUntil(buf, i, ' ');
+    i -= "\nsoftirq X".len;
 
     out.stats[Stat.blocked], i = ustr.atou64BackwardUntil(buf, i, ' ');
     i -= "\nprocs_blocked ".len;
@@ -158,10 +167,13 @@ fn parseProcStat(buf: []const u8, out: *Stat) void {
     i -= "\nprocs_running ".len;
 
     out.stats[Stat.forks], i = ustr.atou64BackwardUntil(buf, i, ' ');
-    i -= "btime X\nprocesses ".len;
+    i -= "\nprocesses ".len;
+    const block: Block = buf[i - 32 ..][0..32].*;
+    const mask: u32 = @bitCast(block == @as(Block, @splat('\n')));
+    i -= @clz(mask);
+    i -= 2;
 
-    while (buf[i] != '\n') : (i -= 1) {}
-    out.stats[Stat.ctxt], _ = ustr.atou64BackwardUntil(buf, i - 1, ' ');
+    out.stats[Stat.ctxt], _ = ustr.atou64BackwardUntil(buf, i, ' ');
 }
 
 test "/proc/stat parser" {
