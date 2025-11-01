@@ -341,24 +341,28 @@ pub inline fn widget(
 
         const bit = typ.optBit(part.opt);
         if (bit & (wd.opt_mask.usage | wd.opt_mask.stats) != 0) {
-            const nu: unt.NumUnit = if (bit & wd.opt_mask.usage != 0)
-                .{
+            var negative = false;
+            var nu: unt.NumUnit = undefined;
+
+            if (bit & wd.opt_mask.usage != 0) {
+                nu = .{
                     .n = if (part.flags.pct)
                         state.usage_pct[part.opt]
                     else
                         state.usage_abs[part.opt],
                     .u = .percent,
-                }
-            else
-                unt.UnitSI(
-                    typ.calc(
-                        curr.stats[part.opt - typ.Options.Cpu.STATS_OFF],
-                        prev.stats[part.opt - typ.Options.Cpu.STATS_OFF],
-                        w.interval,
-                        part.flags,
-                    ),
+                };
+            } else {
+                const value, negative = typ.calcWithOverflow(
+                    curr.stats[part.opt - typ.Options.Cpu.STATS_OFF],
+                    prev.stats[part.opt - typ.Options.Cpu.STATS_OFF],
+                    w.interval,
+                    part.flags,
                 );
-            nu.write(writer, part.wopts);
+                nu = unt.UnitSI(value);
+            }
+            const wopts = part.wopts.copyAndSetNegative(negative);
+            nu.write(writer, wopts);
             continue;
         }
 
