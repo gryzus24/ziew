@@ -146,8 +146,9 @@ inline fn parseProcStat(buf: []const u8, out: *Stat) void {
 
     const Block = @Vector(32, u8);
 
-    // We have some numbers to skip, use this opportunity to align the pointer.
-    i = buf.len & ~@as(usize, 31);
+    // We have some numbers to skip, use this opportunity to align the pointer
+    // and make sure we don't catch the $'\n' at `buf[buf.len - 1]`.
+    i = (buf.len - 1) & ~@as(usize, 31);
     while (true) : (i -= 32) {
         const block: Block = buf[i - 32 ..][0..32].*;
         const mask: u32 = @bitCast(block == @as(Block, @splat('\n')));
@@ -179,7 +180,7 @@ inline fn parseProcStat(buf: []const u8, out: *Stat) void {
 test "/proc/stat parser" {
     const t = std.testing;
 
-    const buf =
+    const s =
         \\cpu  46232 14 14383 12181824987654321 2122 2994 1212 0 0 0
         \\cpu0 9483 5 1638 1007864 211 917 227 0 0 0
         \\cpu1 9934 0 1386 1008813 285 200 103 0 0 0
@@ -199,29 +200,33 @@ test "/proc/stat parser" {
         \\processes 8594
         \\procs_running 1
         \\procs_blocked 0
-        \\softirq 4426117 1410160 300541 4 137919 8958 0 465908 1604918 6 497706
+        \\softirq 4426117 14101 3005 4 13791 895 0 4659 16049 6 4977
+        \\
     ;
-    var tmem: [4096]u8 align(16) = undefined;
+    var tmem: [4096]u8 align(32) = undefined;
     var reg: umem.Region = .init(&tmem, "cputest");
-    var s: Stat = try .initZero(&reg, 12);
-    parseProcStat(buf, &s);
-    try t.expect(s.entries[0].user == 46232 + 14);
-    try t.expect(s.entries[0].sys == 14383 + 2994 + 1212 + 0);
-    try t.expect(s.entries[0].idle == 12181824987654321);
-    try t.expect(s.entries[0].iowait == 2122);
-    try t.expect(s.entries[1].user == 9483 + 5);
-    try t.expect(s.entries[1].sys == 1638 + 917 + 227 + 0);
-    try t.expect(s.entries[7].sys == 1043 + 135 + 80123456);
-    try t.expect(s.entries[12].user == 858 + 0);
-    try t.expect(s.entries[12].sys == 769 + 119 + 123 + 0);
-    try t.expect(s.entries[12].idle == 1019145);
-    try t.expect(s.entries[12].iowait == 138);
-    try t.expect(s.stats[Stat.intr] == 1894596);
-    try t.expect(s.stats[Stat.ctxt] == 3055158);
-    try t.expect(s.stats[Stat.forks] == 8594);
-    try t.expect(s.stats[Stat.running] == 1);
-    try t.expect(s.stats[Stat.blocked] == 0);
-    try t.expect(s.stats[Stat.softirq] == 4426117);
+
+    const buf = try reg.allocMany(u8, s.len, .front);
+    @memcpy(buf, s);
+    var stat: Stat = try .initZero(&reg, 12);
+    parseProcStat(buf, &stat);
+    try t.expect(stat.entries[0].user == 46232 + 14);
+    try t.expect(stat.entries[0].sys == 14383 + 2994 + 1212 + 0);
+    try t.expect(stat.entries[0].idle == 12181824987654321);
+    try t.expect(stat.entries[0].iowait == 2122);
+    try t.expect(stat.entries[1].user == 9483 + 5);
+    try t.expect(stat.entries[1].sys == 1638 + 917 + 227 + 0);
+    try t.expect(stat.entries[7].sys == 1043 + 135 + 80123456);
+    try t.expect(stat.entries[12].user == 858 + 0);
+    try t.expect(stat.entries[12].sys == 769 + 119 + 123 + 0);
+    try t.expect(stat.entries[12].idle == 1019145);
+    try t.expect(stat.entries[12].iowait == 138);
+    try t.expect(stat.stats[Stat.intr] == 1894596);
+    try t.expect(stat.stats[Stat.ctxt] == 3055158);
+    try t.expect(stat.stats[Stat.forks] == 8594);
+    try t.expect(stat.stats[Stat.running] == 1);
+    try t.expect(stat.stats[Stat.blocked] == 0);
+    try t.expect(stat.stats[Stat.softirq] == 4426117);
 }
 
 const BRLBARS: [5][5][3]u8 = .{
