@@ -117,14 +117,15 @@ inline fn parseProcStat(buf: []const u8, out: *Stat) void {
             fields[fi], i = ustr.atou64By8ForwardUntil(buf, i, ' ');
             i += 1;
         }
+        const ptr = &out.entries[cpu];
         // zig fmt: off
         // User time includes guest time. Check v6.17 kernel/sched/cputime.c#L158
-        //                        user        nice
-        //                        system      irq         softirq     steal
-        out.entries[cpu].user   = fields[0] + fields[1];
-        out.entries[cpu].sys    = fields[2] + fields[5] + fields[6] + fields[7];
-        out.entries[cpu].idle   = fields[3];
-        out.entries[cpu].iowait = fields[4];
+        //           user        nice
+        //           system      irq         softirq     steal
+        ptr.user   = fields[0] + fields[1];
+        ptr.sys    = fields[2] + fields[5] + fields[6] + fields[7];
+        ptr.idle   = fields[3];
+        ptr.iowait = fields[4];
         // zig fmt: on
 
         // cpuXX  41208 ... 1061 0 [0] 0\n
