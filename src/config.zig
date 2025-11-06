@@ -257,6 +257,7 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
 
         if (option.parts[Option.specs].len < 3) {
             for (option.parts[Option.specs]) |ch| switch (ch) {
+                '^' => ptr.wopts.alignment = .none,
                 '<' => ptr.wopts.alignment = .left,
                 '>' => ptr.wopts.alignment = .right,
                 '0'...'9' => ptr.wopts.setWidth(ch & 0x0f),

@@ -56,10 +56,10 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                               * s - average difference per second as opposed
                                     to "since last refresh" (implies @d flag),
                               * q - do not display values equal to zero.
-              * ALIGNMENT - either < for left alignment or > for right
-                            alignment - reserves space for the longest
-                            representation of a number (no alignment if
-                            unspecified),
+              * ALIGNMENT - alignment and padding up to WIDTH.
+                              * < - left alignment,
+                              * > - right alignment (default if unspecified),
+                              * ^ - no alignment and no padding.
               * WIDTH     - number of cells available for the integral part
                             of a number (4 if unspecified),
               * PRECISION - number from 0 to 3 inclusive - specifies digits
@@ -67,7 +67,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
                             width if unspecified).
 
     Example
-      CPU 25 format "CPU {%all:>3} {blkbars} {forks@dq:>}"
+      CPU 25 format "CPU {%all:3} {blkbars} {forks@dq:^}"
 
 ### Default color line
 
@@ -282,7 +282,7 @@ Every option and color configuration for each *Widget* is documented below.
              1 - interface is up.
 
     Example config entry
-      NET arg enp5s0 format "{arg}: {inet} {flags} Rx {rx_bytes@dq:>.0}"
+      NET arg enp5s0 format "{arg}: {inet} {flags} Rx {rx_bytes@dq:.0}"
       FG state 0:888 1:eee
 
 **BAT**
@@ -315,7 +315,7 @@ Every option and color configuration for each *Widget* is documented below.
              4 - unknown state.
 
     Example config entry
-      BAT 300 arg BAT0 format "{arg}: {%fulldesign:>2} {state}"
+      BAT 300 arg BAT0 format "{arg}: {%fulldesign:<2} {state}"
       FG state 1:4a4 2:4a4
       BG %fulldesign 0:a00 15:220 25:
 

@@ -116,7 +116,7 @@ pub const NumUnit = struct {
         precision: u3,
         flags: Flags,
 
-        pub const Alignment = enum(u2) { none, right, left };
+        pub const Alignment = enum(u2) { none, left, right };
 
         pub const Flags = packed struct(u8) {
             negative: bool,
@@ -132,7 +132,7 @@ pub const NumUnit = struct {
         };
 
         pub const default: WriteOptions = .{
-            .alignment = .none,
+            .alignment = .right,
             .width = 4,
             .precision = PRECISION_VALUE_AUTO,
             .flags = .default,
