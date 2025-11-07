@@ -409,4 +409,5 @@ test "all tests" {
     _ = @import("config.zig");
     _ = @import("w_mem.zig");
     _ = @import("w_cpu.zig");
+    _ = @import("w_net.zig");
 }
