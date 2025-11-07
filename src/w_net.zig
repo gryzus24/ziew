@@ -180,8 +180,6 @@ fn getFlags(
     ifr: *linux.ifreq,
     out: *[IFF_BUF_MAX]u8,
 ) struct { usize, bool } {
-    // interestingly, the SIOCGIF*P*FLAGS ioctl is not implemented for INET?
-    // check switch prong of: v6.6-rc3/source/net/ipv4/af_inet.c#L974
     const ret: isize = @bitCast(linux.ioctl(sock, linux.SIOCGIFFLAGS, @intFromPtr(ifr)));
     return switch (ret) {
         0 => blk: {
@@ -206,7 +204,7 @@ fn getFlags(
     };
 }
 
-fn parseProcNetDev(
+inline fn parseProcNetDev(
     buf: []const u8,
     ifs: *Interfaces,
     reg: *umem.Region,
@@ -313,7 +311,7 @@ pub const State = struct {
         return state;
     }
 
-    fn getNetdev(self: *const @This(), mask: typ.OptBit) ?*const NetDev {
+    fn getNetDev(self: *const @This(), mask: typ.OptBit) ?*const NetDev {
         return if (mask != 0) &self.netdev.? else null;
     }
 };
@@ -358,7 +356,7 @@ pub inline fn widget(
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
     var ifs_match = false;
-    if (state.getNetdev(wd.opt_mask.netdev)) |ok| {
+    if (state.getNetDev(wd.opt_mask.netdev)) |ok| {
         const new, const old = typ.constCurrPrev(Interfaces, &ok.ifs, ok.curr);
 
         const Hash = @Vector(linux.IFNAMESIZE, u8);
