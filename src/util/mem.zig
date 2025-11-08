@@ -135,7 +135,7 @@ pub const Region = struct {
         return bytesAsSliceOrganic(T, allocation);
     }
 
-    pub inline fn alloc(self: *@This(), comptime T: type, where: Where) Error!*T {
+    pub inline fn alloc(self: *@This(), comptime T: type, comptime where: Where) Error!*T {
         return @ptrCast(try self.allocMany(T, 1, where));
     }
 
