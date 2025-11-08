@@ -225,14 +225,14 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
         };
         option.parts[part] = field[cur..field.len];
 
+        const hash = typ.widOptHash(option.parts[Option.name]);
         const opt: u8 = blk: for (
             typ.WID__OPTIONS_PERCENT_PREFIX_ALLOWED[@intFromEnum(wid)],
-            typ.WID__OPTION_NAMES[@intFromEnum(wid)],
+            typ.WID__OPTION_HASHES[@intFromEnum(wid)],
             0..,
-        ) |pct_prefix_allowed, name, j| {
+        ) |pct_prefix_allowed, opt_hash, j| {
             // An implication in the wild!
-            if ((!pct_prefix or pct_prefix_allowed) and
-                mem.eql(u8, option.parts[Option.name], name))
+            if ((!pct_prefix or pct_prefix_allowed) and hash == opt_hash)
                 break :blk @intCast(j);
         } else {
             return .fail("unknown option", split.opt);
@@ -346,13 +346,13 @@ const ColorOptResult = union(enum) {
 
 fn strColorOpt(wid: typ.Widget.Id.ActiveColorSupported, str: []const u8) ColorOptResult {
     const pct = acceptPrefix(str, '%');
-    const i: u8 = @intFromBool(pct);
+    const hash = typ.widOptHash(str[@intFromBool(pct)..]);
     for (
         typ.WID__OPTIONS_COLOR_SUPPORT[@intFromEnum(wid)],
-        typ.WID__OPTION_NAMES[@intFromEnum(wid)],
+        typ.WID__OPTION_HASHES[@intFromEnum(wid)],
         0..,
-    ) |support, name, opt| {
-        if (mem.eql(u8, str[i..], name)) {
+    ) |support, opt_hash, opt| {
+        if (hash == opt_hash) {
             if ((support.no_pct and !pct) or (support.pct and pct)) {
                 return .{ .ok = .{ .opt = @intCast(opt), .pct = pct } };
             }
@@ -733,7 +733,7 @@ fn testParse(comptime str: []const u8, reg: *umem.Region, scratch: []align(16) u
 
 fn testDiag(r: ParseResult, note: []const u8, line_nr: usize, field: Split) !void {
     const t = std.testing;
-    try t.expect(mem.eql(u8, r.err.note, note));
+    try t.expect(std.mem.eql(u8, r.err.note, note));
     try t.expect(r.err.line_nr == line_nr);
     try t.expect(r.err.field.beg == field.beg);
     try t.expect(r.err.field.end == field.end);

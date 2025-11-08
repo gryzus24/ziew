@@ -23,7 +23,10 @@ const meta = std.meta;
 
 // == public types ============================================================
 
-// 1/10th of a second
+// `Widget.Id` or `OptionTypes` hash.
+pub const WidOptHash = u32;
+
+// 1/10th of a second.
 pub const DeciSec = i32;
 pub const UDeciSec = u32;
 
@@ -599,14 +602,6 @@ pub const Options = struct {
     };
 };
 
-pub fn strWid(str: []const u8) ?Widget.Id {
-    inline for (@typeInfo(Widget.Id).@"enum".fields) |field| {
-        if (mem.eql(u8, str, field.name))
-            return @enumFromInt(field.value);
-    }
-    return null;
-}
-
 const OptionTypes = &.{
     Options.Time, Options.Mem, Options.Cpu,  Options.Disk,
     Options.Net,  Options.Bat, Options.Read,
@@ -617,11 +612,44 @@ comptime {
         @compileError("Adjust OptionTypes");
 }
 
+fn makeHashes(comptime Enum: type) []const WidOptHash {
+    const fields = @typeInfo(Enum).@"enum".fields;
+    var hashes: [fields.len]WidOptHash = undefined;
+    for (fields, 0..) |field, i|
+        hashes[i] = widOptHash(field.name);
+    for (fields, hashes, 1..) |field, hash, i| {
+        for (fields[i..], hashes[i..]) |other, other_hash| {
+            if (hash == other_hash)
+                @compileError("collision: " ++ field.name ++ "=" ++ other.name);
+        }
+    }
+    const final = hashes;
+    return &final;
+}
+
 // == public ==================================================================
 
-pub const WID__OPTION_NAMES: [Widget.NR_WIDGETS][]const [:0]const u8 = blk: {
-    var w: [Widget.NR_WIDGETS][]const [:0]const u8 = undefined;
-    for (OptionTypes, 0..) |T, i| w[i] = meta.fieldNames(T);
+pub fn widOptHash(str: []const u8) WidOptHash {
+    var r: WidOptHash = 5381;
+    for (str) |c| {
+        r *%= 33;
+        r +%= c;
+    }
+    return r;
+}
+
+pub fn strWid(str: []const u8) ?Widget.Id {
+    const hash = widOptHash(str);
+    for (comptime makeHashes(Widget.Id), 0..) |wid_hash, i| {
+        if (hash == wid_hash)
+            return @enumFromInt(i);
+    }
+    return null;
+}
+
+pub const WID__OPTION_HASHES: [Widget.NR_WIDGETS][]const WidOptHash = blk: {
+    var w: [Widget.NR_WIDGETS][]const WidOptHash = undefined;
+    for (OptionTypes, 0..) |T, i| w[i] = makeHashes(T);
     break :blk w;
 };
 
