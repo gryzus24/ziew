@@ -230,7 +230,11 @@ test "/proc/stat parser" {
     try t.expect(stat.stats[Stat.softirq] == 4426117);
 }
 
-const BRLBARS: [5][5][3]u8 = .{
+const BAR_WIDTH = 3;
+const BRLBARS_RANGE = 5;
+const BLKBARS_RANGE = 9;
+
+const BRLBARS: [BRLBARS_RANGE][BRLBARS_RANGE][BAR_WIDTH]u8 = .{
     .{ "⠀".*, "⢀".*, "⢠".*, "⢰".*, "⢸".* },
     .{ "⡀".*, "⣀".*, "⣠".*, "⣰".*, "⣸".* },
     .{ "⡄".*, "⣄".*, "⣤".*, "⣴".*, "⣼".* },
@@ -238,8 +242,8 @@ const BRLBARS: [5][5][3]u8 = .{
     .{ "⡇".*, "⣇".*, "⣧".*, "⣷".*, "⣿".* },
 };
 
-const BLKBARS: [9][3]u8 = .{
-    "⠀".*, "▁".*, "▂".*, "▃".*, "▄".*, "▅".*, "▆".*, "▇".*, "█".*,
+const BLKBARS: [BLKBARS_RANGE][BAR_WIDTH]u8 = .{
+    "   ".*, "▁".*, "▂".*, "▃".*, "▄".*, "▅".*, "▆".*, "▇".*, "█".*,
 };
 
 inline fn barIntensity(curr: Cpu, prev: Cpu, comptime range: comptime_int) u32 {
@@ -372,8 +376,8 @@ pub inline fn widget(
             continue;
         }
 
-        const needed = curr.nr_cpux_entries * @max(BRLBARS[0][0].len, BLKBARS[0].len);
-        if (writer.unusedCapacityLen() < needed) {
+        comptime std.debug.assert(BAR_WIDTH == 3);
+        if (writer.unusedCapacityLen() < curr.nr_cpux_entries * BAR_WIDTH) {
             @branchHint(.unlikely);
             break;
         }
@@ -388,9 +392,9 @@ pub inline fn widget(
 
                 for (1..1 + curr.nr_cpux_entries) |i| {
                     if (i & 1 == 1) {
-                        left = barIntensity(curr.entries[i], prev.entries[i], BRLBARS.len);
+                        left = barIntensity(curr.entries[i], prev.entries[i], BRLBARS_RANGE);
                     } else {
-                        right = barIntensity(curr.entries[i], prev.entries[i], BRLBARS[0].len);
+                        right = barIntensity(curr.entries[i], prev.entries[i], BRLBARS_RANGE);
                         buffer[pos..][0..3].* = BRLBARS[left][right];
                         pos += 3;
                     }
@@ -402,9 +406,11 @@ pub inline fn widget(
             },
             .blkbars => {
                 for (1..1 + curr.nr_cpux_entries) |i| {
-                    buffer[pos..][0..3].* =
-                        BLKBARS[barIntensity(curr.entries[i], prev.entries[i], BLKBARS.len)];
-                    pos += 3;
+                    const rank = barIntensity(curr.entries[i], prev.entries[i], BLKBARS_RANGE);
+                    buffer[pos..][0..3].* = BLKBARS[rank];
+                    if (rank != 0)
+                        pos += 2;
+                    pos += 1;
                 }
             },
         }
