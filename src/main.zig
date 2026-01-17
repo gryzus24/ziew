@@ -164,7 +164,10 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
     return widgets;
 }
 
-fn getConfigPath(reg: *umem.Region) !struct { [*:0]const u8, umem.Region.SavePoint } {
+const ConfigPathError = error{NoPath} || umem.Region.Error;
+const ConfigPathResult = struct { [*:0]const u8, umem.Region.SavePoint };
+
+fn getConfigPath(reg: *umem.Region) ConfigPathError!ConfigPathResult {
     const sp = reg.save(u8, .front);
     var n: usize = 0;
     if (posix.getenvZ("XDG_CONFIG_HOME")) |ok| {
