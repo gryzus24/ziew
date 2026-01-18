@@ -396,12 +396,11 @@ pub fn main() void {
             break;
         }
         var req = sleep_ts;
-        while (true) switch (@as(isize, @bitCast(linux.nanosleep(&req, &req)))) {
-            -ext.c.EFAULT => unreachable,
-            -ext.c.EINTR => if (g_refresh_all) continue :refresh,
-            -ext.c.EINVAL => unreachable,
-            else => break,
-        };
+        while (true) {
+            if (linux.nanosleep(&req, &req) == 0) break;
+            // Only EINTR is reachable here.
+            if (g_refresh_all) continue :refresh;
+        }
     }
     unreachable;
 }
