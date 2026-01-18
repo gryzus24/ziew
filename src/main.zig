@@ -283,6 +283,85 @@ fn setupWidgets(reg: *umem.Region, widgets: []typ.Widget, states: *WidgetStates)
     };
 }
 
+fn update(
+    reg: *umem.Region,
+    widgets: []typ.Widget,
+    states: *WidgetStates,
+    bufs: [][typ.WIDGET_BUF_MAX]u8,
+    vecs: [][]const u8,
+    sleep_dsec: typ.DeciSec,
+) !void {
+    const base = reg.head.ptr;
+
+    const Update = packed struct(u32) {
+        net: bool = false,
+        mem: bool = false,
+        cpu: bool = false,
+        _: u29 = 0,
+    };
+    var updated: Update = .{ .net = states.net.netdev == null };
+
+    for (widgets, 0..) |*w, i| {
+        w.interval.now -= sleep_dsec;
+        if (w.interval.now <= 0) {
+            var fw: uio.Writer = .fixed(&bufs[i]);
+            const parts = w.format.parts.get(base);
+            switch (w.id) {
+                .TIME => w_time.widget(&fw, w, parts, base),
+                .MEM => {
+                    if (!updated.mem) {
+                        try w_mem.update(&states.mem);
+                        updated.mem = true;
+                    }
+                    w_mem.widget(&fw, w, parts, base, &states.mem);
+                },
+                .CPU => {
+                    if (!updated.cpu) {
+                        try w_cpu.update(&states.cpu);
+                        updated.cpu = true;
+                    }
+                    w_cpu.widget(&fw, w, parts, base, &states.cpu);
+                },
+                .DISK => w_dysk.widget(&fw, w, parts, base, &states.disk),
+                .NET => {
+                    if (!updated.net) {
+                        try w_net.update(reg, &states.net.netdev.?);
+                        updated.net = true;
+                    }
+                    w_net.widget(&fw, w, parts, base, &states.net);
+                },
+                .BAT => w_bat.widget(&fw, w, parts, base),
+                .READ => w_read.widget(&fw, w, parts, base),
+            }
+            w.format.last_str.writeBytes(&fw, base);
+            vecs[i] = typ.writeWidgetEnd(&fw);
+            w.interval.now = w.interval.set;
+        }
+    }
+}
+
+fn copy(dst: []u8, vecs: []const []const u8) []const u8 {
+    dst[0..2].* = ",[".*;
+    var pos: usize = 2;
+    for (vecs) |vec| {
+        dst[pos..][0..64].* = vec.ptr[0..64].*;
+        if (vec.len > 64) {
+            @branchHint(.unlikely);
+            const e = (vec.len + 15) & ~@as(usize, 0x0f);
+            var i: usize = 64;
+            while (true) {
+                dst[pos + i ..][0..16].* = vec.ptr[i..][0..16].*;
+                i += 16;
+                if (i == e)
+                    break;
+            }
+        }
+        pos += vec.len;
+    }
+    dst[pos - 1] = ']'; // get rid of the trailing comma
+    return dst[0..pos];
+}
+
 pub fn main() void {
     errdefer |e| log.fatal(&.{ "main: ", @errorName(e) });
 
@@ -302,8 +381,8 @@ pub fn main() void {
     var states: WidgetStates = .init();
     try setupWidgets(&reg, widgets, &states);
 
-    var vecs = try reg.allocMany([]const u8, widgets.len, .front);
-    var bufs = try reg.allocMany([typ.WIDGET_BUF_MAX]u8, widgets.len, .front);
+    const vecs = try reg.allocMany([]const u8, widgets.len, .front);
+    const bufs = try reg.allocMany([typ.WIDGET_BUF_MAX]u8, widgets.len, .front);
 
     const base = reg.head.ptr;
 
@@ -314,76 +393,11 @@ pub fn main() void {
             for (widgets) |*w| w.interval.now = 0;
             g_refresh_all = false;
         }
-
-        const Update = packed struct(u32) {
-            net: bool = false,
-            mem: bool = false,
-            cpu: bool = false,
-            _: u29 = 0,
-        };
-        var updated: Update = .{ .net = states.net.netdev == null };
-
-        for (widgets, 0..) |*w, i| {
-            w.interval.now -= sleep_dsec;
-            if (w.interval.now <= 0) {
-                var fw: uio.Writer = .fixed(&bufs[i]);
-                const parts = w.format.parts.get(base);
-                switch (w.id) {
-                    .TIME => w_time.widget(&fw, w, parts, base),
-                    .MEM => {
-                        if (!updated.mem) {
-                            try w_mem.update(&states.mem);
-                            updated.mem = true;
-                        }
-                        w_mem.widget(&fw, w, parts, base, &states.mem);
-                    },
-                    .CPU => {
-                        if (!updated.cpu) {
-                            try w_cpu.update(&states.cpu);
-                            updated.cpu = true;
-                        }
-                        w_cpu.widget(&fw, w, parts, base, &states.cpu);
-                    },
-                    .DISK => w_dysk.widget(&fw, w, parts, base, &states.disk),
-                    .NET => {
-                        if (!updated.net) {
-                            try w_net.update(&reg, &states.net.netdev.?);
-                            updated.net = true;
-                        }
-                        w_net.widget(&fw, w, parts, base, &states.net);
-                    },
-                    .BAT => w_bat.widget(&fw, w, parts, base),
-                    .READ => w_read.widget(&fw, w, parts, base),
-                }
-                w.format.last_str.writeBytes(&fw, base);
-                vecs[i] = typ.writeWidgetEnd(&fw);
-                w.interval.now = w.interval.set;
-            }
-        }
-
-        const dst = base[reg.front..reg.back];
-        dst[0..2].* = ",[".*;
-
-        var pos: usize = 2;
-        for (vecs) |vec| {
-            dst[pos..][0..64].* = vec.ptr[0..64].*;
-            if (vec.len > 64) {
-                @branchHint(.unlikely);
-                const e = (vec.len + 15) & ~@as(usize, 0x0f);
-                var i: usize = 64;
-                while (true) {
-                    dst[pos + i ..][0..16].* = vec.ptr[i..][0..16].*;
-                    i += 16;
-                    if (i == e)
-                        break;
-                }
-            }
-            pos += vec.len;
-        }
-        dst[pos - 1] = ']'; // get rid of the trailing comma
+        try update(&reg, widgets, &states, bufs, vecs, sleep_dsec);
+        const p = copy(base[reg.front..reg.back], vecs);
 
         while (true) {
-            const ret = uio.sys_write(1, dst);
+            const ret = uio.sys_write(1, p);
             if (ret >= 0) break;
             if (ret == -ext.c.EINTR) {
                 if (g_refresh_all)
