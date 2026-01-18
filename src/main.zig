@@ -296,13 +296,13 @@ pub fn main() void {
     const sleep_dsec = sleepInterval(widgets);
     const sleep_ts: linux.timespec = .{
         .sec = @divTrunc(sleep_dsec, 10),
-        .nsec = (@rem(sleep_dsec, 10)) * (time.ns_per_s / 10),
+        .nsec = @rem(sleep_dsec, 10) * (time.ns_per_s / 10),
     };
 
     var states: WidgetStates = .init();
     try setupWidgets(&reg, widgets, &states);
 
-    var views = try reg.allocMany([]const u8, widgets.len, .front);
+    var vecs = try reg.allocMany([]const u8, widgets.len, .front);
     var bufs = try reg.allocMany([typ.WIDGET_BUF_MAX]u8, widgets.len, .front);
 
     const base = reg.head.ptr;
@@ -356,7 +356,7 @@ pub fn main() void {
                     .READ => w_read.widget(&fw, w, parts, base),
                 }
                 w.format.last_str.writeBytes(&fw, base);
-                views[i] = typ.writeWidgetEnd(&fw);
+                vecs[i] = typ.writeWidgetEnd(&fw);
                 w.interval.now = w.interval.set;
             }
         }
@@ -365,20 +365,20 @@ pub fn main() void {
         dst[0..2].* = ",[".*;
 
         var pos: usize = 2;
-        for (views) |view| {
-            dst[pos..][0..64].* = view.ptr[0..64].*;
-            if (view.len > 64) {
+        for (vecs) |vec| {
+            dst[pos..][0..64].* = vec.ptr[0..64].*;
+            if (vec.len > 64) {
                 @branchHint(.unlikely);
-                const e = (view.len + 15) & ~@as(usize, 0x0f);
+                const e = (vec.len + 15) & ~@as(usize, 0x0f);
                 var i: usize = 64;
                 while (true) {
-                    dst[pos + i ..][0..16].* = view.ptr[i..][0..16].*;
+                    dst[pos + i ..][0..16].* = vec.ptr[i..][0..16].*;
                     i += 16;
                     if (i == e)
                         break;
                 }
             }
-            pos += view.len;
+            pos += vec.len;
         }
         dst[pos - 1] = ']'; // get rid of the trailing comma
 
