@@ -383,17 +383,15 @@ pub fn main() void {
         dst[pos - 1] = ']'; // get rid of the trailing comma
 
         while (true) {
-            const ret = uio.sys_write(1, dst[0..pos]);
-            if (ret < 0) {
-                @branchHint(.cold);
-                if (ret == -ext.c.EINTR) {
-                    if (g_refresh_all) continue :refresh;
-                    continue;
-                }
-                if (WRITE_FAIL_CHECK)
-                    log.fatalSys(&.{"main: write: "}, ret);
+            const ret = uio.sys_write(1, dst);
+            if (ret >= 0) break;
+            if (ret == -ext.c.EINTR) {
+                if (g_refresh_all)
+                    continue :refresh;
+                continue;
             }
-            break;
+            if (WRITE_FAIL_CHECK)
+                log.fatalSys(&.{"main: write: "}, ret);
         }
         var req = sleep_ts;
         while (true) {
