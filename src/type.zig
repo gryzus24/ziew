@@ -117,8 +117,11 @@ pub const Widget = struct {
             .MEM, .CPU, .DISK, .NET, .BAT,
         });
 
-        pub fn checkCastTo(self: @This(), comptime T: type) ?T {
-            return enums.fromInt(T, @intFromEnum(self));
+        pub inline fn checkCastTo(self: @This(), comptime E: type) ?E {
+            const m = MaskFromEnum(E);
+            comptime std.debug.assert(m <= ~@as(u32, 0));
+            const bit = @as(u32, 1) << @intCast(@intFromEnum(self));
+            return if (bit & m != 0) @enumFromInt(@intFromEnum(self)) else null;
         }
     };
 
