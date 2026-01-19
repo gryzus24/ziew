@@ -608,7 +608,7 @@ pub fn parse(
                 current.data = switch (current.id) {
                     .TIME => .{ .TIME = try .init(reg, arg) },
                     .MEM  => .{ .MEM  = undefined },
-                    .CPU  => .{ .CPU  = try .init(reg, format, base) },
+                    .CPU  => .{ .CPU  = undefined },
                     .DISK => .{ .DISK = try .init(reg, arg, format, base) },
                     .NET  => .{ .NET  = try .init(reg, arg, format, base) },
                     .BAT  => .{ .BAT  = try .init(reg, arg) },

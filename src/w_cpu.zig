@@ -341,7 +341,6 @@ pub inline fn widget(
     base: [*]const u8,
     state: *const State,
 ) void {
-    const wd = w.data.CPU;
     const curr, const prev = typ.constCurrPrev(Stat, &state.stats, state.curr);
 
     const fg, const bg = w.check(state, base);
@@ -350,11 +349,11 @@ pub inline fn widget(
         part.str.writeBytes(writer, base);
 
         const bit = typ.optBit(part.opt);
-        if (bit & (wd.opt_mask.usage | wd.opt_mask.stats) != 0) {
+        if (bit & (typ.Options.Cpu.USAGE_MASK | typ.Options.Cpu.STATS_MASK) != 0) {
             var negative = false;
             var nu: unt.NumUnit = undefined;
 
-            if (bit & wd.opt_mask.usage != 0) {
+            if (bit & typ.Options.Cpu.USAGE_MASK != 0) {
                 nu = .{
                     .n = if (part.flags.pct)
                         state.usage_pct[part.opt]

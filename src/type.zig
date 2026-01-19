@@ -125,7 +125,7 @@ pub const Widget = struct {
     pub const Data = union {
         TIME: *Time,
         MEM: usize, // unused
-        CPU: *Cpu,
+        CPU: usize, // unused
         DISK: *Disk,
         NET: *Net,
         BAT: *Bat,
@@ -137,7 +137,7 @@ pub const Widget = struct {
             const assert = std.debug.assert;
             assert(@sizeOf(Time) <= SIZE_MAX);
             // Mem
-            assert(@sizeOf(Cpu) <= SIZE_MAX);
+            // Cpu
             assert(@sizeOf(Disk) <= SIZE_MAX);
             assert(@sizeOf(Net) <= SIZE_MAX);
             assert(@sizeOf(Bat) <= SIZE_MAX);
@@ -165,34 +165,7 @@ pub const Widget = struct {
         };
 
         pub const Mem = void;
-
-        pub const Cpu = struct {
-            opt_mask: Masks,
-
-            const Masks = struct {
-                usage: OptBit,
-                stats: OptBit,
-
-                const zero: Masks = .{ .usage = 0, .stats = 0 };
-            };
-
-            pub fn init(reg: *umem.Region, format: Format, base: [*]const u8) !*@This() {
-                const ret = try reg.alloc(@This(), .front);
-                var opt_mask: Masks = .zero;
-                for (format.parts.get(base)) |*part| {
-                    const opt: Options.Cpu = @enumFromInt(part.opt);
-                    const bit = optBit(part.opt);
-
-                    if (opt.checkCastTo(Options.Cpu.Usage)) |_| {
-                        opt_mask.usage |= bit;
-                    } else if (opt.checkCastTo(Options.Cpu.Stats)) |_| {
-                        opt_mask.stats |= bit;
-                    }
-                }
-                ret.opt_mask = opt_mask;
-                return ret;
-            }
-        };
+        pub const Cpu = void;
 
         pub const Disk = struct {
             opt_mask: Masks,
@@ -489,9 +462,8 @@ pub const Options = struct {
             .iowait,
         });
 
-        pub fn checkCastTo(self: @This(), comptime T: type) ?T {
-            return enums.fromInt(T, @intFromEnum(self));
-        }
+        pub const USAGE_MASK = MaskFromEnum(Usage);
+        pub const STATS_MASK = MaskFromEnum(Stats);
     };
 
     pub const Disk = enum(u8) {
@@ -927,4 +899,17 @@ pub fn PackedFlagsFromEnum(comptime E: type, comptime BackingInt: type) type {
             .layout = .@"packed",
         },
     });
+}
+
+pub fn MaskFromEnum(comptime E: type) comptime_int {
+    const E_enum = @typeInfo(E).@"enum";
+
+    if (E_enum.fields.len == 0)
+        @compileError("Provided an empty enum");
+
+    var mask = 0;
+    for (E_enum.fields) |field| {
+        mask |= 1 << field.value;
+    }
+    return mask;
 }
