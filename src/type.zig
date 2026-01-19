@@ -349,6 +349,58 @@ pub const Widget = struct {
             return .empty;
         }
     };
+
+    // Iterates over each option referenced by a Widget in order:
+    //   fg, bg, format.parts.
+    pub const OptIterator = struct {
+        widget: *const Widget,
+        base: [*]const u8,
+        i: isize,
+
+        const Item = struct {
+            opt: u8,
+            pct: bool,
+            width: u3,
+        };
+
+        pub fn init(widget: *const Widget, base: [*]const u8) @This() {
+            return .{
+                .widget = widget,
+                .base = base,
+                .i = -2,
+            };
+        }
+
+        pub fn next(self: *@This()) ?Item {
+            while (self.i < 0) {
+                const c = switch (self.i) {
+                    -2 => self.widget.fg,
+                    -1 => self.widget.bg,
+                    else => unreachable,
+                };
+                self.i += 1;
+                switch (c) {
+                    .active => |a| return .{
+                        .opt = a.opt,
+                        .pct = a.pct,
+                        .width = 0,
+                    },
+                    .static => {},
+                }
+            }
+            const parts = self.widget.format.parts.get(self.base);
+            if (self.i < parts.len) {
+                const part = &parts[@intCast(self.i)];
+                self.i += 1;
+                return .{
+                    .opt = part.opt,
+                    .pct = part.flags.pct,
+                    .width = part.wopts.width,
+                };
+            }
+            return null;
+        }
+    };
 };
 
 pub const Options = struct {
