@@ -32,6 +32,8 @@ inline fn HUMAN_UNIT(f: F5608, comptime steps: [4]NumUnit.Unit) NumUnit {
 
 // == public ==================================================================
 
+pub const WIDTH_VALUE_MAX: comptime_int = ~@as(u3, 0);
+
 pub const PRECISION_VALUE_AUTO: comptime_int = ~@as(u3, 0);
 pub const PRECISION_DIGITS_MAX: comptime_int = 3;
 comptime {
@@ -142,7 +144,7 @@ pub const NumUnit = struct {
             if (w == 0) {
                 self.width = 1;
             } else {
-                self.width = @min(w, ~@as(u3, 0));
+                self.width = @min(w, WIDTH_VALUE_MAX);
             }
         }
 
