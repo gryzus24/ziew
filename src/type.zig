@@ -193,22 +193,13 @@ pub const Widget = struct {
 
         pub const Net = struct {
             ifr: linux.ifreq,
-            opt_mask: Masks,
+            format_opt_mask: Masks,
 
             const Masks = struct {
                 enabled: Flags,
-                string: OptBit,
                 netdev: OptBit,
-                netdev_size: OptBit,
 
                 const Flags = PackedFlagsFromEnum(Options.Net, OptBit);
-
-                const zero: Masks = .{
-                    .enabled = @bitCast(@as(OptBit, 0)),
-                    .string = 0,
-                    .netdev = 0,
-                    .netdev_size = 0,
-                };
             };
 
             pub fn init(
@@ -224,21 +215,19 @@ pub const Widget = struct {
                 @memset(ret.ifr.ifrn.name[0..], 0);
                 @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
 
-                var opt_mask: Masks = .zero;
+                var netdev: OptBit = 0;
+                var enabled: OptBit = 0;
                 for (format.parts.get(base)) |*part| {
-                    const opt: Options.Net = @enumFromInt(part.opt);
                     const bit = optBit(part.opt);
 
-                    if (opt.checkCastTo(Options.Net.String)) |_| {
-                        opt_mask.string |= bit;
-                    } else if (opt.checkCastTo(Options.Net.NetDev)) |_| {
-                        opt_mask.netdev |= bit;
-                        if (opt.checkCastTo(Options.Net.NetDevSize)) |_|
-                            opt_mask.netdev_size |= bit;
-                    }
+                    enabled |= bit;
+                    if (bit & Options.Net.NETDEV_MASK != 0)
+                        netdev |= bit;
                 }
-                ret.opt_mask = opt_mask;
-                ret.opt_mask.enabled = @bitCast(opt_mask.string | opt_mask.netdev);
+                ret.format_opt_mask = .{
+                    .enabled = @bitCast(enabled),
+                    .netdev = netdev,
+                };
                 return ret;
             }
         };
@@ -391,10 +380,6 @@ pub const Options = struct {
         pub const PercentPrefixAllowed = Mem;
         pub const ColorSupported = enum(u8) {};
         pub const ColorSupportedWithPercentPrefix = PercentPrefixAllowed;
-
-        pub fn checkCastTo(self: @This(), comptime T: type) ?T {
-            return enums.fromInt(T, @intFromEnum(self));
-        }
     };
 
     pub const Cpu = enum(u8) {
@@ -515,9 +500,9 @@ pub const Options = struct {
         });
         pub const ColorSupportedWithPercentPrefix = enum(u8) {};
 
-        pub fn checkCastTo(self: @This(), comptime T: type) ?T {
-            return enums.fromInt(T, @intFromEnum(self));
-        }
+        pub const STRING_MASK = MaskFromEnum(String);
+        pub const NETDEV_MASK = MaskFromEnum(NetDev);
+        pub const NETDEV_SIZE_MASK = MaskFromEnum(NetDevSize);
     };
 
     pub const Bat = enum(u8) {

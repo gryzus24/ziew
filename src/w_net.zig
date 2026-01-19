@@ -296,7 +296,7 @@ pub const State = struct {
         };
         const wants_netdev = blk: {
             for (widgets) |*w|
-                if (w.id == .NET and w.data.NET.opt_mask.netdev != 0)
+                if (w.id == .NET and w.data.NET.format_opt_mask.netdev != 0)
                     break :blk true;
             break :blk false;
         };
@@ -347,7 +347,7 @@ pub inline fn widget(
     var iff_len: usize = 0;
     var up = false;
 
-    const enabled = wd.opt_mask.enabled;
+    const enabled = wd.format_opt_mask.enabled;
     if (enabled.inet)
         inet_len = getInet(state.sock, &wd.ifr, &inetbuf);
     if (enabled.flags or enabled.state or w.fg == .active or w.bg == .active)
@@ -356,7 +356,7 @@ pub inline fn widget(
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
     var ifs_match = false;
-    if (state.getNetDev(wd.opt_mask.netdev)) |ok| {
+    if (state.getNetDev(wd.format_opt_mask.netdev)) |ok| {
         const new, const old = typ.constCurrPrev(Interfaces, &ok.ifs, ok.curr);
 
         const Hash = @Vector(linux.IFNAMESIZE, u8);
@@ -391,7 +391,7 @@ pub inline fn widget(
         part.str.writeBytes(writer, base);
 
         const bit = typ.optBit(part.opt);
-        if (bit & wd.opt_mask.string != 0) {
+        if (bit & typ.Options.Net.STRING_MASK != 0) {
             const SZ = 16;
             const expected = @max(wd.ifr.ifrn.name.len, INET_BUF_SIZE);
             comptime std.debug.assert(expected == SZ);
@@ -437,7 +437,7 @@ pub inline fn widget(
         }
 
         var nu: unt.NumUnit = undefined;
-        if (bit & wd.opt_mask.netdev_size != 0) {
+        if (bit & typ.Options.Net.NETDEV_SIZE_MASK != 0) {
             nu = unt.SizeKb(0);
         } else {
             nu = unt.UnitSI(0);
@@ -448,7 +448,7 @@ pub inline fn widget(
             const b = old_if.?.fields[part.opt - typ.Options.Net.NETDEV_OFF];
 
             const value = typ.calc(a, b, w.interval, part.flags);
-            if (bit & wd.opt_mask.netdev_size != 0) {
+            if (bit & typ.Options.Net.NETDEV_SIZE_MASK != 0) {
                 nu = unt.SizeBytes(value);
             } else {
                 nu = unt.UnitSI(value);
