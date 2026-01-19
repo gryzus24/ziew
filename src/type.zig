@@ -168,26 +168,13 @@ pub const Widget = struct {
         pub const Cpu = void;
 
         pub const Disk = struct {
-            opt_mask: Masks,
             mount_id: u8,
             len: u8,
             mountpoint: [MOUNTPOINT_SIZE]u8,
 
-            const Masks = struct {
-                ino: OptBit,
+            const MOUNTPOINT_SIZE = SIZE_MAX - 1 - 1;
 
-                const zero: Masks = .{ .ino = 0 };
-            };
-
-            const MOUNTPOINT_SIZE =
-                SIZE_MAX - @sizeOf(Masks) - 1 - 1;
-
-            pub fn init(
-                reg: *umem.Region,
-                arg: []const u8,
-                format: Format,
-                base: [*]const u8,
-            ) !*@This() {
+            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
                 if (arg.len >= MOUNTPOINT_SIZE)
                     log.fatal(&.{"DISK: mountpoint path too long"});
 
@@ -196,15 +183,6 @@ pub const Widget = struct {
                 ret.len = @intCast(arg.len);
                 @memcpy(ret.mountpoint[0..arg.len], arg);
                 ret.mountpoint[arg.len] = 0;
-                var opt_mask: Masks = .zero;
-                for (format.parts.get(base)) |*part| {
-                    const opt: Options.Disk = @enumFromInt(part.opt);
-                    const bit = optBit(part.opt);
-
-                    if (opt.checkCastTo(Options.Disk.Ino)) |_|
-                        opt_mask.ino |= bit;
-                }
-                ret.opt_mask = opt_mask;
                 return ret;
             }
 
@@ -488,9 +466,7 @@ pub const Options = struct {
         pub const ColorSupported = enum(u8) {};
         pub const ColorSupportedWithPercentPrefix = PercentPrefixAllowed;
 
-        pub fn checkCastTo(self: @This(), comptime T: type) ?T {
-            return enums.fromInt(T, @intFromEnum(self));
-        }
+        pub const INO_MASK = MaskFromEnum(Ino);
     };
 
     pub const Net = enum(u8) {

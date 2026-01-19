@@ -609,7 +609,7 @@ pub fn parse(
                     .TIME => .{ .TIME = try .init(reg, arg) },
                     .MEM  => .{ .MEM  = undefined },
                     .CPU  => .{ .CPU  = undefined },
-                    .DISK => .{ .DISK = try .init(reg, arg, format, base) },
+                    .DISK => .{ .DISK = try .init(reg, arg) },
                     .NET  => .{ .NET  = try .init(reg, arg, format, base) },
                     .BAT  => .{ .BAT  = try .init(reg, arg) },
                     .READ => .{ .READ = try .init(reg, arg) },

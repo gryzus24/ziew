@@ -34,17 +34,9 @@ const Mount = struct {
 
 const MountPair = struct {
     pair: [2]Mount,
-
     curr: u8,
-    opt_mask_ino: typ.OptBit,
 
-    fn init(opt_mask_ino: typ.OptBit) @This() {
-        return .{
-            .pair = .{ .zero, .zero },
-            .curr = 0,
-            .opt_mask_ino = opt_mask_ino,
-        };
-    }
+    const zero: MountPair = .{ .pair = .{ .zero, .zero }, .curr = 0 };
 
     pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
         const mount = &self.pair[self.curr];
@@ -52,7 +44,7 @@ const MountPair = struct {
             unt.Percent(
                 mount.fields[ac.opt],
                 mount.fields[
-                    if (typ.optBit(ac.opt) & self.opt_mask_ino != 0)
+                    if (typ.optBit(ac.opt) & typ.Options.Disk.INO_MASK != 0)
                         Mount.ino_total
                     else
                         Mount.kb_total
@@ -76,7 +68,7 @@ pub const State = struct {
                 w.data.DISK.mount_id = id;
                 id += 1;
                 const ret = try reg.pushVec(&mounts, .front);
-                ret.* = .init(w.data.DISK.opt_mask.ino);
+                ret.* = .zero;
             }
         }
         return .{ .mounts = mounts };
@@ -151,7 +143,7 @@ pub inline fn widget(
             nu = unt.Percent(
                 curr.fields[part.opt],
                 curr.fields[
-                    if (bit & wd.opt_mask.ino != 0)
+                    if (bit & typ.Options.Disk.INO_MASK != 0)
                         Mount.ino_total
                     else
                         Mount.kb_total
@@ -164,7 +156,7 @@ pub inline fn widget(
                 w.interval,
                 part.flags,
             );
-            nu = if (bit & wd.opt_mask.ino != 0)
+            nu = if (bit & typ.Options.Disk.INO_MASK != 0)
                 unt.UnitSI(value)
             else
                 unt.SizeKb(value);
