@@ -13,6 +13,7 @@ const ustr = @import("util/str.zig");
 const linux = std.os.linux;
 
 const DELTA_ZERO_CHECK = false;
+const BLK_ZERO_SPACES = true;
 
 const Cpu = struct {
     user: u64,
@@ -243,7 +244,15 @@ const BRLBARS: [BRLBARS_RANGE][BRLBARS_RANGE][BAR_WIDTH]u8 = .{
 };
 
 const BLKBARS: [BLKBARS_RANGE][BAR_WIDTH]u8 = .{
-    "   ".*, "▁".*, "▂".*, "▃".*, "▄".*, "▅".*, "▆".*, "▇".*, "█".*,
+    if (BLK_ZERO_SPACES) "   ".* else "⠀".*,
+    "▁".*,
+    "▂".*,
+    "▃".*,
+    "▄".*,
+    "▅".*,
+    "▆".*,
+    "▇".*,
+    "█".*,
 };
 
 inline fn barIntensity(curr: Cpu, prev: Cpu, comptime range: comptime_int) u32 {
@@ -407,9 +416,13 @@ pub inline fn widget(
                 for (1..1 + curr.nr_cpux_entries) |i| {
                     const rank = barIntensity(curr.entries[i], prev.entries[i], BLKBARS_RANGE);
                     buffer[pos..][0..3].* = BLKBARS[rank];
-                    if (rank != 0)
-                        pos += 2;
-                    pos += 1;
+                    if (BLK_ZERO_SPACES) {
+                        if (rank != 0)
+                            pos += 2;
+                        pos += 1;
+                    } else {
+                        pos += 3;
+                    }
                 }
             },
         }
