@@ -24,20 +24,19 @@ pub fn nrPossibleCpus() u32 {
 }
 
 pub inline fn nrDigits(n: u64) u8 {
-    var r = 1 +
-        @as(u8, @intFromBool(n >= 10)) +
-        @as(u8, @intFromBool(n >= 100)) +
-        @as(u8, @intFromBool(n >= 1000)) +
-        @as(u8, @intFromBool(n >= 10000));
-    if (r < 5) {
+    if (n < 10_000) {
         @branchHint(.likely);
-        return r;
+        return (1 +
+            @as(u8, @intFromBool(n >= 10)) +
+            @as(u8, @intFromBool(n >= 100)) +
+            @as(u8, @intFromBool(n >= 1000)));
     }
-    var t = n / 10000;
-    while (t >= 10) {
-        t /= 10;
-        r += 1;
-    }
+    return __nrDigits(n);
+}
+fn __nrDigits(n: u64) u8 {
+    var r: u8 = 1;
+    var t = n;
+    while (t >= 10) : (t /= 10) r += 1;
     return r;
 }
 
