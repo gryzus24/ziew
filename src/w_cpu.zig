@@ -13,7 +13,44 @@ const ustr = @import("util/str.zig");
 const linux = std.os.linux;
 
 const DELTA_ZERO_CHECK = false;
-const BLK_ZERO_SPACES = true;
+const BLK_RANK_ZERO_IS_SPACE = true;
+
+const BAR_WIDTH = 3;
+
+const BRL = struct {
+    const RANGE = 5;
+
+    const BARS: [RANGE][RANGE][BAR_WIDTH]u8 = .{
+        .{ "⠀".*, "⢀".*, "⢠".*, "⢰".*, "⢸".* },
+        .{ "⡀".*, "⣀".*, "⣠".*, "⣰".*, "⣸".* },
+        .{ "⡄".*, "⣄".*, "⣤".*, "⣴".*, "⣼".* },
+        .{ "⡆".*, "⣆".*, "⣦".*, "⣶".*, "⣾".* },
+        .{ "⡇".*, "⣇".*, "⣧".*, "⣷".*, "⣿".* },
+    };
+};
+
+const BLK = struct {
+    const RANGE = 9;
+
+    const BARS: [RANGE][BAR_WIDTH]u8 = .{
+        if (BLK_RANK_ZERO_IS_SPACE) "   ".* else "⠀".*,
+        "▁".*,
+        "▂".*,
+        "▃".*,
+        "▄".*,
+        "▅".*,
+        "▆".*,
+        "▇".*,
+        "█".*,
+    };
+
+    inline fn rankIncrement(rank: u4) usize {
+        return if (BLK_RANK_ZERO_IS_SPACE)
+            if (rank == 0) 1 else 3
+        else
+            3;
+    }
+};
 
 const Cpu = struct {
     user: u64,
@@ -104,6 +141,73 @@ const Stat = struct {
             .nr_cpux_entries = 0,
             .stats = @splat(0),
         };
+    }
+};
+
+const Graph = struct {
+    cur: u32,
+    mask: u32,
+    ring: void,
+
+    const SampleSize = u4;
+    const SAMPLES_PER_BYTE = 8 / @bitSizeOf(SampleSize);
+    comptime {
+        const a = @bitSizeOf(SampleSize);
+        std.debug.assert(a & (a - 1) == 0);
+    }
+
+    fn init(reg: *umem.Region, width: u3) !*Graph {
+        const ring_size = (@as(usize, 1) << width) / SAMPLES_PER_BYTE;
+        const self = try reg.alloc(Graph, .front);
+        const ring = try reg.allocMany(u8, ring_size, .front);
+        self.* = .{
+            .cur = 0,
+            .mask = (@as(u32, 1) << width) - 1,
+            .ring = undefined,
+        };
+        @memset(ring, 0);
+        return self;
+    }
+
+    inline fn ringPtr(self: *@This()) [*]u8 {
+        return @ptrFromInt(@intFromPtr(self) + @offsetOf(Graph, "ring"));
+    }
+
+    inline fn constRingPtr(self: *const @This()) [*]const u8 {
+        return @ptrFromInt(@intFromPtr(self) + @offsetOf(Graph, "ring"));
+    }
+
+    inline fn offMaskShiftU4(i: usize) struct { usize, u8, u3 } {
+        comptime std.debug.assert(@bitSizeOf(SampleSize) == 4);
+        const shift: u3 = @intCast((i & 1) * 4);
+        return .{ i >> 1, @shlExact(@as(u8, 0b1111), shift), shift };
+    }
+
+    inline fn blot(self: *@This(), __n: SampleSize) void {
+        const n: u8 = __n;
+        const cur = self.cur;
+        const ring = self.ringPtr();
+        if (SampleSize == u8) {
+            ring[cur] = n;
+        } else if (SampleSize == u4) {
+            const off, const mask, const shift = offMaskShiftU4(cur);
+            ring[off] = (ring[off] & ~mask) | @shlExact(n, shift);
+        } else {
+            @compileError("Unimplemented SampleSize");
+        }
+        self.cur = (cur + 1) & self.mask;
+    }
+
+    inline fn at(self: *const @This(), __i: usize) SampleSize {
+        const i = __i & self.mask;
+        if (SampleSize == u8) {
+            return self.constRingPtr()[i];
+        } else if (SampleSize == u4) {
+            const off, const mask, const shift = offMaskShiftU4(i);
+            return @intCast(@shrExact(self.constRingPtr()[off] & mask, shift));
+        } else {
+            @compileError("Unimplemented SampleSize");
+        }
     }
 };
 
@@ -231,31 +335,7 @@ test "/proc/stat parser" {
     try t.expect(stat.stats[Stat.softirq] == 4426117);
 }
 
-const BAR_WIDTH = 3;
-const BRLBARS_RANGE = 5;
-const BLKBARS_RANGE = 9;
-
-const BRLBARS: [BRLBARS_RANGE][BRLBARS_RANGE][BAR_WIDTH]u8 = .{
-    .{ "⠀".*, "⢀".*, "⢠".*, "⢰".*, "⢸".* },
-    .{ "⡀".*, "⣀".*, "⣠".*, "⣰".*, "⣸".* },
-    .{ "⡄".*, "⣄".*, "⣤".*, "⣴".*, "⣼".* },
-    .{ "⡆".*, "⣆".*, "⣦".*, "⣶".*, "⣾".* },
-    .{ "⡇".*, "⣇".*, "⣧".*, "⣷".*, "⣿".* },
-};
-
-const BLKBARS: [BLKBARS_RANGE][BAR_WIDTH]u8 = .{
-    if (BLK_ZERO_SPACES) "   ".* else "⠀".*,
-    "▁".*,
-    "▂".*,
-    "▃".*,
-    "▄".*,
-    "▅".*,
-    "▆".*,
-    "▇".*,
-    "█".*,
-};
-
-inline fn barIntensity(curr: Cpu, prev: Cpu, comptime range: comptime_int) u32 {
+inline fn cpuUsageRank(curr: Cpu, prev: Cpu, comptime range: comptime_int) u4 {
     if (range <= 1) @compileError("range <= 1");
     const step = comptime unt.F5608.init(100).div(range - 1).u;
     const off = step - 1;
@@ -271,26 +351,76 @@ inline fn barIntensity(curr: Cpu, prev: Cpu, comptime range: comptime_int) u32 {
 
 pub const State = struct {
     stats: [2]Stat,
-    usage_pct: [NR_USAGE_FIELDS]unt.F5608,
-    usage_abs: [NR_USAGE_FIELDS]unt.F5608,
+
+    usage_pct: [4]unt.F5608,
+    usage_abs: [4]unt.F5608,
+    graph_brl: *Graph,
+    graph_blk: *Graph,
+    enabled: Flags,
 
     curr: u32,
     fd: linux.fd_t,
 
-    const NR_USAGE_FIELDS = @typeInfo(typ.Options.Cpu.Usage).@"enum".fields.len;
+    const Flags = packed struct(u8) {
+        pct: bool,
+        abs: bool,
+        brl: bool,
+        blk: bool,
+        _: u4 = 0,
 
-    comptime {
-        std.debug.assert(NR_USAGE_FIELDS == 4);
-    }
+        pub const none: Flags = .{
+            .pct = false,
+            .abs = false,
+            .brl = false,
+            .blk = false,
+        };
+    };
 
-    pub fn init(reg: *umem.Region) !State {
+    pub fn init(reg: *umem.Region, widgets: []const typ.Widget) !State {
+        const base = reg.head.ptr;
+
+        var enabled: Flags = .none;
+        var brl_width: u8 = 0;
+        var blk_width: u8 = 0;
+        for (widgets) |*w| {
+            if (w.id == .CPU) {
+                var it: typ.Widget.OptIterator = .init(w, base);
+                while (it.next()) |e| {
+                    if (typ.optBit(e.opt) & typ.Options.Cpu.USAGE_MASK != 0) {
+                        if (e.pct) {
+                            enabled.pct = true;
+                        } else {
+                            enabled.abs = true;
+                        }
+                    } else if (e.opt == @intFromEnum(typ.Options.Cpu.brlgraph)) {
+                        enabled.brl = true;
+                        brl_width = e.width;
+                    } else if (e.opt == @intFromEnum(typ.Options.Cpu.blkgraph)) {
+                        enabled.blk = true;
+                        blk_width = e.width;
+                    }
+                }
+            }
+        }
         const nr_cpus = misc.nrPossibleCpus();
         const a: Stat = try .initZero(reg, nr_cpus);
         const b: Stat = try .initZero(reg, nr_cpus);
+
+        var graph_brl: *Graph = undefined;
+        if (enabled.brl)
+            graph_brl = try .init(reg, @intCast(brl_width));
+
+        var graph_blk: *Graph = undefined;
+        if (enabled.blk)
+            graph_blk = try .init(reg, @intCast(blk_width));
+
         return .{
             .stats = .{ a, b },
             .usage_pct = @splat(.init(0)),
             .usage_abs = @splat(.init(0)),
+            .graph_brl = graph_brl,
+            .graph_blk = graph_blk,
+            .enabled = enabled,
             .curr = 0,
             .fd = uio.open0("/proc/stat") catch |e|
                 log.fatal(&.{ "open: /proc/stat: ", @errorName(e) }),
@@ -327,20 +457,29 @@ pub inline fn update(state: *State) error{ReadError}!void {
 
     const curr_cpu = curr.entries[0];
     const prev_cpu = prev.entries[0];
-    const delta = curr_cpu.delta(prev_cpu);
-    const deltaN = curr_cpu.deltaN(prev_cpu, @intCast(curr.nr_cpux_entries));
 
-    // zig fmt: off
-    state.usage_pct[@intFromEnum(typ.Options.Cpu.all)]    = delta.all;
-    state.usage_pct[@intFromEnum(typ.Options.Cpu.user)]   = delta.user;
-    state.usage_pct[@intFromEnum(typ.Options.Cpu.sys)]    = delta.sys;
-    state.usage_pct[@intFromEnum(typ.Options.Cpu.iowait)] = delta.iowait;
-
-    state.usage_abs[@intFromEnum(typ.Options.Cpu.all)]    = deltaN.all;
-    state.usage_abs[@intFromEnum(typ.Options.Cpu.user)]   = deltaN.user;
-    state.usage_abs[@intFromEnum(typ.Options.Cpu.sys)]    = deltaN.sys;
-    state.usage_abs[@intFromEnum(typ.Options.Cpu.iowait)] = deltaN.iowait;
-    // zig fmt: on
+    if (state.enabled.pct) {
+        const delta = curr_cpu.delta(prev_cpu);
+        state.usage_pct[@intFromEnum(typ.Options.Cpu.all)] = delta.all;
+        state.usage_pct[@intFromEnum(typ.Options.Cpu.user)] = delta.user;
+        state.usage_pct[@intFromEnum(typ.Options.Cpu.sys)] = delta.sys;
+        state.usage_pct[@intFromEnum(typ.Options.Cpu.iowait)] = delta.iowait;
+    }
+    if (state.enabled.abs) {
+        const deltaN = curr_cpu.deltaN(prev_cpu, @intCast(curr.nr_cpux_entries));
+        state.usage_abs[@intFromEnum(typ.Options.Cpu.all)] = deltaN.all;
+        state.usage_abs[@intFromEnum(typ.Options.Cpu.user)] = deltaN.user;
+        state.usage_abs[@intFromEnum(typ.Options.Cpu.sys)] = deltaN.sys;
+        state.usage_abs[@intFromEnum(typ.Options.Cpu.iowait)] = deltaN.iowait;
+    }
+    if (state.enabled.brl) {
+        const sample = cpuUsageRank(curr_cpu, prev_cpu, BRL.RANGE);
+        state.graph_brl.blot(sample);
+    }
+    if (state.enabled.blk) {
+        const sample = cpuUsageRank(curr_cpu, prev_cpu, BLK.RANGE);
+        state.graph_blk.blot(sample);
+    }
 }
 
 pub inline fn widget(
@@ -385,43 +524,70 @@ pub inline fn widget(
         }
 
         comptime std.debug.assert(BAR_WIDTH == 3);
-        if (writer.unusedCapacityLen() < curr.nr_cpux_entries * BAR_WIDTH) {
-            @branchHint(.unlikely);
-            break;
-        }
 
         const buffer = writer.buffer;
         var pos = writer.end;
 
-        switch (@as(typ.Options.Cpu.Special, @enumFromInt(part.opt))) {
-            .brlbars => {
-                var left: u32 = 0;
-                var right: u32 = 0;
-
-                for (1..1 + curr.nr_cpux_entries) |i| {
-                    if (i & 1 == 1) {
-                        left = barIntensity(curr.entries[i], prev.entries[i], BRLBARS_RANGE);
-                    } else {
-                        right = barIntensity(curr.entries[i], prev.entries[i], BRLBARS_RANGE);
-                        buffer[pos..][0..3].* = BRLBARS[left][right];
+        const opt: typ.Options.Cpu.Special = @enumFromInt(part.opt);
+        switch (opt) {
+            .brlbars, .blkbars => {
+                var need = curr.nr_cpux_entries * BAR_WIDTH;
+                if (opt == .brlbars)
+                    need /= 2;
+                if (need > writer.unusedCapacityLen()) {
+                    @branchHint(.unlikely);
+                    break;
+                }
+                if (opt == .brlbars) {
+                    var l: u32, var r: u32 = .{ 0, 0 };
+                    for (1..1 + curr.nr_cpux_entries) |i| {
+                        if (i & 1 == 1) {
+                            l = cpuUsageRank(curr.entries[i], prev.entries[i], BRL.RANGE);
+                        } else {
+                            r = cpuUsageRank(curr.entries[i], prev.entries[i], BRL.RANGE);
+                            buffer[pos..][0..3].* = BRL.BARS[l][r];
+                            pos += 3;
+                        }
+                    }
+                    if (curr.nr_cpux_entries & 1 == 1) {
+                        buffer[pos..][0..3].* = BRL.BARS[l][0];
                         pos += 3;
                     }
-                }
-                if (curr.nr_cpux_entries & 1 == 1) {
-                    buffer[pos..][0..3].* = BRLBARS[left][0];
-                    pos += 3;
+                } else {
+                    for (1..1 + curr.nr_cpux_entries) |i| {
+                        const rank = cpuUsageRank(curr.entries[i], prev.entries[i], BLK.RANGE);
+                        buffer[pos..][0..3].* = BLK.BARS[rank];
+                        pos += BLK.rankIncrement(rank);
+                    }
                 }
             },
-            .blkbars => {
-                for (1..1 + curr.nr_cpux_entries) |i| {
-                    const rank = barIntensity(curr.entries[i], prev.entries[i], BLKBARS_RANGE);
-                    buffer[pos..][0..3].* = BLKBARS[rank];
-                    if (BLK_ZERO_SPACES) {
-                        if (rank != 0)
-                            pos += 2;
-                        pos += 1;
-                    } else {
+            .brlgraph, .blkgraph => {
+                const g = if (opt == .brlgraph)
+                    state.graph_brl
+                else
+                    state.graph_blk;
+
+                var nr_sample_slots = writer.unusedCapacityLen() / 3;
+                if (opt == .brlgraph)
+                    nr_sample_slots *= 2;
+
+                const nr_samples = g.mask + 1;
+                const n = @min(nr_samples, nr_sample_slots);
+
+                // Skip `nr_samples - n` oldest samples if they can't fit.
+                var i = (g.cur + nr_samples - n) & g.mask;
+                if (opt == .brlgraph) {
+                    for (0..n / 2) |_| {
+                        buffer[pos..][0..3].* = BRL.BARS[g.at(i)][g.at(i + 1)];
                         pos += 3;
+                        i += 2;
+                    }
+                } else {
+                    for (0..n) |_| {
+                        const rank = g.at(i);
+                        buffer[pos..][0..3].* = BLK.BARS[rank];
+                        pos += BLK.rankIncrement(rank);
+                        i += 1;
                     }
                 }
             },

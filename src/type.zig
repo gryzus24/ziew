@@ -452,6 +452,8 @@ pub const Options = struct {
 
         brlbars,
         blkbars,
+        brlgraph,
+        blkgraph,
 
         pub const STATS_OFF = @intFromEnum(Cpu.intr);
 
@@ -464,7 +466,7 @@ pub const Options = struct {
         });
 
         pub const Special = MakeEnumSubset(@This(), &.{
-            .brlbars, .blkbars,
+            .brlbars, .blkbars, .brlgraph, .blkgraph,
         });
 
         pub const PercentPrefixAllowed = MakeEnumSubset(@This(), &.{
@@ -601,6 +603,7 @@ comptime {
 }
 
 fn makeHashes(comptime Enum: type) []const WidOptHash {
+    @setEvalBranchQuota(2000);
     const fields = @typeInfo(Enum).@"enum".fields;
     var hashes: [fields.len]WidOptHash = undefined;
     for (fields, 0..) |field, i|

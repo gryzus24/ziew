@@ -253,7 +253,7 @@ fn setupWidgets(reg: *umem.Region, widgets: []typ.Widget, states: *WidgetStates)
         },
         .CPU => {
             if (!inited[cpu_i]) {
-                states.cpu = try .init(reg);
+                states.cpu = try .init(reg, widgets);
                 inited[cpu_i] = true;
             }
             intervals[cpu_i] = @min(intervals[cpu_i], w.interval.set);
