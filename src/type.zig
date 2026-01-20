@@ -682,12 +682,17 @@ pub const WIDGET_INTERVAL_DEFAULT = 50;
 /// Maximum widget refresh interval (refresh once and forget).
 pub const WIDGET_INTERVAL_MAX: DeciSec = (1 << 31) - 1;
 
-/// Individual widget maximum buffer size.
-pub const WIDGET_BUF_MAX = 128;
+/// Space reserved for the widget end marker.
+pub const WIDGET_BUF_TAIL = 6;
+
+/// Individual widget writable buffer space.
+pub const WIDGET_BUF_WRITABLE = 192 - WIDGET_BUF_TAIL;
+
+/// Individual widget buffer size.
+pub const WIDGET_BUF_MAX = WIDGET_BUF_WRITABLE + WIDGET_BUF_TAIL;
 
 pub fn writeWidgetBeg(writer: *uio.Writer, fg: color.Hex, bg: color.Hex) void {
-    if (WIDGET_BUF_MAX < 64)
-        @compileError("typ.WIDGET_BUF_MAX < 64");
+    comptime std.debug.assert(WIDGET_BUF_WRITABLE >= 64);
 
     const headers: [4][]const u8 = .{
         \\{"full_text":"
@@ -730,22 +735,15 @@ pub fn writeWidgetBeg(writer: *uio.Writer, fg: color.Hex, bg: color.Hex) void {
     }
 }
 
-pub fn writeWidgetEnd(writer: *uio.Writer) []const u8 {
-    const endstr = "\"},";
-    const cap = writer.unusedCapacityLen();
-    const buffer = writer.buffer;
-    const end = writer.end;
-
-    if (endstr.len <= cap) {
+pub fn writeWidgetEnd(buffer: *[WIDGET_BUF_MAX]u8, end: usize) []const u8 {
+    const END_MARKER = "\"},";
+    if (end < WIDGET_BUF_WRITABLE) {
         @branchHint(.likely);
-        buffer[end..][0..3].* = endstr.*;
-        writer.end = end + 3;
+        buffer[end..][0..3].* = END_MARKER.*;
         return buffer[0 .. end + 3];
     }
-
-    buffer[buffer.len - 6 ..][0..6].* = ("…" ++ endstr).*;
-    writer.end = buffer.len;
-    return buffer;
+    buffer[end..][0..WIDGET_BUF_TAIL].* = ("…" ++ END_MARKER).*;
+    return buffer[0 .. end + WIDGET_BUF_TAIL];
 }
 
 pub fn writeWidget(

@@ -304,7 +304,7 @@ fn update(
     for (widgets, 0..) |*w, i| {
         w.interval.now -= sleep_dsec;
         if (w.interval.now <= 0) {
-            var fw: uio.Writer = .fixed(&bufs[i]);
+            var fw: uio.Writer = .fixed(bufs[i][0..typ.WIDGET_BUF_WRITABLE]);
             const parts = w.format.parts.get(base);
             switch (w.id) {
                 .TIME => w_time.widget(&fw, w, parts, base),
@@ -334,7 +334,7 @@ fn update(
                 .READ => w_read.widget(&fw, w, parts, base),
             }
             w.format.last_str.writeBytes(&fw, base);
-            vecs[i] = typ.writeWidgetEnd(&fw);
+            vecs[i] = typ.writeWidgetEnd(&bufs[i], fw.end);
             w.interval.now = w.interval.set;
         }
     }

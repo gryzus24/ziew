@@ -43,7 +43,7 @@ pub inline fn widget(
 ) void {
     const wd = w.data.READ;
 
-    var buf: [typ.WIDGET_BUF_MAX]u8 = undefined;
+    var buf: [typ.WIDGET_BUF_WRITABLE]u8 = undefined;
 
     const data = openAndRead(wd.getPath(), &buf) catch |e|
         return typ.writeWidget(
