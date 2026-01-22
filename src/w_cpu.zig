@@ -19,14 +19,14 @@ const BAR_WIDTH = 3;
 
 const BRL = struct {
     const RANGE = 5;
+    //                                    "⠀"       "⡀"       "⡄"       "⡆"       "⡇"
+    const BARS_LEFT: [RANGE]u24 = .{ 0x80a0e2, 0x80a1e2, 0x84a1e2, 0x86a1e2, 0x87a1e2 };
+    //                                    "⠀"       "⢀"       "⢠"      "⢰"        "⢸"
+    const BARS_RIGH: [RANGE]u24 = .{ 0x80a0e2, 0x80a2e2, 0xa0a2e2, 0xb0a2e2, 0xb8a2e2 };
 
-    const BARS: [RANGE][RANGE][BAR_WIDTH]u8 = .{
-        .{ "⠀".*, "⢀".*, "⢠".*, "⢰".*, "⢸".* },
-        .{ "⡀".*, "⣀".*, "⣠".*, "⣰".*, "⣸".* },
-        .{ "⡄".*, "⣄".*, "⣤".*, "⣴".*, "⣼".* },
-        .{ "⡆".*, "⣆".*, "⣦".*, "⣶".*, "⣾".* },
-        .{ "⡇".*, "⣇".*, "⣧".*, "⣷".*, "⣿".* },
-    };
+    inline fn rankChar(left: u32, righ: u32) [3]u8 {
+        return @bitCast(BARS_LEFT[left] | BARS_RIGH[righ]);
+    }
 };
 
 const BLK = struct {
@@ -545,12 +545,12 @@ pub inline fn widget(
                             l = cpuUsageRank(curr.entries[i], prev.entries[i], BRL.RANGE);
                         } else {
                             r = cpuUsageRank(curr.entries[i], prev.entries[i], BRL.RANGE);
-                            buffer[pos..][0..3].* = BRL.BARS[l][r];
+                            buffer[pos..][0..3].* = BRL.rankChar(l, r);
                             pos += 3;
                         }
                     }
                     if (curr.nr_cpux_entries & 1 == 1) {
-                        buffer[pos..][0..3].* = BRL.BARS[l][0];
+                        buffer[pos..][0..3].* = BRL.rankChar(l, 0);
                         pos += 3;
                     }
                 } else {
@@ -578,7 +578,7 @@ pub inline fn widget(
                 var i = (g.cur + nr_samples - n) & g.mask;
                 if (opt == .brlgraph) {
                     for (0..n / 2) |_| {
-                        buffer[pos..][0..3].* = BRL.BARS[g.at(i)][g.at(i + 1)];
+                        buffer[pos..][0..3].* = BRL.rankChar(g.at(i), g.at(i + 1));
                         pos += 3;
                         i += 2;
                     }
