@@ -24,7 +24,7 @@ const BRL = struct {
     //                                    "⠀"       "⢀"       "⢠"      "⢰"        "⢸"
     const BARS_RIGH: [RANGE]u24 = .{ 0x80a0e2, 0x80a2e2, 0xa0a2e2, 0xb0a2e2, 0xb8a2e2 };
 
-    inline fn rankChar(left: u32, righ: u32) [3]u8 {
+    inline fn rankChar(left: u32, righ: u32) [BAR_WIDTH]u8 {
         return @bitCast(BARS_LEFT[left] | BARS_RIGH[righ]);
     }
 };
@@ -46,9 +46,9 @@ const BLK = struct {
 
     inline fn rankIncrement(rank: u32) usize {
         return if (BLK_RANK_ZERO_IS_SPACE)
-            if (rank == 0) 1 else 3
+            if (rank == 0) 1 else BAR_WIDTH
         else
-            3;
+            BAR_WIDTH;
     }
 };
 
@@ -523,8 +523,6 @@ pub inline fn widget(
             continue;
         }
 
-        comptime std.debug.assert(BAR_WIDTH == 3);
-
         const buffer = writer.buffer;
         var pos = writer.end;
 
@@ -545,18 +543,18 @@ pub inline fn widget(
                             l = cpuUsageRank(curr.entries[i], prev.entries[i], BRL.RANGE);
                         } else {
                             r = cpuUsageRank(curr.entries[i], prev.entries[i], BRL.RANGE);
-                            buffer[pos..][0..3].* = BRL.rankChar(l, r);
-                            pos += 3;
+                            buffer[pos..][0..BAR_WIDTH].* = BRL.rankChar(l, r);
+                            pos += BAR_WIDTH;
                         }
                     }
                     if (curr.nr_cpux_entries & 1 == 1) {
-                        buffer[pos..][0..3].* = BRL.rankChar(l, 0);
-                        pos += 3;
+                        buffer[pos..][0..BAR_WIDTH].* = BRL.rankChar(l, 0);
+                        pos += BAR_WIDTH;
                     }
                 } else {
                     for (1..1 + curr.nr_cpux_entries) |i| {
                         const rank = cpuUsageRank(curr.entries[i], prev.entries[i], BLK.RANGE);
-                        buffer[pos..][0..3].* = BLK.BARS[rank];
+                        buffer[pos..][0..BAR_WIDTH].* = BLK.BARS[rank];
                         pos += BLK.rankIncrement(rank);
                     }
                 }
@@ -567,7 +565,7 @@ pub inline fn widget(
                 else
                     state.graph_blk;
 
-                var nr_sample_slots = writer.unusedCapacityLen() / 3;
+                var nr_sample_slots = writer.unusedCapacityLen() / BAR_WIDTH;
                 if (opt == .brlgraph)
                     nr_sample_slots *= 2;
 
@@ -578,14 +576,14 @@ pub inline fn widget(
                 var i = (g.cur + nr_samples - n) & g.mask;
                 if (opt == .brlgraph) {
                     for (0..n / 2) |_| {
-                        buffer[pos..][0..3].* = BRL.rankChar(g.at(i), g.at(i + 1));
-                        pos += 3;
+                        buffer[pos..][0..BAR_WIDTH].* = BRL.rankChar(g.at(i), g.at(i + 1));
+                        pos += BAR_WIDTH;
                         i += 2;
                     }
                 } else {
                     for (0..n) |_| {
                         const rank = g.at(i);
-                        buffer[pos..][0..3].* = BLK.BARS[rank];
+                        buffer[pos..][0..BAR_WIDTH].* = BLK.BARS[rank];
                         pos += BLK.rankIncrement(rank);
                         i += 1;
                     }
