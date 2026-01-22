@@ -13,6 +13,12 @@ const ustr = @import("util/str.zig");
 const linux = std.os.linux;
 
 const DELTA_ZERO_CHECK = false;
+
+// The higher the "rank zero step size" the higher the measured CPU usage has
+// to be to *not* be considered idle, i.e. "rank zero":
+//   - 1, any CPU usage is reported as not idle (only zero CPU usage is idle),
+//   - FRAC_MASK (~255), CPU usage <1% is reported as idle.
+const CPU_RANK_ZERO_STEP_SIZE = unt.F5608.FRAC_MASK;
 const BLK_RANK_ZERO_IS_SPACE = true;
 
 const BAR_WIDTH = 3;
@@ -336,9 +342,10 @@ test "/proc/stat parser" {
 }
 
 inline fn cpuUsageRank(curr: Cpu, prev: Cpu, comptime range: comptime_int) u8 {
-    if (range <= 1) @compileError("range <= 1");
+    comptime std.debug.assert(2 <= range and range <= 100);
+    comptime std.debug.assert(CPU_RANK_ZERO_STEP_SIZE > 0);
     const step = comptime unt.F5608.init(100).div(range - 1).u;
-    const off = step - 1;
+    const off = step - CPU_RANK_ZERO_STEP_SIZE;
     const u_max = (range - 1) * step;
 
     const pct = curr.delta(prev).all;
