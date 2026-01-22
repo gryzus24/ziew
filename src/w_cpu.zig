@@ -44,7 +44,7 @@ const BLK = struct {
         "█".*,
     };
 
-    inline fn rankIncrement(rank: u4) usize {
+    inline fn rankIncrement(rank: u32) usize {
         return if (BLK_RANK_ZERO_IS_SPACE)
             if (rank == 0) 1 else 3
         else
@@ -149,7 +149,7 @@ const Graph = struct {
     mask: u32,
     ring: void,
 
-    const SampleSize = u4;
+    const SampleSize = u8;
     const SAMPLES_PER_BYTE = 8 / @bitSizeOf(SampleSize);
     comptime {
         const a = @bitSizeOf(SampleSize);
@@ -335,7 +335,7 @@ test "/proc/stat parser" {
     try t.expect(stat.stats[Stat.softirq] == 4426117);
 }
 
-inline fn cpuUsageRank(curr: Cpu, prev: Cpu, comptime range: comptime_int) u4 {
+inline fn cpuUsageRank(curr: Cpu, prev: Cpu, comptime range: comptime_int) u8 {
     if (range <= 1) @compileError("range <= 1");
     const step = comptime unt.F5608.init(100).div(range - 1).u;
     const off = step - 1;
