@@ -310,10 +310,6 @@ pub const State = struct {
         }
         return state;
     }
-
-    fn getNetDev(self: *const @This(), mask: typ.OptBit) ?*const NetDev {
-        return if (mask != 0) &self.netdev.? else null;
-    }
 };
 
 pub inline fn update(
@@ -356,7 +352,7 @@ pub inline fn widget(
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
     var ifs_match = false;
-    if (state.getNetDev(wd.format_opt_mask.netdev)) |ok| {
+    if (state.netdev) |*ok| {
         const new, const old = typ.constCurrPrev(Interfaces, &ok.ifs, ok.curr);
 
         const Hash = @Vector(linux.IFNAMESIZE, u8);

@@ -218,8 +218,8 @@ pub const Widget = struct {
                 @memset(ret.ifr.ifrn.name[0..], 0);
                 @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
 
-                var netdev: OptBit = 0;
                 var enabled: OptBit = 0;
+                var netdev: OptBit = 0;
                 for (format.parts.get(base)) |*part| {
                     const bit = optBit(part.opt);
 
