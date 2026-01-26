@@ -64,7 +64,7 @@ const Args = struct {
                 _ = uio.sys_write(2, "required argument: c <path>\n");
             },
             .h => _ = uio.sys_write(2, "usage: ziew [c <config file>] [h] [v]\n"),
-            .v => _ = uio.sys_write(2, "ziew 0.0.12\n"),
+            .v => _ = uio.sys_write(2, "ziew 0.0.13\n"),
         }
         linux.exit(0);
     }
