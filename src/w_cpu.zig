@@ -12,7 +12,7 @@ const ustr = @import("util/str.zig");
 
 const linux = std.os.linux;
 
-const DELTA_ZERO_CHECK = false;
+const DELTA_ZERO_CHECK = true;
 
 // The higher the "rank zero step size" the higher the measured CPU usage has
 // to be to *not* be considered idle, i.e. "rank zero":
@@ -354,6 +354,10 @@ inline fn cpuUsageRank(curr: Cpu, prev: Cpu, comptime range: comptime_int) u8 {
     return @intCast(q);
 }
 
+inline fn nrCpusOnlineChanged(curr: *const Stat, prev: *const Stat) bool {
+    return curr.nr_cpux_entries != prev.nr_cpux_entries;
+}
+
 // == public ==================================================================
 
 pub const State = struct {
@@ -458,9 +462,13 @@ pub inline fn update(state: *State) error{ReadError}!void {
     if (n == buf.len) log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
     state.curr ^= 1;
-    const curr, const prev = typ.currPrev(Stat, &state.stats, state.curr);
+    const curr, var prev = typ.currPrev(Stat, &state.stats, state.curr);
 
     parseProcStat(buf[0..n], curr);
+    if (nrCpusOnlineChanged(curr, prev)) {
+        @branchHint(.unlikely);
+        prev = curr;
+    }
 
     const curr_cpu = curr.entries[0];
     const prev_cpu = prev.entries[0];
@@ -496,7 +504,11 @@ pub inline fn widget(
     base: [*]const u8,
     state: *const State,
 ) void {
-    const curr, const prev = typ.constCurrPrev(Stat, &state.stats, state.curr);
+    const curr, var prev = typ.constCurrPrev(Stat, &state.stats, state.curr);
+    if (nrCpusOnlineChanged(curr, prev)) {
+        @branchHint(.unlikely);
+        prev = curr;
+    }
 
     const fg, const bg = w.check(state, base);
     typ.writeWidgetBeg(writer, fg, bg);
