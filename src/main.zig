@@ -25,7 +25,7 @@ const time = std.time;
 // This is all dynamic memory available to the program.
 // Four 4K pages minus some fiddle with BSS, DATA, and alignment,
 // packing everything tightly to avoid internal fragmentation.
-var g_bss: [0x4000 - 1024 - 48 - 0x40]u8 align(64) = undefined;
+var g_bss: [0x4000 - 0x580 - 64 - 0x40]u8 align(64) = undefined;
 
 // USR1 signal latch.
 var g_refresh_all = false;
@@ -123,14 +123,14 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     linux.exit(1);
 }
 
-fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8, env: process.Environ) []typ.Widget {
+fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
     var path: [*:0]const u8 = undefined;
     var path_sp: ?umem.Region.SavePoint = null;
 
     if (config_path) |ok| {
         path = ok;
     } else {
-        path, path_sp = getConfigPath(reg, env) catch |e| switch (e) {
+        path, path_sp = getConfigPath(reg) catch |e| switch (e) {
             error.NoPath => {
                 log.warn(&.{"unknown config file path: using defaults..."});
                 return cfg.defaultConfig(reg);
@@ -182,15 +182,15 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8, env: process.Envir
 const ConfigPathError = error{NoPath} || umem.Region.Error;
 const ConfigPathResult = struct { [*:0]const u8, umem.Region.SavePoint };
 
-fn getConfigPath(reg: *umem.Region, env: process.Environ) ConfigPathError!ConfigPathResult {
+fn getConfigPath(reg: *umem.Region) ConfigPathError!ConfigPathResult {
     const sp = reg.save(u8, .front);
     var n: usize = 0;
 
-    if (env.getPosix("XDG_CONFIG_HOME")) |ok| {
-        n += (try reg.writeStr(ok, .front)).len;
+    if (std.c.getenv("XDG_CONFIG_HOME")) |ok| {
+        n += (try reg.writeStr(mem.sliceTo(ok, 0), .front)).len;
         n += (try reg.writeStr("/ziew/config\x00", .front)).len;
-    } else if (env.getPosix("HOME")) |ok| {
-        n += (try reg.writeStr(ok, .front)).len;
+    } else if (std.c.getenv("HOME")) |ok| {
+        n += (try reg.writeStr(mem.sliceTo(ok, 0), .front)).len;
         n += (try reg.writeStr("/.config/ziew/config\x00", .front)).len;
     } else {
         log.warn(&.{"neither $HOME nor $XDG_CONFIG_HOME set!"});
@@ -368,7 +368,7 @@ pub fn main(init: process.Init.Minimal) void {
     var reg: umem.Region = .init(&g_bss, "main");
 
     const args: Args = .read(init.args.vector);
-    const widgets = loadConfig(&reg, args.config_path, init.environ);
+    const widgets = loadConfig(&reg, args.config_path);
 
     setupSignals();
 

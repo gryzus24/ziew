@@ -59,6 +59,14 @@ pub fn build(b: *std.Build) !void {
         .root_module = module,
         .linkage = .static,
     });
+    // Use kernel's default 8 MB stack size - avoids one prlimit call on entry.
+    // (this number is sourced from the GNU_STACK program header).
+    exe.stack_size = (1 << 20) * 4;
+
+    // LTO is needed to cull unused symbols from the executable.
+    // (mainly Zig's libc reimplementation of some musl symbols).
+    if (optimize != .Debug)
+        exe.lto = .full;
 
     const no_bin = b.option(bool, "no-bin", "Skip emitting binary") orelse false;
     if (no_bin) {
