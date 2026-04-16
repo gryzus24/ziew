@@ -19,8 +19,7 @@ const w_time = @import("w_time.zig");
 
 const linux = std.os.linux;
 const mem = std.mem;
-const os = std.os;
-const posix = std.posix;
+const process = std.process;
 const time = std.time;
 
 // This is all dynamic memory available to the program.
@@ -36,17 +35,17 @@ const WRITE_FAIL_CHECK = true;
 const Args = struct {
     config_path: ?[*:0]const u8 = null,
 
-    fn get(i: usize) ?struct { [*:0]const u8, usize } {
-        return if (i < os.argv.len) .{ os.argv[i], i } else null;
+    fn get(argv: process.Args.Vector, i: usize) ?struct { [*:0]const u8, usize } {
+        return if (i < argv.len) .{ argv[i], i } else null;
     }
 
-    fn read() @This() {
+    fn read(argv: process.Args.Vector) @This() {
         var args: Args = .{};
         var i: usize = 0;
 
         next: switch (enum { arg, c, h, v }.arg) {
             .arg => {
-                const arg, i = Args.get(i + 1) orelse return args;
+                const arg, i = Args.get(argv, i + 1) orelse return args;
                 const len = mem.len(arg);
                 if (len == 1 or (len == 2 and arg[0] == '-')) {
                     if (arg[len - 1] == 'c') continue :next .c;
@@ -57,7 +56,7 @@ const Args = struct {
                 continue :next .h;
             },
             .c => {
-                if (Args.get(i + 1)) |ok| {
+                if (Args.get(argv, i + 1)) |ok| {
                     args.config_path, i = ok;
                     continue :next .arg;
                 }
@@ -124,14 +123,14 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     linux.exit(1);
 }
 
-fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
+fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8, env: process.Environ) []typ.Widget {
     var path: [*:0]const u8 = undefined;
     var path_sp: ?umem.Region.SavePoint = null;
 
     if (config_path) |ok| {
         path = ok;
     } else {
-        path, path_sp = getConfigPath(reg) catch |e| switch (e) {
+        path, path_sp = getConfigPath(reg, env) catch |e| switch (e) {
             error.NoPath => {
                 log.warn(&.{"unknown config file path: using defaults..."});
                 return cfg.defaultConfig(reg);
@@ -183,13 +182,14 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
 const ConfigPathError = error{NoPath} || umem.Region.Error;
 const ConfigPathResult = struct { [*:0]const u8, umem.Region.SavePoint };
 
-fn getConfigPath(reg: *umem.Region) ConfigPathError!ConfigPathResult {
+fn getConfigPath(reg: *umem.Region, env: process.Environ) ConfigPathError!ConfigPathResult {
     const sp = reg.save(u8, .front);
     var n: usize = 0;
-    if (posix.getenvZ("XDG_CONFIG_HOME")) |ok| {
+
+    if (env.getPosix("XDG_CONFIG_HOME")) |ok| {
         n += (try reg.writeStr(ok, .front)).len;
         n += (try reg.writeStr("/ziew/config\x00", .front)).len;
-    } else if (posix.getenvZ("HOME")) |ok| {
+    } else if (env.getPosix("HOME")) |ok| {
         n += (try reg.writeStr(ok, .front)).len;
         n += (try reg.writeStr("/.config/ziew/config\x00", .front)).len;
     } else {
@@ -199,7 +199,7 @@ fn getConfigPath(reg: *umem.Region) ConfigPathError!ConfigPathResult {
     return .{ reg.slice(u8, sp, n)[0 .. n - 1 :0], sp };
 }
 
-fn sa_handler(signum: c_int) callconv(.c) void {
+fn sa_handler(signum: linux.SIG) callconv(.c) void {
     if (signum == linux.SIG.USR1) g_refresh_all = true;
 }
 
@@ -362,13 +362,13 @@ fn copy(dst: []u8, vecs: []const []const u8) []const u8 {
     return dst[0..pos];
 }
 
-pub fn main() void {
+pub fn main(init: process.Init.Minimal) void {
     errdefer |e| log.fatal(&.{ "main: ", @errorName(e) });
 
     var reg: umem.Region = .init(&g_bss, "main");
 
-    const args: Args = .read();
-    const widgets = loadConfig(&reg, args.config_path);
+    const args: Args = .read(init.args.vector);
+    const widgets = loadConfig(&reg, args.config_path, init.environ);
 
     setupSignals();
 

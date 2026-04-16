@@ -166,7 +166,7 @@ pub const Region = struct {
                 var retptr = try self.allocMany(T, 1, .back);
                 if (vec.len > 0) {
                     retptr.len = vec.len + 1;
-                    mem.copyForwards(T, retptr, vec.*);
+                    @memmove(retptr[0..vec.len], vec.*);
                 }
                 vec.* = retptr;
                 break :blk &retptr[retptr.len - 1];

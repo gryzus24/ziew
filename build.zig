@@ -23,14 +23,24 @@ pub fn build(b: *std.Build) !void {
     });
     const optimize = b.standardOptimizeOption(.{});
 
-    const module = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = b.path("src/util/ext.h"),
         .target = target,
         .optimize = optimize,
-        .link_libc = true,
-        .link_libcpp = false,
-        .strip = strip,
+    });
+
+    const module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .imports = &.{
+            .{
+                .name = "ext",
+                .module = translate_c.createModule(),
+            },
+        },
+        .target = target,
+        .optimize = optimize,
         .single_threaded = true,
+        .strip = strip,
         .omit_frame_pointer = omit_frame_pointer,
     });
 

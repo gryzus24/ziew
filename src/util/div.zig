@@ -43,12 +43,12 @@ pub fn DivConstant(comptime d: u32, comptime dividend_max: comptime_int) MultShf
     var mult: u64 = 1;
     var prec: u6 = 0;
 
-    while (true) {
+    while (true) : (prec += 1) {
         var steps = prec + 1;
+
         while (true) : (steps -= 1) {
-            const f_mult: f64 = @floatFromInt(mult);
-            const f_denom: f64 = @floatFromInt(@as(u64, 1) << base << prec);
-            const ratio = f_mult / f_denom;
+            const denom: f64 = 1 << base << prec;
+            const ratio = mult / denom;
             const diff = target - ratio;
 
             const nr_safely_divisible = -(target / diff) - 1;
@@ -62,19 +62,18 @@ pub fn DivConstant(comptime d: u32, comptime dividend_max: comptime_int) MultShf
                 if (mult > ~@as(u32, 0))
                     @panic("-- multiplier could overflow!");
 
-                return .{ .mult = @intCast(mult), .shft = base + prec };
+                return .{ .mult = mult, .shft = base + prec };
             }
             if (steps == 0)
                 break;
 
-            const n = @as(u64, 1) << (steps - 1);
+            const n: u64 = 1 << (steps - 1);
             if (diff > 0) {
                 mult += n;
             } else {
                 mult -= n;
             }
         }
-        prec += 1;
     }
     unreachable;
 }

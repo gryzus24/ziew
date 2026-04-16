@@ -19,7 +19,6 @@ const enums = std.enums;
 const fs = std.fs;
 const linux = std.os.linux;
 const mem = std.mem;
-const meta = std.meta;
 
 // == public types ============================================================
 
@@ -819,30 +818,27 @@ pub inline fn constCurrPrev(
 
 // == meta functions ==========================================================
 
-pub fn MakeEnumSubset(comptime E: type, comptime new_values: []const E) type {
+pub fn MakeEnumSubset(comptime E: type, comptime fields: []const E) type {
     const E_enum = @typeInfo(E).@"enum";
 
-    if (new_values.len == 0)
+    if (fields.len == 0)
         @compileError("Attempted to create an `enum {}`");
 
-    if (new_values.len > E_enum.fields.len)
+    if (fields.len > E_enum.fields.len)
         @compileError("Provided at least one duplicate enum field");
 
-    var new_val_max = 0;
-    var result: [new_values.len]builtin.Type.EnumField = undefined;
-    for (new_values, 0..) |new_value, i| {
-        const v = @intFromEnum(new_value);
-        result[i] = .{ .name = @tagName(new_value), .value = v };
-        new_val_max = @max(new_val_max, v);
+    var names: [fields.len][]const u8 = undefined;
+    var values: [fields.len]E_enum.tag_type = undefined;
+
+    for (fields, 0..) |field, i| {
+        names[i], values[i] = .{ @tagName(field), @intFromEnum(field) };
     }
-    return @Type(.{
-        .@"enum" = .{
-            .tag_type = E_enum.tag_type,
-            .fields = &result,
-            .decls = &.{},
-            .is_exhaustive = E_enum.is_exhaustive,
-        },
-    });
+    return @Enum(
+        E_enum.tag_type,
+        if (E_enum.is_exhaustive) .exhaustive else .nonexhaustive,
+        &names,
+        &values,
+    );
 }
 
 // This is useful if wanting to use enum fields as flags. The order of
@@ -880,42 +876,37 @@ pub fn PackedFlagsFromEnum(comptime E: type, comptime BackingInt: type) type {
         @compileError("Backing integer cannot represent all enum fields");
 
     const pad_bits = BI_int.bits - E_enum.fields.len;
-    const pad_type = meta.Int(.unsigned, pad_bits);
+    const pad_type = @Int(.unsigned, pad_bits);
 
     var nr_struct_fields = E_enum.fields.len;
     if (pad_bits > 0) {
         nr_struct_fields += 1;
     }
-    var struct_fields: [nr_struct_fields]builtin.Type.StructField = undefined;
+    var names: [nr_struct_fields][]const u8 = undefined;
+    var types: [nr_struct_fields]type = undefined;
+    var attrs: [nr_struct_fields]std.builtin.Type.StructField.Attributes = undefined;
+
     for (E_enum.fields, 0..) |field, i| {
         if (field.value != i)
             @compileError("Enum field values must start at 0 and increment linearly");
-        struct_fields[i] = .{
-            .alignment = 0,
+
+        names[i], types[i] = .{ field.name, bool };
+        attrs[i] = .{
+            .@"comptime" = false,
+            .@"align" = null,
             .default_value_ptr = null,
-            .is_comptime = false,
-            .name = field.name,
-            .type = bool,
         };
     }
     if (pad_bits > 0) {
-        struct_fields[nr_struct_fields - 1] = .{
-            .alignment = 0,
+        const last = nr_struct_fields - 1;
+        names[last], types[last] = .{ "_", pad_type };
+        attrs[last] = .{
+            .@"comptime" = false,
+            .@"align" = null,
             .default_value_ptr = null,
-            .is_comptime = false,
-            .name = "_",
-            .type = pad_type,
         };
     }
-    return @Type(.{
-        .@"struct" = .{
-            .backing_integer = BackingInt,
-            .decls = &.{},
-            .fields = &struct_fields,
-            .is_tuple = false,
-            .layout = .@"packed",
-        },
-    });
+    return @Struct(.@"packed", BackingInt, &names, &types, &attrs);
 }
 
 pub fn MaskFromEnum(comptime E: type) comptime_int {

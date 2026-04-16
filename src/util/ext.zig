@@ -1,13 +1,7 @@
 const std = @import("std");
 const linux = std.os.linux;
 
-// zig fmt: off
-pub const c = @cImport({
-    @cInclude("asm-generic/errno.h");
-    @cInclude("sys/statfs.h");
-    @cInclude("time.h");
-});
-// zig fmt: on
+pub const c = @import("ext");
 
 pub const struct_statfs = c.struct_statfs;
 pub const struct_tm = c.struct_tm;

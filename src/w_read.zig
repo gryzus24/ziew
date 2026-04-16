@@ -30,7 +30,7 @@ fn openAndRead(path: [*:0]const u8, buf: []u8) ![]const u8 {
     const fd = try uio.open0(path);
     defer uio.close(fd);
     const n = try uio.pread(fd, buf, 0);
-    return buf[0 .. mem.indexOfScalarPos(u8, buf[0..n], 0, '\n') orelse n];
+    return buf[0 .. mem.findScalarPos(u8, buf[0..n], 0, '\n') orelse n];
 }
 
 // == public ==================================================================

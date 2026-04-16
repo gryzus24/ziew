@@ -489,11 +489,11 @@ pub inline fn update(state: *State) error{ReadError}!void {
     }
     if (state.enabled.brl) {
         const sample = cpuUsageRank(curr_cpu, prev_cpu, BRL.RANGE);
-        state.graph_brl.blot(sample);
+        state.graph_brl.blot(@intCast(sample));
     }
     if (state.enabled.blk) {
         const sample = cpuUsageRank(curr_cpu, prev_cpu, BLK.RANGE);
-        state.graph_blk.blot(sample);
+        state.graph_blk.blot(@intCast(sample));
     }
 }
 

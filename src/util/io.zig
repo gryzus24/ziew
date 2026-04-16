@@ -34,7 +34,7 @@ pub inline fn pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) error{ReadError
 }
 
 pub inline fn open0(path: [*:0]const u8) posix.OpenError!linux.fd_t {
-    return posix.openZ(path, .{}, undefined);
+    return posix.openatZ(posix.AT.FDCWD, path, .{}, undefined);
 }
 
 pub inline fn openCWA(path: [*:0]const u8, mode: linux.mode_t) posix.OpenError!linux.fd_t {
@@ -44,7 +44,7 @@ pub inline fn openCWA(path: [*:0]const u8, mode: linux.mode_t) posix.OpenError!l
         .APPEND = true,
         .CLOEXEC = true,
     };
-    return posix.openZ(path, flags, mode);
+    return posix.openatZ(posix.AT.FDCWD, path, flags, mode);
 }
 
 pub inline fn close(fd: linux.fd_t) void {

@@ -1,6 +1,5 @@
 const std = @import("std");
 const fs = std.fs;
-const meta = std.meta;
 const simd = std.simd;
 const zig = std.zig;
 
@@ -146,13 +145,13 @@ pub fn unsafeU64toa(dst: []u8, n: u64) usize {
 }
 
 // This is so naive and untweaked yet it benches faster than
-// `mem.indexOfScalarPos` in a loop on random input and has
+// `mem.findScalarPos` in a loop on random input and has
 // a nice 20%/20% frontend/backend ratio in that scenario.
 pub fn IndexIterator(comptime T: type, findme: T) type {
     return struct {
         buf: []const T,
         i: usize,
-        bits: meta.Int(.unsigned, BlockSize),
+        bits: @Int(.unsigned, BlockSize),
 
         const BlockSize = @min(64, 2 * (simd.suggestVectorLength(T) orelse 8));
         const Block = @Vector(BlockSize, T);
