@@ -139,7 +139,7 @@ pub const State = struct {
     }
 };
 
-pub inline fn update(state: *State) error{ReadError}!void {
+pub fn update(state: *State) error{ReadError}!void {
     var buf: [8192]u8 = undefined;
     const n = try uio.pread(state.fd, &buf, 0);
 
@@ -147,7 +147,7 @@ pub inline fn update(state: *State) error{ReadError}!void {
     parseProcMeminfo(buf[0..n], &state.meminfos[state.curr]);
 }
 
-pub inline fn widget(
+pub fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     parts: []const typ.Format.Part,

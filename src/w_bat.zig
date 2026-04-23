@@ -176,7 +176,7 @@ fn parseLine(line: []const u8, state: usize) !Parser {
 
 // == public ==================================================================
 
-pub inline fn widget(
+pub fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     parts: []const typ.Format.Part,

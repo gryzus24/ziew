@@ -35,7 +35,7 @@ fn openAndRead(path: [*:0]const u8, buf: []u8) ![]const u8 {
 
 // == public ==================================================================
 
-pub inline fn widget(
+pub fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     parts: []const typ.Format.Part,

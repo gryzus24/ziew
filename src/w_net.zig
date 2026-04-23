@@ -312,7 +312,7 @@ pub const State = struct {
     }
 };
 
-pub inline fn update(
+pub fn update(
     reg: *umem.Region,
     state: *State.NetDev,
 ) error{ NoSpaceLeft, ReadError }!void {
@@ -327,7 +327,7 @@ pub inline fn update(
     try parseProcNetDev(buf[0..n], iface, reg);
 }
 
-pub inline fn widget(
+pub fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     parts: []const typ.Format.Part,

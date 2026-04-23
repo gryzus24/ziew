@@ -75,7 +75,7 @@ pub const State = struct {
     }
 };
 
-pub inline fn widget(
+pub fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     parts: []const typ.Format.Part,
