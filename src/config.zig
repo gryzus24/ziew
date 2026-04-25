@@ -8,14 +8,6 @@ const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");
 
-const w_bat = @import("w_bat.zig");
-const w_cpu = @import("w_cpu.zig");
-const w_dysk = @import("w_dysk.zig");
-const w_mem = @import("w_mem.zig");
-const w_net = @import("w_net.zig");
-const w_read = @import("w_read.zig");
-const w_time = @import("w_time.zig");
-
 const fmt = std.fmt;
 const mem = std.mem;
 

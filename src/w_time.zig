@@ -1,5 +1,4 @@
 const std = @import("std");
-const color = @import("color.zig");
 const typ = @import("type.zig");
 
 const ext = @import("util/ext.zig");

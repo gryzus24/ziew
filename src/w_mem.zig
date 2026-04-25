@@ -5,7 +5,6 @@ const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
 const uio = @import("util/io.zig");
-const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");
 
 const linux = std.os.linux;

@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const ext = @import("ext.zig");
-const umem = @import("mem.zig");
 const ustr = @import("str.zig");
 
 const linux = std.os.linux;
