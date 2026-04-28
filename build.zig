@@ -61,7 +61,7 @@ pub fn build(b: *std.Build) !void {
     });
     // Use kernel's default 8 MB stack size - avoids one prlimit call on entry.
     // (this number is sourced from the GNU_STACK program header).
-    exe.stack_size = (1 << 20) * 4;
+    exe.stack_size = (1 << 20) * 8;
 
     // LTO is needed to cull unused symbols from the executable.
     // (mainly Zig's libc reimplementation of some musl symbols).
