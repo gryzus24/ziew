@@ -74,12 +74,6 @@ pub fn widget(
         const dst = writer.buffer[writer.end..];
 
         writer.end += switch (opt) {
-            .arg => advance: {
-                const s = wd.getPath();
-                var i: usize = 0;
-                while (i < dst.len and s[i] != 0) : (i += 1) dst[i] = s[i];
-                break :advance i;
-            },
             .basename => advance: {
                 const s = wd.getBasename();
                 const n = @min(s.len, dst.len);

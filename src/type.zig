@@ -406,7 +406,6 @@ pub const Options = struct {
         @"7",
         @"8",
         @"9",
-        arg,
 
         pub const PercentPrefixAllowed = enum(u8) {};
         pub const ColorSupported = enum(u8) {};
@@ -486,8 +485,6 @@ pub const Options = struct {
         ino_free,
         ino_used,
 
-        arg,
-
         pub const Ino = MakeEnumSubset(@This(), &.{
             .ino_total, .ino_free, .ino_used,
         });
@@ -503,7 +500,6 @@ pub const Options = struct {
     };
 
     pub const Net = enum(u8) {
-        arg,
         inet,
         flags,
         state,
@@ -528,7 +524,7 @@ pub const Options = struct {
         pub const NETDEV_OFF = @intFromEnum(Net.rx_bytes);
 
         pub const String = MakeEnumSubset(@This(), &.{
-            .arg, .inet, .flags, .state,
+            .inet, .flags, .state,
         });
 
         pub const NetDev = MakeEnumSubset(@This(), &.{
@@ -557,7 +553,6 @@ pub const Options = struct {
         state,
         fulldesign,
         fullnow,
-        arg,
 
         pub const PercentPrefixAllowed = MakeEnumSubset(@This(), &.{
             .fulldesign, .fullnow,
@@ -572,7 +567,6 @@ pub const Options = struct {
     };
 
     pub const Read = enum(u8) {
-        arg,
         basename,
         content,
         raw,

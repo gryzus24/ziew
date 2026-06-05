@@ -99,7 +99,8 @@ pub fn widget(
                 fg,
                 bg,
                 &[3][]const u8{
-                    wd.getMountpoint(), ": ", switch (ret) {
+                    wd.getMountpoint(), ": ",
+                    switch (ret) {
                         -ext.c.EACCES => "<no access>",
                         -ext.c.ENOENT, -ext.c.ENOTDIR => "<not mounted>",
                         -ext.c.ENOSYS => "<not supported>",
@@ -128,13 +129,7 @@ pub fn widget(
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        const opt: typ.Options.Disk = @enumFromInt(part.opt);
         const bit = typ.optBit(part.opt);
-
-        if (opt == .arg) {
-            uio.writeStr(writer, wd.getMountpoint());
-            continue;
-        }
 
         var negative = false;
         var nu: unt.NumUnit = undefined;

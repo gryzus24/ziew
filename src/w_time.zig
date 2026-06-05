@@ -69,12 +69,6 @@ pub fn widget(
                 }
                 break :advance i;
             },
-            .arg => advance: {
-                const s = wd.getStrf();
-                var i: usize = 0;
-                while (i < dst.len and s[i] != 0) : (i += 1) dst[i] = s[i];
-                break :advance i;
-            },
         };
     }
 }

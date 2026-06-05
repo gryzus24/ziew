@@ -67,9 +67,11 @@ const Battery = struct {
         notcharging,
         unknown,
 
+        const WIDTH = 12;
+
         // zig fmt: off
-        const names: [5][12]u8 = blk: {
-            var t: [5][12]u8 = undefined;
+        const names: [5][WIDTH]u8 = blk: {
+            var t: [5][WIDTH]u8 = undefined;
             t[@intFromEnum(Battery.State.discharging)] = "Discharging ".*;
             t[@intFromEnum(Battery.State.charging)]    = "Charging    ".*;
             t[@intFromEnum(Battery.State.full)]        = "Full        ".*;
@@ -193,7 +195,8 @@ pub fn widget(
             fg,
             bg,
             &[3][]const u8{
-                wd.getPsName(), ": ", switch (e) {
+                wd.getPsName(), ": ",
+                switch (e) {
                     error.FileNotFound => "<not found>",
                     else => @errorName(e),
                 },
@@ -226,24 +229,14 @@ pub fn widget(
 
         const opt: typ.Options.Bat = @enumFromInt(part.opt);
         switch (opt) {
-            .state, .arg => {
-                const SZ = 12;
-                const expected = @max(SZ, typ.Widget.Data.Bat.PS_NAME_SIZE_MAX);
-                comptime std.debug.assert(expected == SZ);
-
-                if (expected > writer.unusedCapacityLen()) {
+            .state => {
+                if (Battery.State.WIDTH > writer.unusedCapacityLen()) {
                     @branchHint(.unlikely);
                     break;
                 }
-                writer.buffer[writer.end..][0..SZ].* =
-                    if (opt == .state)
-                        Battery.State.names[bat.fields[Battery.state]]
-                    else
-                        // It would seem it is accessing invalid memory, but it
-                        // doesn't even go past the NUL byte of the widget path
-                        // in the common case of `wd.ps_len == 4`.
-                        wd.path[wd.ps_off..].ptr[0..SZ].*;
-                writer.end += SZ;
+                writer.buffer[writer.end..][0..Battery.State.WIDTH].* =
+                    Battery.State.names[bat.fields[Battery.state]];
+                writer.end += Battery.State.WIDTH;
             },
             .fulldesign, .fullnow => {
                 const nu = if (part.flags.pct)

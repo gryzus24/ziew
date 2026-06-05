@@ -388,35 +388,20 @@ pub fn widget(
 
         const bit = typ.optBit(part.opt);
         if (bit & typ.Options.Net.STRING_MASK != 0) {
-            const SZ = 16;
-            const expected = @max(wd.ifr.ifrn.name.len, INET_BUF_SIZE);
-            comptime std.debug.assert(expected == SZ);
-
-            if (@max(expected, iff_len) > writer.unusedCapacityLen()) {
+            if (@max(INET_BUF_SIZE, iff_len) > writer.unusedCapacityLen()) {
                 @branchHint(.unlikely);
                 break;
             }
             const dst = writer.buffer[writer.end..];
             writer.end += switch (@as(typ.Options.Net.String, @enumFromInt(part.opt))) {
-                .arg => advance: {
-                    const V = @Vector(SZ, u8);
-                    const name: V = wd.ifr.ifrn.name;
-                    dst[0..SZ].* = name;
-                    const where0: u16 = @bitCast(name == @as(V, @splat(0)));
-                    break :advance @ctz(where0);
-                },
                 .inet => advance: {
-                    dst[0..SZ].* = inetbuf;
+                    dst[0..INET_BUF_SIZE].* = inetbuf;
                     break :advance inet_len;
                 },
                 .flags => advance: {
-                    if (iff_len > expected) {
-                        @branchHint(.cold);
-                        uio.writeStr(writer, iffbuf[0..iff_len]);
-                    } else {
-                        dst[0..SZ].* = iffbuf[0..SZ].*;
-                    }
-                    break :advance iff_len;
+                    var i: usize = 0;
+                    while (i < iff_len) : (i += 1) dst[i] = iffbuf[i];
+                    break :advance i;
                 },
                 .state => advance: {
                     // Making it branchless gives the compiler some

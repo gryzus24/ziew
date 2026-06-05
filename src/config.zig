@@ -71,7 +71,7 @@ const FormatSplitter = struct {
 
     const FormatSplit = union(enum) {
         ok: struct {
-            part: Split,
+            txt: Split,
             opt: Split,
         },
         err: struct {
@@ -84,7 +84,7 @@ const FormatSplitter = struct {
         fn init(i: usize) @This() {
             return .{
                 .ok = .{
-                    .part = .{ .beg = i, .end = 0 },
+                    .txt = .{ .beg = i, .end = 0 },
                     .opt = .zero,
                 },
             };
@@ -106,11 +106,11 @@ const FormatSplitter = struct {
         next: switch (enum(u8) { open, close, no_close, no_open }.open) {
             .open => {
                 const c, self.i = accept(self.buf, self.i) orelse {
-                    r.ok.part.end = self.i;
+                    r.ok.txt.end = self.i;
                     return r;
                 };
                 if (c == '{') {
-                    r.ok.part.end = self.i - 1;
+                    r.ok.txt.end = self.i - 1;
                     r.ok.opt.beg = self.i;
                     continue :next .close;
                 }
@@ -128,7 +128,7 @@ const FormatSplitter = struct {
                 continue :next .close;
             },
             .no_close => return .fail(.no_close, .{
-                .beg = r.ok.part.end,
+                .beg = r.ok.txt.end,
                 .end = self.i,
             }),
             .no_open => return .fail(.no_open, .{
@@ -151,7 +151,12 @@ const FormatResult = union(enum) {
     }
 };
 
-fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatResult {
+fn acceptFormat(
+    reg: *umem.Region,
+    str: []const u8,
+    wid: typ.Widget.Id,
+    arg: ?[]const u8,
+) !FormatResult {
     var parts: []typ.Format.Part = &.{};
     const parts_sp = reg.save(typ.Format.Part, .front);
 
@@ -164,12 +169,16 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
                 .no_close => return .fail("no closing brace", e.field),
             },
         };
-        // Is last_str?
-        if (split.part.end == str.len)
+        const field = str[split.opt.beg..split.opt.end];
+
+        // Skip the last split which contains `last_str`.
+        if (split.txt.end == str.len)
             break;
+        // Skip all `arg` options.
+        if (mem.eql(u8, field, "arg"))
+            continue;
 
         var i: usize = 0;
-        const field = str[split.opt.beg..split.opt.end];
 
         var pct_prefix = false;
         if (field.len > 0 and field[0] == '%') {
@@ -267,28 +276,40 @@ fn acceptFormat(reg: *umem.Region, str: []const u8, wid: typ.Widget.Id) !FormatR
         }
     }
 
-    // Second pass - string copying and reference fixup.
+    // Second pass - string copying and `arg` merging.
+    var p: usize = 0;
+    var sp, var len: usize = .{ reg.save(u8, .front), 0 };
+
     fields = .init(str);
-    for (parts) |*part| {
-        const s = switch (fields.next().?) {
-            .ok => |ok| str[ok.part.beg..ok.part.end],
-            .err => unreachable,
-        };
-        const sp = reg.save(u8, .front);
-        if (s.len > 0) _ = try reg.writeStr(s, .front);
-        part.str = .{ .off = @intCast(sp.off), .len = @intCast(s.len) };
+    while (fields.next()) |f| {
+        const s = str[f.ok.txt.beg..f.ok.txt.end];
+        const field = str[f.ok.opt.beg..f.ok.opt.end];
+
+        if (s.len > 0) {
+            _ = try reg.writeStr(s, .front);
+            len += s.len;
+        }
+        if (mem.eql(u8, field, "arg")) {
+            if (arg) |ok| {
+                if (ok.len > 0) {
+                    _ = try reg.writeStr(ok, .front);
+                    len += ok.len;
+                }
+            }
+            continue;
+        }
+        // Only the last field may match.
+        if (field.len == 0)
+            break;
+
+        parts[p].str = .{ .off = @intCast(sp.off), .len = @intCast(len) };
+        p += 1;
+        sp, len = .{ reg.save(u8, .front), 0 };
     }
 
     var last_str: umem.MemSlice(u8) = .zero;
-    if (fields.next()) |f| {
-        const s = switch (f) {
-            .ok => |ok| str[ok.part.beg..ok.part.end],
-            .err => unreachable,
-        };
-        const sp = reg.save(u8, .front);
-        if (s.len > 0) _ = try reg.writeStr(s, .front);
-        last_str = .{ .off = @intCast(sp.off), .len = @intCast(s.len) };
-    }
+    if (len > 0)
+        last_str = .{ .off = @intCast(sp.off), .len = @intCast(len) };
 
     return .{
         .ok = .{
@@ -579,13 +600,13 @@ pub fn parse(
                         if (wi.arg) |ok| break :blk line[ok.beg..ok.end];
                         return .fail("widget requires arg parameter", line, line_nr, .zero);
                     }
-                    break :blk undefined;
+                    break :blk null;
                 };
                 const fmt_str, const fmt_split = blk: {
                     if (wi.format) |ok| break :blk .{ line[ok.beg..ok.end], ok };
                     return .fail("widget requires format parameter", line, line_nr, .zero);
                 };
-                const format = switch (try acceptFormat(reg, fmt_str, current.id)) {
+                const format = switch (try acceptFormat(reg, fmt_str, current.id, arg)) {
                     .ok => |f| f,
                     .err => |e| {
                         return .fail(e.note, line, line_nr, .{
@@ -598,13 +619,13 @@ pub fn parse(
                 // zig fmt: off
                 const base = reg.head.ptr;
                 current.data = switch (current.id) {
-                    .TIME => .{ .TIME = try .init(reg, arg) },
+                    .TIME => .{ .TIME = try .init(reg, arg.?) },
                     .MEM  => .{ .MEM  = undefined },
                     .CPU  => .{ .CPU  = undefined },
-                    .DISK => .{ .DISK = try .init(reg, arg) },
-                    .NET  => .{ .NET  = try .init(reg, arg, format, base) },
-                    .BAT  => .{ .BAT  = try .init(reg, arg) },
-                    .READ => .{ .READ = try .init(reg, arg) },
+                    .DISK => .{ .DISK = try .init(reg, arg.?) },
+                    .NET  => .{ .NET  = try .init(reg, arg.?, format, base) },
+                    .BAT  => .{ .BAT  = try .init(reg, arg.?) },
+                    .READ => .{ .READ = try .init(reg, arg.?) },
                 };
                 // zig fmt: on
             },
@@ -729,6 +750,24 @@ fn testDiag(r: ParseResult, note: []const u8, line_nr: usize, field: Split) !voi
     try t.expect(r.err.line_nr == line_nr);
     try t.expect(r.err.field.beg == field.beg);
     try t.expect(r.err.field.end == field.end);
+}
+
+fn testArgMerge(
+    r: ParseResult,
+    part: usize,
+    str: ?[]const u8,
+    last_str: []const u8,
+    reg: *umem.Region,
+) !void {
+    const t = std.testing;
+    const format = r.ok[0].format;
+    if (str) |ok| {
+        const parts = format.parts.get(reg.head.ptr);
+        const expected_str = parts[part].str.get(reg.head.ptr);
+        try t.expect(std.mem.eql(u8, ok, expected_str));
+    }
+    const expected_last_str = format.last_str.get(reg.head.ptr);
+    try t.expect(std.mem.eql(u8, expected_last_str, last_str));
 }
 
 test parse {
@@ -867,4 +906,28 @@ test parse {
 
     r = try testParse("CPU 1 format {all:.1}\nFG %all 1:ff8 98: 99:012 101:ddd", &reg, &scratch);
     try testDiag(r, "threshold too big (0..100)", 2, .{ .beg = 25, .end = 32 });
+
+    r = try testParse("NET 5 arg eth0 format \"AA{arg}{arg}\"\n", &reg, &scratch);
+    try testArgMerge(r, 0, null, "AAeth0eth0", &reg);
+
+    r = try testParse("NET 5 arg eth0 format \"AA{arg}{arg}BB\"\n", &reg, &scratch);
+    try testArgMerge(r, 0, null, "AAeth0eth0BB", &reg);
+
+    r = try testParse("NET 5 arg eth98 format \"AA{arg}{arg}BB{flags}\"\n", &reg, &scratch);
+    try testArgMerge(r, 0, "AAeth98eth98BB", "", &reg);
+
+    r = try testParse("NET 5 arg eth98 format \"AA{arg}{arg}BB{flags}CC\"\n", &reg, &scratch);
+    try testArgMerge(r, 0, "AAeth98eth98BB", "CC", &reg);
+
+    r = try testParse("NET 5 arg eth98 format \"AA{arg}{arg}BB{flags}CC{arg}\"\n", &reg, &scratch);
+    try testArgMerge(r, 0, "AAeth98eth98BB", "CCeth98", &reg);
+
+    r = try testParse("NET 5 arg eth98 format \"AA{arg}{arg}BB{flags}CC{arg} {state}\"\n", &reg, &scratch);
+    try testArgMerge(r, 0, "AAeth98eth98BB", "", &reg);
+    try testArgMerge(r, 1, "CCeth98 ", "", &reg);
+
+    r = try testParse("NET 5 arg eth98 format \"{state}AA{arg}{arg}BB{flags}CC{arg} {state}\"\n", &reg, &scratch);
+    try testArgMerge(r, 0, "", "", &reg);
+    try testArgMerge(r, 1, "AAeth98eth98BB", "", &reg);
+    try testArgMerge(r, 2, "CCeth98 ", "", &reg);
 }
