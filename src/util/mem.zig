@@ -218,29 +218,10 @@ pub fn MemSlice(T: type) type {
             return bytesAsConstSliceOrganic(T, bytes);
         }
 
-        pub inline fn writeBytes(
-            self: @This(),
-            writer: *uio.Writer,
-            base: [*]const u8,
-        ) void {
-            // Make sure to compute the bounds check before the `dst` pointer
-            // to reuse the `writer.end` that is already in the register for
-            // the `dst` pointer calculation (`writer.buffer` + `writer.end`).
-            const n = @min(self.len, writer.unusedCapacityLen());
-            // Avoid an additional load through the writer pointer on every
-            // iteration. Same as adding `noalias` to the writer parameter, but
-            // plays well with forced inlining into callers without `noalias`
-            // added therein. It leads to more register spills though as,
-            // no wonder, the optimizer prioritizes loops over prologues.
-            const dst = writer.buffer[writer.end..];
-            // `off` should be upcast to at least u32 to avoid a zero extending
-            // load during addressing. Alternatively, we can set up a pointer
-            // with proper offset applied before entering the loop.
-            const src = base[self.off..];
-            for (0..n) |i| {
-                dst[i] = src[i];
-            }
-            writer.end += n;
+        pub fn writeBytes(self: @This(), writer: *uio.Writer, base: [*]const u8) void {
+            if (self.len == 0) return;
+            const bytes = base[self.off..][0 .. @sizeOf(T) * self.len];
+            return uio.writeStr(writer, bytes);
         }
     };
 }

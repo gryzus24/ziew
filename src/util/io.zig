@@ -51,7 +51,15 @@ pub inline fn close(fd: linux.fd_t) void {
 }
 
 pub inline fn writeStr(writer: *Writer, str: []const u8) void {
+    // Make sure to compute the bounds check before the `dst` pointer
+    // to reuse the `writer.end` that is already in the register for
+    // the `dst` pointer calculation (`writer.buffer` + `writer.end`).
     const n = @min(str.len, writer.unusedCapacityLen());
+    // Avoid an additional load through the writer pointer on every
+    // iteration. Same as adding `noalias` to the writer parameter, but
+    // plays well with forced inlining into callers without `noalias`
+    // added therein. It leads to more register spills though as,
+    // no wonder, the optimizer prioritizes loops over prologues.
     const dst = writer.buffer[writer.end..];
     for (0..n) |i| dst[i] = str[i];
     writer.end += n;
@@ -64,10 +72,6 @@ pub const Writer = struct {
 
     pub fn fixed(buffer: []u8) @This() {
         return .{ .buffer = buffer, .end = 0 };
-    }
-
-    pub fn buffered(self: *@This()) []u8 {
-        return self.buffer[0..self.end];
     }
 
     pub fn unusedCapacityLen(self: *const @This()) usize {
