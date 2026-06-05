@@ -41,15 +41,16 @@ pub fn widget(
     base: [*]const u8,
 ) void {
     const wd = w.data.READ;
+    const path, const basename = .{ wd.getPath(), wd.getBasename() };
 
     var buf: [typ.WIDGET_BUF_WRITABLE]u8 = undefined;
 
-    const data = openAndRead(wd.getPath(), &buf) catch |e|
+    const data = openAndRead(path, &buf) catch |e|
         return typ.writeWidget(
             writer,
             w.fg.static,
             w.bg.static,
-            &[3][]const u8{ wd.getBasename(), ": ", @errorName(e) },
+            &[3][]const u8{ basename, ": ", @errorName(e) },
         );
 
     var pos: usize = 0;
@@ -67,26 +68,17 @@ pub fn widget(
     }
 
     typ.writeWidgetBeg(writer, fg, bg);
-    for (w.format.parts.get(base)) |*part| {
+    for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
         const opt: typ.Options.Read = @enumFromInt(part.opt);
-        const dst = writer.buffer[writer.end..];
 
-        writer.end += switch (opt) {
-            .basename => advance: {
-                const s = wd.getBasename();
-                const n = @min(s.len, dst.len);
-                var i: usize = 0;
-                while (i < n) : (i += 1) dst[i] = s[i];
-                break :advance n;
-            },
-            .content, .raw => advance: {
-                const s = data[@intFromBool(opt == .content) * pos ..];
-                const n = @min(s.len, dst.len);
-                @memcpy(dst[0..n], s[0..n]);
-                break :advance n;
-            },
-        };
+        var src = data;
+        if (opt == .content)
+            src = data[pos..];
+        if (opt == .basename)
+            src = basename;
+
+        uio.writeStr(writer, src);
     }
 }
