@@ -13,13 +13,10 @@ fn printAlloc(reg: *Region, where: Region.Where, comptime T: type, nmemb: usize,
     const total_size = @sizeOf(T) * nmemb + pad;
     const str = if (where == .front) "FRONT" else "BACK ";
 
-    var writer = fs.File.stderr().writer(&.{});
-    const stderr = &writer.interface;
-
-    stderr.print(
+    std.debug.print(
         "{s:<8} F={:<4} B={:<4} T={:<5} | ({s}) PAD={} N={:<4} SZ={:<4} TSZ={:<4} {}\n",
         .{ reg.name, front, back, front + back, str, pad, nmemb, @sizeOf(T), total_size, T },
-    ) catch {};
+    );
 }
 
 fn bytesAsSliceOrganic(comptime T: type, bytes: anytype) []T {
