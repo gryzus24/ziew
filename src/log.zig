@@ -63,14 +63,15 @@ pub fn fatalSys(strings: []const []const u8, sysret: isize) noreturn {
     std.debug.assert(sysret < 0);
 
     const log = openLogStrings("fatal: ", strings);
-    var buf: [8]u8 = undefined;
+    var buf: ["4095\n".len]u8 = undefined;
 
-    var pos = ustr.unsafeU64toa(&buf, @as(u64, @intCast(-sysret)) & 0x0fff);
-    @memmove(buf[0..pos], buf[buf.len - pos ..]);
-    buf[pos] = '\n';
-    pos += 1;
+    const n = ustr.unsafeU64toa(
+        buf[0 .. buf.len - 1],
+        @as(u64, @intCast(-sysret)) & 0x0fff,
+    );
+    buf[buf.len - 1] = '\n';
 
-    log.log(buf[0..pos]);
+    log.log(buf[buf.len - n - 1 ..]);
     linux.exit(1);
 }
 

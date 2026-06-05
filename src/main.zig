@@ -99,9 +99,10 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     @memcpy(buf[pos..][0..n], buf[buf.len - n ..]);
     pos += n;
 
-    n = 7 -| n;
-    @memset(buf[pos..][0..n], ' ');
-    pos += n;
+    for (0..7 -| n) |_| {
+        buf[pos] = ' ';
+        pos += 1;
+    }
 
     n = @min(diag.line.len, buf.len - pos);
     @memcpy(buf[pos..][0..n], diag.line[0..n]);
