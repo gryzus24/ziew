@@ -269,7 +269,7 @@ fn setupWidgets(reg: *umem.Region, widgets: []typ.Widget, states: *WidgetStates)
         },
         .NET => {
             if (!inited[net_i]) {
-                states.net = .init(widgets);
+                states.net = .init(widgets, reg.head.ptr);
                 inited[net_i] = true;
             }
             intervals[net_i] = @min(intervals[net_i], w.interval.set);

@@ -289,18 +289,19 @@ pub const State = struct {
 
     pub const empty: State = .{ .sock = 0, .netdev = null };
 
-    pub fn init(widgets: []const typ.Widget) State {
+    pub fn init(widgets: []const typ.Widget, base: [*]const u8) State {
         var state: State = .{
             .sock = openIoctlSocket(),
             .netdev = null,
         };
-        const wants_netdev = blk: {
-            for (widgets) |*w|
-                if (w.id == .NET and w.data.NET.format_opt_mask.netdev != 0)
-                    break :blk true;
-            break :blk false;
-        };
-        if (wants_netdev) {
+        var enabled: typ.OptBit = 0;
+        for (widgets) |*w| {
+            if (w.id == .NET) {
+                w.data.NET.gatherOptEnabled(w, base);
+                enabled |= w.data.NET.opt_enabled.bits;
+            }
+        }
+        if (enabled & typ.Options.Net.NETDEV_MASK != 0) {
             state.netdev = .{
                 .ifs = .{ .empty, .empty },
                 .curr = 0,
@@ -343,10 +344,9 @@ pub fn widget(
     var iff_len: usize = 0;
     var up = false;
 
-    const enabled = wd.format_opt_mask.enabled;
-    if (enabled.inet)
+    if (wd.opt_enabled.inet())
         inet_len = getInet(state.sock, &wd.ifr, &inetbuf);
-    if (enabled.flags or enabled.state or w.fg == .active or w.bg == .active)
+    if (wd.opt_enabled.flags() or wd.opt_enabled.state())
         iff_len, up = getFlags(state.sock, &wd.ifr, &iffbuf);
 
     var new_if: ?*IFace = null;

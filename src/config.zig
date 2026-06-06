@@ -617,13 +617,12 @@ pub fn parse(
                 };
                 current.format = format;
                 // zig fmt: off
-                const base = reg.head.ptr;
                 current.data = switch (current.id) {
                     .TIME => .{ .TIME = try .init(reg, arg.?) },
                     .MEM  => .{ .MEM  = undefined },
                     .CPU  => .{ .CPU  = undefined },
                     .DISK => .{ .DISK = try .init(reg, arg.?) },
-                    .NET  => .{ .NET  = try .init(reg, arg.?, format, base) },
+                    .NET  => .{ .NET  = try .initIfr(reg, arg.?) },
                     .BAT  => .{ .BAT  = try .init(reg, arg.?) },
                     .READ => .{ .READ = try .init(reg, arg.?) },
                 };
