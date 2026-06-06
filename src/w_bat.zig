@@ -188,8 +188,7 @@ pub fn widget(
 
     var buf: [1024]u8 = undefined;
     const data = openAndRead(wd.getPath(), &buf) catch |e| {
-        const handler: typ.Widget.NoopColorHandler = .{};
-        const fg, const bg = w.check(handler, base);
+        const fg, const bg = w.colorForceStatic();
         return typ.writeWidget(
             writer,
             fg,

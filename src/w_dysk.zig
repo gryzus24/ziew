@@ -92,8 +92,7 @@ pub fn widget(
             break;
         }
         if (ret != -ext.c.EINTR) {
-            const handler: typ.Widget.NoopColorHandler = .{};
-            const fg, const bg = w.check(handler, base);
+            const fg, const bg = w.colorForceStatic();
             return typ.writeWidget(
                 writer,
                 fg,

@@ -313,11 +313,7 @@ pub const Widget = struct {
         static: color.Hex,
     };
 
-    pub fn check(
-        self: @This(),
-        indirect: anytype,
-        base: [*]const u8,
-    ) struct { color.Hex, color.Hex } {
+    pub fn check(self: *const @This(), indirect: anytype, base: [*]const u8) [2]color.Hex {
         return .{
             switch (self.fg) {
                 .active => |active| indirect.checkPairs(active, base),
@@ -330,18 +326,18 @@ pub const Widget = struct {
         };
     }
 
-    pub const NoopColorHandler = struct {
-        pub fn checkPairs(
-            other: *const @This(),
-            active: color.Active,
-            base: [*]const u8,
-        ) color.Hex {
-            _ = other;
-            _ = active;
-            _ = base;
-            return .empty;
-        }
-    };
+    pub fn colorForceStatic(self: *const @This()) [2]color.Hex {
+        return .{
+            switch (self.fg) {
+                .active => .empty,
+                .static => |static| static,
+            },
+            switch (self.bg) {
+                .active => .empty,
+                .static => |static| static,
+            },
+        };
+    }
 
     // Iterates over each option referenced by a Widget in order:
     //   fg, bg, parts[0], parts[1], ... etc.
