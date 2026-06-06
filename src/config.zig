@@ -307,9 +307,9 @@ fn acceptFormat(
         sp, len = .{ reg.save(u8, .front), 0 };
     }
 
-    var last_str: umem.MemSlice(u8) = .zero;
-    if (len > 0)
-        last_str = .{ .off = @intCast(sp.off), .len = @intCast(len) };
+    var last_str: umem.MemSlice(u8) = .{ .off = @intCast(sp.off), .len = @intCast(len) };
+    if (len == 0)
+        last_str = .zero;
 
     return .{
         .ok = .{

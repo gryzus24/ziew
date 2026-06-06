@@ -342,10 +342,11 @@ pub const Widget = struct {
     };
 
     // Iterates over each option referenced by a Widget in order:
-    //   fg, bg, format.parts.
+    //   fg, bg, parts[0], parts[1], ... etc.
     pub const OptIterator = struct {
-        widget: *const Widget,
-        base: [*]const u8,
+        fg: Color,
+        bg: Color,
+        parts: []const Format.Part,
         i: isize,
 
         const Item = struct {
@@ -356,38 +357,32 @@ pub const Widget = struct {
 
         pub fn init(widget: *const Widget, base: [*]const u8) @This() {
             return .{
-                .widget = widget,
-                .base = base,
+                .fg = widget.fg,
+                .bg = widget.bg,
+                .parts = widget.format.parts.get(base),
                 .i = -2,
             };
         }
 
         pub fn next(self: *@This()) ?Item {
-            while (self.i < 0) {
-                const c = switch (self.i) {
-                    -2 => self.widget.fg,
-                    -1 => self.widget.bg,
-                    else => unreachable,
-                };
+            if (self.i == -2) {
                 self.i += 1;
-                switch (c) {
-                    .active => |a| return .{
-                        .opt = a.opt,
-                        .pct = a.pct,
-                        .width = 0,
-                    },
+                switch (self.fg) {
+                    .active => |a| return .{ .opt = a.opt, .pct = a.pct, .width = 0 },
                     .static => {},
                 }
             }
-            const parts = self.widget.format.parts.get(self.base);
-            if (self.i < parts.len) {
-                const part = &parts[@intCast(self.i)];
+            if (self.i == -1) {
                 self.i += 1;
-                return .{
-                    .opt = part.opt,
-                    .pct = part.flags.pct,
-                    .width = part.wopts.width,
-                };
+                switch (self.bg) {
+                    .active => |a| return .{ .opt = a.opt, .pct = a.pct, .width = 0 },
+                    .static => {},
+                }
+            }
+            if (self.i < self.parts.len) {
+                const p = &self.parts[@intCast(self.i)];
+                self.i += 1;
+                return .{ .opt = p.opt, .pct = p.flags.pct, .width = p.wopts.width };
             }
             return null;
         }
