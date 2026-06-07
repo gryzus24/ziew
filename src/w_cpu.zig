@@ -438,20 +438,16 @@ pub const State = struct {
         };
     }
 
-    pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
+    pub fn checkPairs(self: *const @This(), opt: u8, pairs: []const color.Active.Pair) color.Hex {
         const curr, const prev = typ.constCurrPrev(Stat, &self.stats, self.curr);
         return color.firstColorGEThreshold(
-            switch (@as(typ.Options.Cpu.ColorAdjacent, @enumFromInt(ac.opt))) {
-                .all,
-                .user,
-                .sys,
-                .iowait,
-                => self.usage_pct[ac.opt].roundU24AndTruncate(),
+            switch (@as(typ.Options.Cpu.ColorAdjacent, @enumFromInt(opt))) {
+                .all, .user, .sys, .iowait => self.usage_pct[opt].roundU24AndTruncate(),
                 .blocked => curr.stats[Stat.blocked],
                 .running => curr.stats[Stat.running],
                 .forks => curr.stats[Stat.forks] - prev.stats[Stat.forks],
             },
-            ac.pairs.get(base),
+            pairs,
         );
     }
 };

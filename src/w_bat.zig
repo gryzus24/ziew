@@ -86,18 +86,18 @@ const Battery = struct {
         .fields = @splat(0),
     };
 
-    pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        return switch (@as(typ.Options.Bat.ColorAdjacent, @enumFromInt(ac.opt))) {
+    pub fn checkPairs(self: *const @This(), opt: u8, pairs: []const color.Active.Pair) color.Hex {
+        return switch (@as(typ.Options.Bat.ColorAdjacent, @enumFromInt(opt))) {
             .state => color.firstColorEQThreshold(
                 @intCast(self.fields[Battery.state]),
-                ac.pairs.get(base),
+                pairs,
             ),
             .fulldesign, .fullnow => color.firstColorGEThreshold(
                 unt.Percent(
                     self.fields[Battery.now],
-                    self.fields[ac.opt],
+                    self.fields[opt],
                 ).n.roundU24AndTruncate(),
-                ac.pairs.get(base),
+                pairs,
             ),
         };
     }

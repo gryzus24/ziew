@@ -38,19 +38,19 @@ const MountPair = struct {
 
     const zero: MountPair = .{ .pair = .{ .zero, .zero }, .curr = 0 };
 
-    pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
+    pub fn checkPairs(self: *const @This(), opt: u8, pairs: []const color.Active.Pair) color.Hex {
         const mount = &self.pair[self.curr];
         return color.firstColorGEThreshold(
             unt.Percent(
-                mount.fields[ac.opt],
+                mount.fields[opt],
                 mount.fields[
-                    if (typ.optBit(ac.opt) & typ.Options.Disk.INO_MASK != 0)
+                    if (typ.optBit(opt) & typ.Options.Disk.INO_MASK != 0)
                         Mount.ino_total
                     else
                         Mount.kb_total
                 ],
             ).n.roundU24AndTruncate(),
-            ac.pairs.get(base),
+            pairs,
         );
     }
 };

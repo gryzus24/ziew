@@ -40,14 +40,6 @@ comptime {
         @compileError("Bad IFF_BIT_NAMES_ALPHA sum");
 }
 
-const ColorHandler = struct {
-    up: bool,
-
-    pub fn checkPairs(self: *const @This(), ac: color.Active, base: [*]const u8) color.Hex {
-        return color.firstColorEQThreshold(@intFromBool(self.up), ac.pairs.get(base));
-    }
-};
-
 const IFace = struct {
     node: std.SinglyLinkedList.Node,
     name: [linux.IFNAMESIZE]u8,
@@ -379,9 +371,16 @@ pub fn widget(
         ifs_match = new_if != null and old_if != null;
     }
 
-    const ch: ColorHandler = .{ .up = up };
+    const Handler = struct {
+        up: u8,
 
-    const fg, const bg = w.check(&ch, base);
+        pub fn checkPairs(self: @This(), opt: u8, pairs: []const color.Active.Pair) color.Hex {
+            _ = opt;
+            return color.firstColorEQThreshold(self.up, pairs);
+        }
+    };
+
+    const fg, const bg = w.check(Handler{ .up = @intFromBool(up) }, base);
     typ.writeWidgetBeg(writer, fg, bg);
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
