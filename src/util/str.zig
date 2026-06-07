@@ -35,92 +35,45 @@ pub fn trimWhitespace(str: []const u8) []const u8 {
     return str[a..b];
 }
 
-pub inline fn atou(comptime T: type, buf: []const u8) T {
-    var r: T = buf[0] & 0x0f;
-    for (buf[1..]) |ch| r = r * 10 + (ch & 0x0f);
+// == "atou" function specialization silliness ================================
+
+fn Ret(comptime T: type) type {
+    return struct { T, usize };
+}
+
+pub fn atou(comptime T: type, buf: []const u8) T {
+    var r: T = 0;
+    for (buf) |ch| r = r * 10 + (ch & 0x0f);
     return r;
 }
 
-pub inline fn atou64ForwardUntil(
-    buf: []const u8,
-    i: usize,
-    comptime char: u8,
-) struct { u64, usize } {
+pub fn atouForwardUntil(comptime T: type, buf: []const u8, i: usize, char: u8) Ret(T) {
     var j = i;
-    var r: u64 = 0;
+    var r: T = 0;
     while (buf[j] != char) : (j += 1) {
         r = r * 10 + (buf[j] & 0x0f);
     }
     return .{ r, j };
 }
 
-pub inline fn atou64By8ForwardUntil(
-    buf: []const u8,
-    i: usize,
-    comptime char: u8,
-) struct { u64, usize } {
-    const V = @Vector(8, u8);
-    const exp10: [16]u32 = .{
-        100_000_000, 10_000_000, 1_000_000, 100_000,
-        10_000,      1_000,      100,       10,
-        1,           0,          0,         0,
-        0,           0,          0,         0,
-    };
+pub fn atouForwardUntilOrEOF(comptime T: type, buf: []const u8, i: usize, char: u8) Ret(T) {
     var j = i;
-    var r: u64 = 0;
-    while (true) {
-        const block: V = buf[j..][0..8].*;
-        const digits = block & @as(V, @splat(0x0f));
-        const mask: u8 = @bitCast(block == @as(V, @splat(char)));
-        const len: u8 = @ctz(mask);
-        r *= exp10[8 - len];
-        r += @reduce(.Add, digits * exp10[1 + 8 - len ..][0..8].*);
-        j += len;
-        if (len != 8 or buf[j] == char) break;
-    }
-    return .{ r, j };
-}
-
-pub inline fn atou64ForwardUntilOrEOF(
-    buf: []const u8,
-    i: usize,
-    comptime char: u8,
-) struct { u64, usize } {
-    var j = i;
-    var r: u64 = 0;
+    var r: T = 0;
     while (j < buf.len and buf[j] != char) : (j += 1) {
         r = r * 10 + (buf[j] & 0x0f);
     }
     return .{ r, j };
 }
 
-pub inline fn atou64BackwardUntil(
-    buf: []const u8,
-    i: usize,
-    comptime char: u8,
-) struct { u64, usize } {
+pub fn atouBackwardUntil(comptime T: type, buf: []const u8, i: usize, char: u8) Ret(T) {
     var j = i;
-    var mul: u64 = 1;
-    var r: u64 = 0;
+    var mul: T = 1;
+    var r: T = 0;
     while (buf[j] != char) : (j -= 1) {
         r += (buf[j] & 0x0f) * mul;
         mul *= 10;
     }
     return .{ r, j };
-}
-
-pub fn atou32V9Back(buf: []const u8) u32 {
-    const Block = @Vector(8, u32);
-
-    const exp: Block = .{
-        100_000_000, 10_000_000, 1_000_000,
-        100_000,     10_000,     1_000,
-        100,         10,
-    };
-    const u = buf[buf.len - 1];
-    const block: Block = buf[buf.len - 9 ..][0..8].*;
-    const r = (block & @as(Block, @splat(0x0f))) * exp;
-    return @reduce(.Add, r) + (u & 0x0f);
 }
 
 pub fn digits2_lut(n: u64) [2]u8 {

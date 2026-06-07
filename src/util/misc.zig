@@ -19,7 +19,7 @@ pub fn nrPossibleCpus() u32 {
     while (i > 0 and buf[i] != '-') : (i -= 1) {}
     if (i > 0) i += 1;
 
-    const r, _ = ustr.atou64ForwardUntil(&buf, i, '\n');
+    const r, _ = ustr.atouForwardUntil(u32, &buf, i, '\n');
     return @min(r + 1, NR_POSSIBLE_CPUS_MAX);
 }
 

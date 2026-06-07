@@ -219,13 +219,36 @@ const Graph = struct {
 
 // == private =================================================================
 
+fn atouVecForwardUntil(buf: []const u8, i: usize, char: u8) struct { u64, usize } {
+    const V = @Vector(8, u8);
+    const exp10: [16]u32 = .{
+        100_000_000, 10_000_000, 1_000_000, 100_000,
+        10_000,      1_000,      100,       10,
+        1,           0,          0,         0,
+        0,           0,          0,         0,
+    };
+    var j = i;
+    var r: u64 = 0;
+    while (true) {
+        const block: V = buf[j..][0..8].*;
+        const digits = block & @as(V, @splat(0x0f));
+        const mask: u8 = @bitCast(block == @as(V, @splat(char)));
+        const len: u8 = @ctz(mask);
+        r *= exp10[8 - len];
+        r += @reduce(.Add, digits * exp10[1 + 8 - len ..][0..8].*);
+        j += len;
+        if (len != 8 or buf[j] == char) break;
+    }
+    return .{ r, j };
+}
+
 inline fn parseProcStat(buf: []const u8, out: *Stat) void {
     var cpu: usize = 0;
     var i = "cpu  ".len;
     while (true) {
         var fields: [8]u64 = undefined;
         for (0..fields.len) |fi| {
-            fields[fi], i = ustr.atou64By8ForwardUntil(buf, i, ' ');
+            fields[fi], i = atouVecForwardUntil(buf, i, ' ');
             i += 1;
         }
         const ptr = &out.entries[cpu];
@@ -254,7 +277,7 @@ inline fn parseProcStat(buf: []const u8, out: *Stat) void {
     out.nr_cpux_entries = cpu;
 
     i += "intr ".len;
-    out.stats[Stat.intr], _ = ustr.atou64ForwardUntil(buf, i, ' ');
+    out.stats[Stat.intr], _ = ustr.atouForwardUntil(u64, buf, i, ' ');
 
     const Block = @Vector(32, u8);
 
@@ -270,23 +293,23 @@ inline fn parseProcStat(buf: []const u8, out: *Stat) void {
             break;
         }
     }
-    out.stats[Stat.softirq], _ = ustr.atou64ForwardUntil(buf, i, ' ');
+    out.stats[Stat.softirq], _ = ustr.atouForwardUntil(u64, buf, i, ' ');
     i -= "\nsoftirq X".len;
 
-    out.stats[Stat.blocked], i = ustr.atou64BackwardUntil(buf, i, ' ');
+    out.stats[Stat.blocked], i = ustr.atouBackwardUntil(u64, buf, i, ' ');
     i -= "\nprocs_blocked ".len;
 
-    out.stats[Stat.running], i = ustr.atou64BackwardUntil(buf, i, ' ');
+    out.stats[Stat.running], i = ustr.atouBackwardUntil(u64, buf, i, ' ');
     i -= "\nprocs_running ".len;
 
-    out.stats[Stat.forks], i = ustr.atou64BackwardUntil(buf, i, ' ');
+    out.stats[Stat.forks], i = ustr.atouBackwardUntil(u64, buf, i, ' ');
     i -= "\nprocesses ".len;
     const block: Block = buf[i - 32 ..][0..32].*;
     const mask: u32 = @bitCast(block == @as(Block, @splat('\n')));
     i -= @clz(mask);
     i -= 2;
 
-    out.stats[Stat.ctxt], _ = ustr.atou64BackwardUntil(buf, i, ' ');
+    out.stats[Stat.ctxt], _ = ustr.atouBackwardUntil(u64, buf, i, ' ');
 }
 
 test "/proc/stat parser" {

@@ -220,7 +220,7 @@ inline fn parseProcNetDev(
 
         for (0..new_if.fields.len) |fi| {
             while (line[j] == ' ') : (j += 1) {}
-            new_if.fields[fi], j = ustr.atou64ForwardUntilOrEOF(line, j, ' ');
+            new_if.fields[fi], j = ustr.atouForwardUntilOrEOF(u64, line, j, ' ');
             j += 1;
         }
     }

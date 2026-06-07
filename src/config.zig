@@ -8,7 +8,6 @@ const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
 const ustr = @import("util/str.zig");
 
-const fmt = std.fmt;
 const mem = std.mem;
 
 // == private =================================================================
@@ -319,15 +318,14 @@ fn acceptFormat(
     };
 }
 
-fn acceptInterval(str: []const u8) ?typ.DeciSec {
-    var ret = fmt.parseUnsigned(typ.DeciSec, str, 10) catch |e| switch (e) {
-        error.Overflow => return typ.WIDGET_INTERVAL_MAX,
-        error.InvalidCharacter => return null,
-    };
-    if (ret == 0 or ret > typ.WIDGET_INTERVAL_MAX)
-        ret = typ.WIDGET_INTERVAL_MAX;
-
-    return ret;
+fn atouChecked(comptime T: type, buf: []const u8) ?T {
+    var r: T = 0;
+    for (buf) |ch| {
+        if (ch < '0' or '9' < ch) return null;
+        r *|= 10;
+        r +|= ch & 0x0f;
+    }
+    return r;
 }
 
 fn acceptPrefix(str: []const u8, prefix: u8) bool {
@@ -337,13 +335,9 @@ fn acceptPrefix(str: []const u8, prefix: u8) bool {
 const ColorIdentifier = enum { fg, bg };
 
 fn strColorIdentifier(str: []const u8) ?ColorIdentifier {
-    if (mem.eql(u8, str, "FG")) {
-        return .fg;
-    } else if (mem.eql(u8, str, "BG")) {
-        return .bg;
-    } else {
-        return null;
-    }
+    if (mem.eql(u8, str, "FG")) return .fg;
+    if (mem.eql(u8, str, "BG")) return .bg;
+    return null;
 }
 
 const ColorOptResult = union(enum) {
@@ -434,8 +428,12 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
                 }
             },
             .interval => {
-                if (acceptInterval(field)) |ok| {
-                    result.widget.interval = .init(ok);
+                if (atouChecked(typ.DeciSec, field)) |ok| {
+                    var interval = ok;
+                    if (interval == 0 or interval > typ.WIDGET_INTERVAL_MAX)
+                        interval = typ.WIDGET_INTERVAL_MAX;
+
+                    result.widget.interval = .init(interval);
                     want = .key;
                 } else {
                     return .fail("bad interval", split);
@@ -470,11 +468,8 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
             .color_active_pair => {
                 const sep = mem.findScalarPos(u8, field, 0, ':') orelse
                     return .fail("missing threshold", split);
-                const thresh = fmt.parseUnsigned(u8, field[0..sep], 10) catch |e| switch (e) {
-                    error.Overflow,
-                    error.InvalidCharacter,
-                    => return .fail("bad threshold", split),
-                };
+                const thresh = atouChecked(u8, field[0..sep]) orelse
+                    return .fail("bad threshold", split);
                 if (thresh > 100) return .fail("threshold too big (0..100)", split);
 
                 const tag: color.Hex.Tag = switch (result.color.type) {

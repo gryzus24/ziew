@@ -5,7 +5,6 @@ const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
 const uio = @import("util/io.zig");
-const ustr = @import("util/str.zig");
 
 const linux = std.os.linux;
 
@@ -34,6 +33,20 @@ const Meminfo = struct {
 
 // == private =================================================================
 
+fn atouVec(buf: []const u8) u32 {
+    const Block = @Vector(8, u32);
+
+    const exp: Block = .{
+        100_000_000, 10_000_000, 1_000_000,
+        100_000,     10_000,     1_000,
+        100,         10,
+    };
+    const u = buf[buf.len - 1];
+    const block: Block = buf[buf.len - 9 ..][0..8].*;
+    const r = (block & @as(Block, @splat(0x0f))) * exp;
+    return @reduce(.Add, r) + (u & 0x0f);
+}
+
 inline fn parseProcMeminfo(buf: []const u8, out: *Meminfo) void {
     const KEY_LEN = "xxxxxxxx:       ".len;
     const VAL_LEN = 8;
@@ -46,7 +59,7 @@ inline fn parseProcMeminfo(buf: []const u8, out: *Meminfo) void {
     for (0..7) |fi| {
         while (buf[i] != '\n') : (i += 1) {}
         // Will break on systems with over 953 GB of RAM.
-        out.fields[fi] = ustr.atou32V9Back(buf[0 .. i - "kb\n".len]);
+        out.fields[fi] = atouVec(buf[0 .. i - "kb\n".len]);
 
         if (fi == 4) {
             // Skipping 11 fields is tight for kernels
