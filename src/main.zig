@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const cfg = @import("config.zig");
 const log = @import("log.zig");
@@ -363,12 +364,15 @@ fn copy(dst: []u8, vecs: []const []const u8) []const u8 {
     return dst[0..pos];
 }
 
-pub fn main(init: process.Init.Minimal) void {
+comptime {
+    if (!builtin.is_test) @export(&main, .{ .name = "main" });
+}
+pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
     errdefer |e| log.fatal(&.{ "main: ", @errorName(e) });
 
     var reg: umem.Region = .init(&g_bss, "main");
 
-    const args: Args = .read(init.args.vector);
+    const args: Args = .read(argv[0..@intCast(argc)]);
     const widgets = loadConfig(&reg, args.config_path);
 
     setupSignals();
