@@ -130,9 +130,8 @@ Every option and color configuration for each *Widget* is documented below.
                 of precision <N> as an option, where <N> is within [1, 9].
                 The resulting timestamp is not rounded.
 
-    Colors
-      [+] default
-      [ ] conditional (unsupported)
+    Conditional colors
+      unsupported
 
     Example config entry
       TIME 20 arg "%A %d.%m ~ %H:%M:%S" format "{time}.{3}"
@@ -161,9 +160,8 @@ Every option and color configuration for each *Widget* is documented below.
     Option flag @d or @s may affect
       all non-%-prefixed options
 
-    Colors
-      [+] default
-      [-] conditional (only %-prefixed options supported)
+    Conditional colors
+      only %-prefixed options supported
 
     Example config entry
       MEM 20 format "mem: {used:<2}:{free:>2} [{cached:.0}]"
@@ -203,10 +201,8 @@ Every option and color configuration for each *Widget* is documented below.
     Option flag @d or @s may affect
       intr, ctxt, forks, running, blocked, softirq
 
-    Colors
-      [+] default
-      [-] conditional (only forks, running, blocked and %-prefixed options
-                      supported)
+    Conditional colors
+      all except *bars and *graph options
 
     Example config entry
       CPU 15 format "cpu: {running} {blocked} |{brlgraph:5}| {blkbars} {all:<}"
@@ -240,9 +236,8 @@ Every option and color configuration for each *Widget* is documented below.
     Option flag @d or @s may affect
       total, free, available, used, and all ino_* options
 
-    Colors
-      [+] default
-      [-] conditional (only %-prefixed options supported)
+    Conditional colors
+      only %-prefixed options supported
 
     Example config entry
       DISK 600 arg /home format "{arg} {available}/{total}"
@@ -282,9 +277,8 @@ Every option and color configuration for each *Widget* is documented below.
     Option flag @d or @s may affect
       all rx_* and tx_* options
 
-    Colors
-      [+] default
-      [-] conditional (only state option supported)
+    Conditional colors
+      only state option supported
 
       state: 0 - interface is down,
              1 - interface is up.
@@ -312,9 +306,8 @@ Every option and color configuration for each *Widget* is documented below.
       * state          - battery state: "Discharging", "Charging", "Full",
                          or "Not-charging".
 
-    Colors
-      [+] default
-      [+] conditional
+    Conditional colors
+      state and %-prefixed options supported
 
       state: 0 - battery is discharging,
              1 - battery is charging,
@@ -343,9 +336,8 @@ Every option and color configuration for each *Widget* is documented below.
       * content  - line of text from the file with the color fields applied,
       * raw      - line of text from the file.
 
-    Colors
-      [+] default
-      [-] conditional (read directly from the file)
+    Conditional colors
+      read directly from the file
 
       color format of the "content" option, specified directly in the file:
         #[FG RGB] #[BG RGB] [TEXT] - apply FG and BG colors
