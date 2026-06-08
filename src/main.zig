@@ -71,19 +71,10 @@ const Args = struct {
 };
 
 const WidgetStates = struct {
-    mem: w_mem.State,
-    cpu: w_cpu.State,
-    disk: w_dysk.State,
-    net: w_net.State,
-
-    fn init() @This() {
-        return .{
-            .mem = undefined,
-            .cpu = undefined,
-            .disk = undefined,
-            .net = .empty,
-        };
-    }
+    mem: w_mem.State = undefined,
+    cpu: w_cpu.State = undefined,
+    disk: w_dysk.State = undefined,
+    net: w_net.State = .empty,
 };
 
 fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
@@ -238,49 +229,46 @@ fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
 }
 
 fn setupWidgets(reg: *umem.Region, widgets: []typ.Widget, states: *WidgetStates) !void {
-    var intervals: [4]typ.DeciSec = @splat(typ.WIDGET_INTERVAL_MAX);
+    var intrvl: [4]typ.DeciSec = @splat(typ.WIDGET_INTERVAL_MAX);
     var inited: [4]bool = @splat(false);
-    const mem_i = 0;
-    const cpu_i = 1;
-    const net_i = 2;
-    const disk_i = 3;
+
+    const Fn = struct {
+        fn index(id: typ.Widget.Id) usize {
+            return @intFromEnum(id) -% 1;
+        }
+        comptime {
+            std.debug.assert(index(typ.Widget.Id.MEM) == 0);
+            std.debug.assert(index(typ.Widget.Id.CPU) == 1);
+            std.debug.assert(index(typ.Widget.Id.DISK) == 2);
+            std.debug.assert(index(typ.Widget.Id.NET) == 3);
+        }
+    };
 
     for (widgets) |*w| switch (w.id) {
-        .MEM => {
-            if (!inited[mem_i]) {
-                states.mem = .init();
-                inited[mem_i] = true;
-            }
-            intervals[mem_i] = @min(intervals[mem_i], w.interval.set);
-        },
-        .CPU => {
-            if (!inited[cpu_i]) {
-                states.cpu = try .init(reg, widgets);
-                inited[cpu_i] = true;
-            }
-            intervals[cpu_i] = @min(intervals[cpu_i], w.interval.set);
-        },
-        .DISK => {
-            if (!inited[disk_i]) {
-                states.disk = try .init(reg, widgets);
-                inited[disk_i] = true;
+        .MEM, .CPU, .DISK, .NET => {
+            const id = Fn.index(w.id);
+
+            if (!inited[id]) {
+                switch (w.id) {
+                    .MEM => states.mem = .init(),
+                    .CPU => states.cpu = try .init(reg, widgets),
+                    .DISK => states.disk = try .init(reg, widgets),
+                    .NET => states.net = .init(widgets, reg.head.ptr),
+                    else => unreachable,
+                }
+                inited[id] = true;
             }
             // DISK widgets perform per mountpoint updates,
             // no need to clamp the interval.
-        },
-        .NET => {
-            if (!inited[net_i]) {
-                states.net = .init(widgets, reg.head.ptr);
-                inited[net_i] = true;
+            switch (w.id) {
+                .MEM, .CPU, .NET => intrvl[id] = @min(intrvl[id], w.interval.set),
+                else => {},
             }
-            intervals[net_i] = @min(intervals[net_i], w.interval.set);
         },
         else => {},
     };
     for (widgets) |*w| switch (w.id) {
-        .CPU => w.interval.set = intervals[cpu_i],
-        .MEM => w.interval.set = intervals[mem_i],
-        .NET => w.interval.set = intervals[net_i],
+        .MEM, .CPU, .NET => w.interval.set = intrvl[Fn.index(w.id)],
         else => {},
     };
 }
@@ -383,7 +371,7 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
         .nsec = @rem(sleep_dsec, 10) * (time.ns_per_s / 10),
     };
 
-    var states: WidgetStates = .init();
+    var states: WidgetStates = .{};
     try setupWidgets(&reg, widgets, &states);
 
     const vecs = try reg.allocMany([]const u8, widgets.len, .front);
