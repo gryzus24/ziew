@@ -74,8 +74,8 @@ pub const F5608 = struct {
         return .{ .u = q * step };
     }
 
-    pub inline fn roundU24AndTruncate(self: @This()) u64 {
-        return self.roundU24(0).whole();
+    pub inline fn roundU24AndTruncate(self: @This()) u32 {
+        return @intCast(self.roundU24(0).whole());
     }
 
     pub const FRAC_SHIFT = 8;

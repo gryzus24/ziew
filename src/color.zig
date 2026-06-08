@@ -1,11 +1,10 @@
 const umem = @import("util/mem.zig");
 
 pub const Hex = struct {
-    _priv: u8 = undefined,
     tag: Tag,
     hex: [6]u8,
 
-    pub const Tag = enum(u8) {
+    pub const Tag = enum(u16) {
         empty,
         fg,
         bg,
@@ -24,23 +23,8 @@ pub const Active = struct {
     pairs: umem.MemSlice(Pair),
 
     pub const Pair = struct {
-        inner: Hex,
-
-        pub fn init(tag: Hex.Tag, hex: [6]u8, _thresh: u8) @This() {
-            var ret: Hex = .init(tag, hex);
-            ret._priv = _thresh;
-            return .{ .inner = ret };
-        }
-
-        pub fn initEmpty(_thresh: u8) @This() {
-            var ret: Hex = .empty;
-            ret._priv = _thresh;
-            return .{ .inner = ret };
-        }
-
-        pub fn thresh(self: @This()) u8 {
-            return self.inner._priv;
-        }
+        thresh: u32,
+        hex: Hex,
     };
 };
 
@@ -77,18 +61,18 @@ pub fn acceptHex(str: []const u8) ?[6]u8 {
 pub inline fn firstColorGEThreshold(value: u64, pairs: []const Active.Pair) Hex {
     var i: usize = 0;
     for (pairs) |pair| {
-        if (pair.thresh() > value) break;
+        if (pair.thresh > value) break;
         i += 1;
     }
     if (i != 0)
-        return pairs[i - 1].inner;
+        return pairs[i - 1].hex;
 
     return .empty;
 }
 
-pub inline fn firstColorEQThreshold(value: u8, pairs: []const Active.Pair) Hex {
+pub inline fn firstColorEQThreshold(value: u32, pairs: []const Active.Pair) Hex {
     for (pairs) |pair| {
-        if (pair.thresh() == value) return pair.inner;
+        if (pair.thresh == value) return pair.hex;
     }
     return .empty;
 }

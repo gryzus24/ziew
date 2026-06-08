@@ -467,9 +467,10 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
             .color_active_pair => {
                 const sep = mem.findScalarPos(u8, field, 0, ':') orelse
                     return .fail("missing threshold", split);
-                const thresh = atouChecked(u8, field[0..sep]) orelse
+                const thresh = atouChecked(u32, field[0..sep]) orelse
                     return .fail("bad threshold", split);
-                if (thresh > 100) return .fail("threshold too big (0..100)", split);
+                if (thresh == ~@as(u32, 0))
+                    return .fail("threshold too big", split);
 
                 const tag: color.Hex.Tag = switch (result.color.type) {
                     .fg => .fg,
@@ -478,10 +479,10 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
                 const hex = field[sep + 1 ..];
                 if (color.acceptHex(hex)) |ok| {
                     const ptr = try tmp.pushVec(&result.color.data.?.active.pairs, .front);
-                    ptr.* = .init(tag, ok, thresh);
+                    ptr.* = .{ .thresh = thresh, .hex = .init(tag, ok) };
                 } else if (hex.len == 0 or mem.eql(u8, hex, "default")) {
                     const ptr = try tmp.pushVec(&result.color.data.?.active.pairs, .front);
-                    ptr.* = .initEmpty(thresh);
+                    ptr.* = .{ .thresh = thresh, .hex = .empty };
                 } else {
                     return .fail("bad hex", .{ .beg = split.beg + sep + 1, .end = split.end });
                 }
@@ -894,11 +895,14 @@ test parse {
     r = try testParse("CPU 1 format {all:.1}\nFG %all 1:ff8 98: 99:012 100:dd", &reg, &scratch);
     try testDiag(r, "bad hex", 2, .{ .beg = 29, .end = 31 });
 
-    r = try testParse("CPU 1 format {all:.1}\nFG %all 1:ff8 98: 99:012 101:dd", &reg, &scratch);
-    try testDiag(r, "threshold too big (0..100)", 2, .{ .beg = 25, .end = 31 });
+    r = try testParse("CPU 1 format {all:.1}\nFG %all 1:ff8 98: 99:012 4294967295:dd XXX", &reg, &scratch);
+    try testDiag(r, "threshold too big", 2, .{ .beg = 25, .end = 38 });
 
-    r = try testParse("CPU 1 format {all:.1}\nFG %all 1:ff8 98: 99:012 101:ddd", &reg, &scratch);
-    try testDiag(r, "threshold too big (0..100)", 2, .{ .beg = 25, .end = 32 });
+    r = try testParse("CPU 1 format {all:.1}\nFG %all 1:ff8 98: 99:012 4294967296:ddd", &reg, &scratch);
+    try testDiag(r, "threshold too big", 2, .{ .beg = 25, .end = 39 });
+
+    r = try testParse("CPU 1 format {all:.1}\nFG %all 1:ff8 98: 99:012 429496729789:ddd", &reg, &scratch);
+    try testDiag(r, "threshold too big", 2, .{ .beg = 25, .end = 41 });
 
     r = try testParse("NET 5 arg eth0 format \"AA{arg}{arg}\"\n", &reg, &scratch);
     try testArgMerge(r, 0, null, "AAeth0eth0", &reg);
