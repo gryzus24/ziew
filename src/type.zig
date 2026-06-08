@@ -127,14 +127,13 @@ pub const Widget = struct {
         const SIZE_MAX = 64;
 
         comptime {
-            const assert = std.debug.assert;
-            assert(@sizeOf(Time) <= SIZE_MAX);
+            std.debug.assert(@sizeOf(Time) <= SIZE_MAX);
             // Mem
             // Cpu
-            assert(@sizeOf(Disk) <= SIZE_MAX);
-            assert(@sizeOf(Net) <= SIZE_MAX);
-            assert(@sizeOf(Bat) <= SIZE_MAX);
-            assert(@sizeOf(Read) <= SIZE_MAX);
+            std.debug.assert(@sizeOf(Disk) <= SIZE_MAX);
+            std.debug.assert(@sizeOf(Net) <= SIZE_MAX);
+            std.debug.assert(@sizeOf(Bat) <= SIZE_MAX);
+            std.debug.assert(@sizeOf(Read) <= SIZE_MAX);
         }
 
         pub const Time = struct {

@@ -14,7 +14,7 @@ const Meminfo = struct {
     const NR_FIELDS = 8;
 
     comptime {
-        std.debug.assert(NR_FIELDS == @typeInfo(typ.Options.Mem).@"enum".fields.len);
+        std.debug.assert(@typeInfo(typ.Options.Mem).@"enum".fields.len == NR_FIELDS);
     }
 
     const zero: Meminfo = .{ .fields = @splat(0) };
@@ -147,13 +147,11 @@ pub const State = struct {
     ) color.Hex {
         _ = pct;
         const mi = &self.meminfos[self.curr];
-        return color.firstColorGEThreshold(
-            unt.Percent(
-                mi.fields[opt],
-                mi.total(),
-            ).n.roundU24AndTruncate(),
-            pairs,
-        );
+        const value = unt.Percent(
+            mi.fields[opt],
+            mi.total(),
+        ).n.roundU24AndTruncate();
+        return color.firstColorGEThreshold(value, pairs);
     }
 };
 

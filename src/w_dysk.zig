@@ -10,24 +10,25 @@ const umem = @import("util/mem.zig");
 const Mount = struct {
     fields: [8]u64,
 
-    const kb_total = 0;
-    const kb_free = 1;
-    const kb_avail = 2;
-    const kb_used = 3;
-    const ino_total = 4;
-    const ino_free = 5;
-    const ino_used = 6;
+    // zig fmt: off
+    const kb_total  = @intFromEnum(typ.Options.Disk.total);
+    const kb_free   = @intFromEnum(typ.Options.Disk.free);
+    const kb_avail  = @intFromEnum(typ.Options.Disk.available);
+    const kb_used   = @intFromEnum(typ.Options.Disk.used);
+    const ino_total = @intFromEnum(typ.Options.Disk.ino_total);
+    const ino_free  = @intFromEnum(typ.Options.Disk.ino_free);
+    const ino_used  = @intFromEnum(typ.Options.Disk.ino_used);
 
     comptime {
-        const assert = std.debug.assert;
-        assert(kb_total == @intFromEnum(typ.Options.Disk.total));
-        assert(kb_free == @intFromEnum(typ.Options.Disk.free));
-        assert(kb_avail == @intFromEnum(typ.Options.Disk.available));
-        assert(kb_used == @intFromEnum(typ.Options.Disk.used));
-        assert(ino_total == @intFromEnum(typ.Options.Disk.ino_total));
-        assert(ino_free == @intFromEnum(typ.Options.Disk.ino_free));
-        assert(ino_used == @intFromEnum(typ.Options.Disk.ino_used));
+        std.debug.assert(kb_total  == 0);
+        std.debug.assert(kb_free   == 1);
+        std.debug.assert(kb_avail  == 2);
+        std.debug.assert(kb_used   == 3);
+        std.debug.assert(ino_total == 4);
+        std.debug.assert(ino_free  == 5);
+        std.debug.assert(ino_used  == 6);
     }
+    // zig fmt: on
 
     const zero: Mount = .{ .fields = @splat(0) };
 };
@@ -46,18 +47,16 @@ const MountPair = struct {
     ) color.Hex {
         _ = pct;
         const mount = &self.pair[self.curr];
-        return color.firstColorGEThreshold(
-            unt.Percent(
-                mount.fields[opt],
-                mount.fields[
-                    if (typ.optBit(opt) & typ.Options.Disk.INO_MASK != 0)
-                        Mount.ino_total
-                    else
-                        Mount.kb_total
-                ],
-            ).n.roundU24AndTruncate(),
-            pairs,
-        );
+        const value = unt.Percent(
+            mount.fields[opt],
+            mount.fields[
+                if (typ.optBit(opt) & typ.Options.Disk.INO_MASK != 0)
+                    Mount.ino_total
+                else
+                    Mount.kb_total
+            ],
+        ).n.roundU24AndTruncate();
+        return color.firstColorGEThreshold(value, pairs);
     }
 };
 

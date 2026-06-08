@@ -45,43 +45,44 @@ const IFace = struct {
     name: [linux.IFNAMESIZE]u8,
     fields: [16]u64,
 
-    const rx_bytes = 0;
-    const rx_pkts = 1;
-    const rx_errs = 2;
-    const rx_drop = 3;
-    const rx_fifo = 4;
-    const rx_frame = 5;
-    const rx_compressed = 6;
-    const rx_multicast = 7;
-    const tx_bytes = 8;
-    const tx_pkts = 9;
-    const tx_errs = 10;
-    const tx_drop = 11;
-    const tx_fifo = 12;
-    const tx_colls = 13;
-    const tx_carrier = 14;
-    const tx_compressed = 15;
+    // zig fmt: off
+    const __off         = typ.Options.Net.NETDEV_OFF;
+    const rx_bytes      = @intFromEnum(typ.Options.Net.rx_bytes) - __off;
+    const rx_pkts       = @intFromEnum(typ.Options.Net.rx_pkts) - __off;
+    const rx_errs       = @intFromEnum(typ.Options.Net.rx_errs) - __off;
+    const rx_drop       = @intFromEnum(typ.Options.Net.rx_drop) - __off;
+    const rx_fifo       = @intFromEnum(typ.Options.Net.rx_fifo) - __off;
+    const rx_frame      = @intFromEnum(typ.Options.Net.rx_frame) - __off;
+    const rx_compressed = @intFromEnum(typ.Options.Net.rx_compressed) - __off;
+    const rx_multicast  = @intFromEnum(typ.Options.Net.rx_multicast) - __off;
+    const tx_bytes      = @intFromEnum(typ.Options.Net.tx_bytes) - __off;
+    const tx_pkts       = @intFromEnum(typ.Options.Net.tx_pkts) - __off;
+    const tx_errs       = @intFromEnum(typ.Options.Net.tx_errs) - __off;
+    const tx_drop       = @intFromEnum(typ.Options.Net.tx_drop) - __off;
+    const tx_fifo       = @intFromEnum(typ.Options.Net.tx_fifo) - __off;
+    const tx_colls      = @intFromEnum(typ.Options.Net.tx_colls) - __off;
+    const tx_carrier    = @intFromEnum(typ.Options.Net.tx_carrier) - __off;
+    const tx_compressed = @intFromEnum(typ.Options.Net.tx_compressed) - __off;
 
     comptime {
-        const assert = std.debug.assert;
-        const off = typ.Options.Net.NETDEV_OFF;
-        assert(rx_bytes == @intFromEnum(typ.Options.Net.rx_bytes) - off);
-        assert(rx_pkts == @intFromEnum(typ.Options.Net.rx_pkts) - off);
-        assert(rx_errs == @intFromEnum(typ.Options.Net.rx_errs) - off);
-        assert(rx_drop == @intFromEnum(typ.Options.Net.rx_drop) - off);
-        assert(rx_fifo == @intFromEnum(typ.Options.Net.rx_fifo) - off);
-        assert(rx_frame == @intFromEnum(typ.Options.Net.rx_frame) - off);
-        assert(rx_compressed == @intFromEnum(typ.Options.Net.rx_compressed) - off);
-        assert(rx_multicast == @intFromEnum(typ.Options.Net.rx_multicast) - off);
-        assert(tx_bytes == @intFromEnum(typ.Options.Net.tx_bytes) - off);
-        assert(tx_pkts == @intFromEnum(typ.Options.Net.tx_pkts) - off);
-        assert(tx_errs == @intFromEnum(typ.Options.Net.tx_errs) - off);
-        assert(tx_drop == @intFromEnum(typ.Options.Net.tx_drop) - off);
-        assert(tx_fifo == @intFromEnum(typ.Options.Net.tx_fifo) - off);
-        assert(tx_colls == @intFromEnum(typ.Options.Net.tx_colls) - off);
-        assert(tx_carrier == @intFromEnum(typ.Options.Net.tx_carrier) - off);
-        assert(tx_compressed == @intFromEnum(typ.Options.Net.tx_compressed) - off);
+        std.debug.assert(rx_bytes      == 0);
+        std.debug.assert(rx_pkts       == 1);
+        std.debug.assert(rx_errs       == 2);
+        std.debug.assert(rx_drop       == 3);
+        std.debug.assert(rx_fifo       == 4);
+        std.debug.assert(rx_frame      == 5);
+        std.debug.assert(rx_compressed == 6);
+        std.debug.assert(rx_multicast  == 7);
+        std.debug.assert(tx_bytes      == 8);
+        std.debug.assert(tx_pkts       == 9);
+        std.debug.assert(tx_errs       == 10);
+        std.debug.assert(tx_drop       == 11);
+        std.debug.assert(tx_fifo       == 12);
+        std.debug.assert(tx_colls      == 13);
+        std.debug.assert(tx_carrier    == 14);
+        std.debug.assert(tx_compressed == 15);
     }
+    // zig fmt: on
 
     fn setName(self: *@This(), name: []const u8) void {
         self.name[0..16].* = @splat(0);

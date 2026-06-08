@@ -48,16 +48,22 @@ const Parser = struct {
 const Battery = struct {
     fields: [4]u64,
 
-    const state = @intFromEnum(Parser.Key.status);
+    // zig fmt: off
+    const state       = @intFromEnum(Parser.Key.status);
     const full_design = @intFromEnum(Parser.Key.full_design);
-    const full_now = @intFromEnum(Parser.Key.full);
-    const now = @intFromEnum(Parser.Key.now);
+    const full_now    = @intFromEnum(Parser.Key.full);
+    const now         = @intFromEnum(Parser.Key.now);
 
     comptime {
-        const assert = std.debug.assert;
-        assert(state == @intFromEnum(typ.Options.Bat.state));
-        assert(full_design == @intFromEnum(typ.Options.Bat.fulldesign));
-        assert(full_now == @intFromEnum(typ.Options.Bat.fullnow));
+        std.debug.assert(state       == @intFromEnum(typ.Options.Bat.state));
+        std.debug.assert(full_design == @intFromEnum(typ.Options.Bat.fulldesign));
+        std.debug.assert(full_now    == @intFromEnum(typ.Options.Bat.fullnow));
+        // N/A
+
+        std.debug.assert(state       == 0);
+        std.debug.assert(full_design == 1);
+        std.debug.assert(full_now    == 2);
+        std.debug.assert(now         == 3);
     }
 
     const State = enum(u8) {
@@ -69,7 +75,6 @@ const Battery = struct {
 
         const WIDTH = 12;
 
-        // zig fmt: off
         const names: [5][WIDTH]u8 = blk: {
             var t: [5][WIDTH]u8 = undefined;
             t[@intFromEnum(Battery.State.discharging)] = "Discharging ".*;
@@ -79,8 +84,8 @@ const Battery = struct {
             t[@intFromEnum(Battery.State.unknown)]     = "Unknown     ".*;
             break :blk t;
         };
-        // zig fmt: on
     };
+    // zig fmt: on
 
     const default: Battery = .{
         .fields = @splat(0),
@@ -93,7 +98,9 @@ const Battery = struct {
         pairs: []const color.Active.Pair,
     ) color.Hex {
         _ = pct;
-        return switch (@as(typ.Options.Bat.ColorSupported, @enumFromInt(opt))) {
+        const opt_color: typ.Options.Bat.ColorSupported = @enumFromInt(opt);
+
+        return switch (opt_color) {
             .state => color.firstColorEQThreshold(
                 @intCast(self.fields[Battery.state]),
                 pairs,
