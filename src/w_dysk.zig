@@ -38,7 +38,13 @@ const MountPair = struct {
 
     const zero: MountPair = .{ .pair = .{ .zero, .zero }, .curr = 0 };
 
-    pub fn checkPairs(self: *const @This(), opt: u8, pairs: []const color.Active.Pair) color.Hex {
+    pub fn checkPairs(
+        self: *const @This(),
+        opt: u8,
+        pct: bool,
+        pairs: []const color.Active.Pair,
+    ) color.Hex {
+        _ = pct;
         const mount = &self.pair[self.curr];
         return color.firstColorGEThreshold(
             unt.Percent(

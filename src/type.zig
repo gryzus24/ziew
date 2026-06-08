@@ -315,11 +315,19 @@ pub const Widget = struct {
     pub fn check(self: *const @This(), indirect: anytype, base: [*]const u8) [2]color.Hex {
         return .{
             switch (self.fg) {
-                .active => |*active| indirect.checkPairs(active.opt, active.pairs.get(base)),
+                .active => |*active| indirect.checkPairs(
+                    active.opt,
+                    active.pct,
+                    active.pairs.get(base),
+                ),
                 .static => |static| static,
             },
             switch (self.bg) {
-                .active => |*active| indirect.checkPairs(active.opt, active.pairs.get(base)),
+                .active => |*active| indirect.checkPairs(
+                    active.opt,
+                    active.pct,
+                    active.pairs.get(base),
+                ),
                 .static => |static| static,
             },
         };
@@ -453,9 +461,7 @@ pub const Options = struct {
 
         pub const PctPrefix = Usage;
         pub const ColorPct = PctPrefix;
-        pub const ColorBare = EnumSubset(@This(), &.{
-            .blocked, .running, .forks,
-        });
+        pub const ColorBare = EnumUnion(@This(), Usage, Stats);
         pub const ColorSupported = EnumUnion(@This(), ColorPct, ColorBare);
 
         pub const USAGE_MASK = MaskFromEnum(Usage);

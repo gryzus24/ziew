@@ -120,22 +120,16 @@ const Stat = struct {
     nr_cpux_entries: usize,
     stats: [6]u64,
 
-    const intr = 0;
-    const softirq = 1;
-    const blocked = 2;
-    const running = 3;
-    const forks = 4;
-    const ctxt = 5;
-
+    fn index(opt: typ.Options.Cpu) usize {
+        return @intFromEnum(opt) -% typ.Options.Cpu.STATS_OFF;
+    }
     comptime {
-        const assert = std.debug.assert;
-        const off = typ.Options.Cpu.STATS_OFF;
-        assert(intr == @intFromEnum(typ.Options.Cpu.intr) - off);
-        assert(softirq == @intFromEnum(typ.Options.Cpu.softirq) - off);
-        assert(blocked == @intFromEnum(typ.Options.Cpu.blocked) - off);
-        assert(running == @intFromEnum(typ.Options.Cpu.running) - off);
-        assert(forks == @intFromEnum(typ.Options.Cpu.forks) - off);
-        assert(ctxt == @intFromEnum(typ.Options.Cpu.ctxt) - off);
+        std.debug.assert(index(typ.Options.Cpu.intr) == 0);
+        std.debug.assert(index(typ.Options.Cpu.softirq) == 1);
+        std.debug.assert(index(typ.Options.Cpu.blocked) == 2);
+        std.debug.assert(index(typ.Options.Cpu.running) == 3);
+        std.debug.assert(index(typ.Options.Cpu.forks) == 4);
+        std.debug.assert(index(typ.Options.Cpu.ctxt) == 5);
     }
 
     fn initZero(reg: *umem.Region, nr_possible_cpus: u32) !@This() {
@@ -277,7 +271,8 @@ inline fn parseProcStat(buf: []const u8, out: *Stat) void {
     out.nr_cpux_entries = cpu;
 
     i += "intr ".len;
-    out.stats[Stat.intr], _ = ustr.atouForwardUntil(u64, buf, i, ' ');
+    out.stats[Stat.index(typ.Options.Cpu.intr)], _ =
+        ustr.atouForwardUntil(u64, buf, i, ' ');
 
     const Block = @Vector(32, u8);
 
@@ -293,23 +288,28 @@ inline fn parseProcStat(buf: []const u8, out: *Stat) void {
             break;
         }
     }
-    out.stats[Stat.softirq], _ = ustr.atouForwardUntil(u64, buf, i, ' ');
+    out.stats[Stat.index(typ.Options.Cpu.softirq)], _ =
+        ustr.atouForwardUntil(u64, buf, i, ' ');
     i -= "\nsoftirq X".len;
 
-    out.stats[Stat.blocked], i = ustr.atouBackwardUntil(u64, buf, i, ' ');
+    out.stats[Stat.index(typ.Options.Cpu.blocked)], i =
+        ustr.atouBackwardUntil(u64, buf, i, ' ');
     i -= "\nprocs_blocked ".len;
 
-    out.stats[Stat.running], i = ustr.atouBackwardUntil(u64, buf, i, ' ');
+    out.stats[Stat.index(typ.Options.Cpu.running)], i =
+        ustr.atouBackwardUntil(u64, buf, i, ' ');
     i -= "\nprocs_running ".len;
 
-    out.stats[Stat.forks], i = ustr.atouBackwardUntil(u64, buf, i, ' ');
+    out.stats[Stat.index(typ.Options.Cpu.forks)], i =
+        ustr.atouBackwardUntil(u64, buf, i, ' ');
     i -= "\nprocesses ".len;
     const block: Block = buf[i - 32 ..][0..32].*;
     const mask: u32 = @bitCast(block == @as(Block, @splat('\n')));
     i -= @clz(mask);
     i -= 2;
 
-    out.stats[Stat.ctxt], _ = ustr.atouBackwardUntil(u64, buf, i, ' ');
+    out.stats[Stat.index(typ.Options.Cpu.ctxt)], _ =
+        ustr.atouBackwardUntil(u64, buf, i, ' ');
 }
 
 test "/proc/stat parser" {
@@ -461,17 +461,31 @@ pub const State = struct {
         };
     }
 
-    pub fn checkPairs(self: *const @This(), opt: u8, pairs: []const color.Active.Pair) color.Hex {
+    pub fn checkPairs(
+        self: *const @This(),
+        opt: u8,
+        pct: bool,
+        pairs: []const color.Active.Pair,
+    ) color.Hex {
         const curr, const prev = typ.constCurrPrev(Stat, &self.stats, self.curr);
-        return color.firstColorGEThreshold(
-            switch (@as(typ.Options.Cpu.ColorSupported, @enumFromInt(opt))) {
-                .all, .user, .sys, .iowait => self.usage_pct[opt].roundU24AndTruncate(),
-                .blocked => curr.stats[Stat.blocked],
-                .running => curr.stats[Stat.running],
-                .forks => curr.stats[Stat.forks] - prev.stats[Stat.forks],
+        const opt_color: typ.Options.Cpu.ColorSupported = @enumFromInt(opt);
+        const id = Stat.index(@enumFromInt(opt));
+
+        const value = switch (opt_color) {
+            .all, .user, .sys, .iowait => blk: {
+                const ptr = if (pct) &self.usage_pct else &self.usage_abs;
+                break :blk ptr[opt].roundU24AndTruncate();
             },
-            pairs,
-        );
+            .intr, .softirq, .blocked, .running, .forks, .ctxt => blk: {
+                var stat = curr.stats[id];
+                switch (opt_color) {
+                    .intr, .softirq, .forks, .ctxt => stat -= prev.stats[id],
+                    else => {},
+                }
+                break :blk stat;
+            },
+        };
+        return color.firstColorGEThreshold(value, pairs);
     }
 };
 

@@ -374,8 +374,14 @@ pub fn widget(
     const Handler = struct {
         up: u8,
 
-        pub fn checkPairs(self: @This(), opt: u8, pairs: []const color.Active.Pair) color.Hex {
+        pub fn checkPairs(
+            self: @This(),
+            opt: u8,
+            pct: bool,
+            pairs: []const color.Active.Pair,
+        ) color.Hex {
             _ = opt;
+            _ = pct;
             return color.firstColorEQThreshold(self.up, pairs);
         }
     };

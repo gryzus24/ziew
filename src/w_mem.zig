@@ -139,7 +139,13 @@ pub const State = struct {
         };
     }
 
-    pub fn checkPairs(self: *const @This(), opt: u8, pairs: []const color.Active.Pair) color.Hex {
+    pub fn checkPairs(
+        self: *const @This(),
+        opt: u8,
+        pct: bool,
+        pairs: []const color.Active.Pair,
+    ) color.Hex {
+        _ = pct;
         const mi = &self.meminfos[self.curr];
         return color.firstColorGEThreshold(
             unt.Percent(
