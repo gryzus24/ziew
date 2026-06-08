@@ -226,12 +226,12 @@ fn acceptFormat(
 
         const hash = typ.widOptHash(option.parts[Option.name]);
         const opt: u8 = blk: for (
-            typ.WID__OPTIONS_PERCENT_PREFIX_ALLOWED[@intFromEnum(wid)],
+            typ.WID__OPTIONS_PCT_PREFIX_SUPPORTED[@intFromEnum(wid)],
             typ.WID__OPTION_HASHES[@intFromEnum(wid)],
             0..,
-        ) |pct_prefix_allowed, opt_hash, j| {
+        ) |pct_prefix_supported, opt_hash, j| {
             // An implication in the wild!
-            if ((!pct_prefix or pct_prefix_allowed) and hash == opt_hash)
+            if ((!pct_prefix or pct_prefix_supported) and hash == opt_hash)
                 break :blk @intCast(j);
         } else {
             return .fail("unknown option", split.opt);
@@ -591,7 +591,7 @@ pub fn parse(
                     return .fail("widget requires interval", line, line_nr, .zero);
                 }
                 const arg = blk: {
-                    if (current.id.checkCastTo(typ.Widget.Id.RequiresArg)) |_| {
+                    if (current.id.checkCastTo(typ.Widget.Id.ArgRequired)) |_| {
                         if (wi.arg) |ok| break :blk line[ok.beg..ok.end];
                         return .fail("widget requires arg parameter", line, line_nr, .zero);
                     }

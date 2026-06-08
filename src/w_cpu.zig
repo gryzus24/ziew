@@ -464,7 +464,7 @@ pub const State = struct {
     pub fn checkPairs(self: *const @This(), opt: u8, pairs: []const color.Active.Pair) color.Hex {
         const curr, const prev = typ.constCurrPrev(Stat, &self.stats, self.curr);
         return color.firstColorGEThreshold(
-            switch (@as(typ.Options.Cpu.ColorAdjacent, @enumFromInt(opt))) {
+            switch (@as(typ.Options.Cpu.ColorSupported, @enumFromInt(opt))) {
                 .all, .user, .sys, .iowait => self.usage_pct[opt].roundU24AndTruncate(),
                 .blocked => curr.stats[Stat.blocked],
                 .running => curr.stats[Stat.running],

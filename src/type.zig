@@ -99,11 +99,11 @@ pub const Widget = struct {
         BAT,
         READ,
 
-        pub const RequiresArg = MakeEnumSubset(Id, &.{
+        pub const ArgRequired = EnumSubset(Id, &.{
             .TIME, .DISK, .NET, .BAT, .READ,
         });
 
-        pub const ActiveColorSupported = MakeEnumSubset(Id, &.{
+        pub const ActiveColorSupported = EnumSubset(Id, &.{
             .MEM, .CPU, .DISK, .NET, .BAT,
         });
 
@@ -399,9 +399,9 @@ pub const Options = struct {
         @"8",
         @"9",
 
-        pub const PercentPrefixAllowed = enum(u8) {};
-        pub const ColorSupported = enum(u8) {};
-        pub const ColorSupportedWithPercentPrefix = enum(u8) {};
+        pub const PctPrefix = enum(u8) {};
+        pub const ColorPct = enum(u8) {};
+        pub const ColorBare = enum(u8) {};
     };
 
     pub const Mem = enum(u8) {
@@ -414,9 +414,9 @@ pub const Options = struct {
         writeback,
         used,
 
-        pub const PercentPrefixAllowed = Mem;
-        pub const ColorSupported = enum(u8) {};
-        pub const ColorSupportedWithPercentPrefix = PercentPrefixAllowed;
+        pub const PctPrefix = @This();
+        pub const ColorPct = PctPrefix;
+        pub const ColorBare = enum(u8) {};
     };
 
     pub const Cpu = enum(u8) {
@@ -439,30 +439,24 @@ pub const Options = struct {
 
         pub const STATS_OFF = @intFromEnum(Cpu.intr);
 
-        pub const Usage = MakeEnumSubset(@This(), &.{
+        pub const Usage = EnumSubset(@This(), &.{
             .all, .user, .sys, .iowait,
         });
 
-        pub const Stats = MakeEnumSubset(@This(), &.{
+        pub const Stats = EnumSubset(@This(), &.{
             .intr, .softirq, .blocked, .running, .forks, .ctxt,
         });
 
-        pub const Special = MakeEnumSubset(@This(), &.{
+        pub const Special = EnumSubset(@This(), &.{
             .brlbars, .blkbars, .brlgraph, .blkgraph,
         });
 
-        pub const PercentPrefixAllowed = MakeEnumSubset(@This(), &.{
-            .all, .user, .sys, .iowait,
-        });
-        pub const ColorSupported = MakeEnumSubset(@This(), &.{
+        pub const PctPrefix = Usage;
+        pub const ColorPct = PctPrefix;
+        pub const ColorBare = EnumSubset(@This(), &.{
             .blocked, .running, .forks,
         });
-        pub const ColorSupportedWithPercentPrefix = PercentPrefixAllowed;
-        pub const ColorAdjacent = MakeEnumSubset(@This(), &.{
-            .blocked, .running, .forks,
-            .all,     .user,    .sys,
-            .iowait,
-        });
+        pub const ColorSupported = EnumUnion(@This(), ColorPct, ColorBare);
 
         pub const USAGE_MASK = MaskFromEnum(Usage);
         pub const STATS_MASK = MaskFromEnum(Stats);
@@ -477,16 +471,13 @@ pub const Options = struct {
         ino_free,
         ino_used,
 
-        pub const Ino = MakeEnumSubset(@This(), &.{
+        pub const Ino = EnumSubset(@This(), &.{
             .ino_total, .ino_free, .ino_used,
         });
 
-        pub const PercentPrefixAllowed = MakeEnumSubset(@This(), &.{
-            .total,     .free,     .available, .used,
-            .ino_total, .ino_free, .ino_used,
-        });
-        pub const ColorSupported = enum(u8) {};
-        pub const ColorSupportedWithPercentPrefix = PercentPrefixAllowed;
+        pub const PctPrefix = @This();
+        pub const ColorPct = PctPrefix;
+        pub const ColorBare = enum(u8) {};
 
         pub const INO_MASK = MaskFromEnum(Ino);
     };
@@ -515,26 +506,26 @@ pub const Options = struct {
 
         pub const NETDEV_OFF = @intFromEnum(Net.rx_bytes);
 
-        pub const String = MakeEnumSubset(@This(), &.{
+        pub const String = EnumSubset(@This(), &.{
             .inet, .flags, .state,
         });
 
-        pub const NetDev = MakeEnumSubset(@This(), &.{
+        pub const NetDev = EnumSubset(@This(), &.{
             .rx_bytes, .rx_pkts,  .rx_errs,       .rx_drop,
             .rx_fifo,  .rx_frame, .rx_compressed, .rx_multicast,
             .tx_bytes, .tx_pkts,  .tx_errs,       .tx_drop,
             .tx_fifo,  .tx_colls, .tx_carrier,    .tx_compressed,
         });
 
-        pub const NetDevSize = MakeEnumSubset(@This(), &.{
+        pub const NetDevSize = EnumSubset(@This(), &.{
             .rx_bytes, .tx_bytes,
         });
 
-        pub const PercentPrefixAllowed = enum(u8) {};
-        pub const ColorSupported = MakeEnumSubset(@This(), &.{
+        pub const PctPrefix = enum(u8) {};
+        pub const ColorPct = enum(u8) {};
+        pub const ColorBare = EnumSubset(@This(), &.{
             .state,
         });
-        pub const ColorSupportedWithPercentPrefix = enum(u8) {};
 
         pub const STRING_MASK = MaskFromEnum(String);
         pub const NETDEV_MASK = MaskFromEnum(NetDev);
@@ -546,16 +537,15 @@ pub const Options = struct {
         fulldesign,
         fullnow,
 
-        pub const PercentPrefixAllowed = MakeEnumSubset(@This(), &.{
-            .fulldesign, .fullnow,
+        pub const PctPrefix = EnumSubset(@This(), &.{
+            .fulldesign,
+            .fullnow,
         });
-        pub const ColorSupported = MakeEnumSubset(@This(), &.{
+        pub const ColorPct = PctPrefix;
+        pub const ColorBare = EnumSubset(@This(), &.{
             .state,
         });
-        pub const ColorSupportedWithPercentPrefix = PercentPrefixAllowed;
-        pub const ColorAdjacent = MakeEnumSubset(@This(), &.{
-            .state, .fulldesign, .fullnow,
-        });
+        pub const ColorSupported = EnumUnion(@This(), ColorPct, ColorBare);
     };
 
     pub const Read = enum(u8) {
@@ -563,9 +553,9 @@ pub const Options = struct {
         content,
         raw,
 
-        pub const PercentPrefixAllowed = enum(u8) {};
-        pub const ColorSupported = enum(u8) {};
-        pub const ColorSupportedWithPercentPrefix = enum(u8) {};
+        pub const PctPrefix = enum(u8) {};
+        pub const ColorBare = enum(u8) {};
+        pub const ColorPct = enum(u8) {};
     };
 };
 
@@ -621,14 +611,14 @@ pub const WID__OPTION_HASHES: [Widget.NR_WIDGETS][]const WidOptHash = blk: {
     break :blk w;
 };
 
-pub const WID__OPTIONS_PERCENT_PREFIX_ALLOWED: [Widget.NR_WIDGETS][]const bool = blk: {
+pub const WID__OPTIONS_PCT_PREFIX_SUPPORTED: [Widget.NR_WIDGETS][]const bool = blk: {
     var w: [Widget.NR_WIDGETS][]const bool = undefined;
     for (OptionTypes, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
-        var allow: [len]bool = @splat(false);
-        for (enums.values(T.PercentPrefixAllowed)) |v|
-            allow[@intFromEnum(v)] = true;
-        const final = allow;
+        var support: [len]bool = @splat(false);
+        for (enums.values(T.PctPrefix)) |v|
+            support[@intFromEnum(v)] = true;
+        const final = support;
         w[i] = &final;
     }
     break :blk w;
@@ -646,9 +636,9 @@ pub const WID__OPTIONS_COLOR_SUPPORT: [Widget.NR_WIDGETS][]const OptionColorSupp
     for (OptionTypes, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
         var support: [len]OptionColorSupport = @splat(.none);
-        for (enums.values(T.ColorSupported)) |v|
+        for (enums.values(T.ColorBare)) |v|
             support[@intFromEnum(v)].no_pct = true;
-        for (enums.values(T.ColorSupportedWithPercentPrefix)) |v|
+        for (enums.values(T.ColorPct)) |v|
             support[@intFromEnum(v)].pct = true;
         const final = support;
         w[i] = &final;
@@ -796,12 +786,13 @@ pub inline fn constCurrPrev(
 
 // == meta functions ==========================================================
 
-pub fn MakeEnumSubset(comptime E: type, comptime fields: []const E) type {
+pub fn EnumSubset(comptime E: type, comptime fields: []const E) type {
     const E_enum = @typeInfo(E).@"enum";
 
+    if (!E_enum.is_exhaustive)
+        @compileError("Provided enum must be exhaustive");
     if (fields.len == 0)
-        @compileError("Attempted to create an `enum {}`");
-
+        @compileError("Attempted to create an empty enum");
     if (fields.len > E_enum.fields.len)
         @compileError("Provided at least one duplicate enum field");
 
@@ -811,12 +802,39 @@ pub fn MakeEnumSubset(comptime E: type, comptime fields: []const E) type {
     for (fields, 0..) |field, i| {
         names[i], values[i] = .{ @tagName(field), @intFromEnum(field) };
     }
-    return @Enum(
-        E_enum.tag_type,
-        if (E_enum.is_exhaustive) .exhaustive else .nonexhaustive,
-        &names,
-        &values,
-    );
+    return @Enum(E_enum.tag_type, .exhaustive, &names, &values);
+}
+
+pub fn EnumUnion(comptime E: type, comptime A: type, comptime B: type) type {
+    const E_enum = @typeInfo(E).@"enum";
+    const A_enum = @typeInfo(A).@"enum";
+    const B_enum = @typeInfo(B).@"enum";
+
+    if (!E_enum.is_exhaustive or !A_enum.is_exhaustive or !B_enum.is_exhaustive)
+        @compileError("Provided enums must be exhaustive");
+    if (A_enum.fields.len == 0 or B_enum.fields.len == 0)
+        @compileError("One of provided enums is empty");
+    if (A_enum.fields.len > E_enum.fields.len or B_enum.fields.len > E_enum.fields.len)
+        @compileError("Provided at least one duplicate enum field");
+
+    var a, var b = .{ 0, 0 };
+    for (A_enum.fields) |field| a |= 1 << field.value;
+    for (B_enum.fields) |field| b |= 1 << field.value;
+
+    const mask: u64 = a | b;
+    const size = @popCount(mask);
+
+    var names: [size][]const u8 = undefined;
+    var values: [size]E_enum.tag_type = undefined;
+
+    var i, var m = .{ 0, mask };
+    while (m != 0) : (i += 1) {
+        const lsb = m & (~m + 1);
+        const bit = @ctz(m);
+        names[i], values[i] = .{ @tagName(@as(E, @enumFromInt(bit))), bit };
+        m ^= lsb;
+    }
+    return @Enum(E_enum.tag_type, .exhaustive, &names, &values);
 }
 
 pub fn MaskFromEnum(comptime E: type) comptime_int {
