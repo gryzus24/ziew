@@ -6,7 +6,6 @@ const unt = @import("unit.zig");
 const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
 
-const builtin = std.builtin;
 const enums = std.enums;
 const fs = std.fs;
 const linux = std.os.linux;

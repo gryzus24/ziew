@@ -2,7 +2,6 @@ const std = @import("std");
 const color = @import("color.zig");
 const log = @import("log.zig");
 const typ = @import("type.zig");
-const unt = @import("unit.zig");
 
 const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");

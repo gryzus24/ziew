@@ -2,7 +2,6 @@ const builtin = @import("builtin");
 const std = @import("std");
 const uio = @import("io.zig");
 
-const fs = std.fs;
 const mem = std.mem;
 const meta = std.meta;
 

@@ -1,8 +1,5 @@
-const std = @import("std");
 const uio = @import("io.zig");
 const ustr = @import("str.zig");
-
-const linux = std.os.linux;
 
 pub const NR_POSSIBLE_CPUS_MAX = 64;
 

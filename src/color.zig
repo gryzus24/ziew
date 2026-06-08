@@ -1,7 +1,4 @@
-const std = @import("std");
 const umem = @import("util/mem.zig");
-
-// == public ==================================================================
 
 pub const Hex = struct {
     _priv: u8 = undefined,

@@ -1,19 +1,5 @@
 const std = @import("std");
-const fs = std.fs;
 const simd = std.simd;
-const zig = std.zig;
-
-pub fn repr(str: ?[]const u8) void {
-    var writer = fs.File.stderr().writer(&.{});
-    const stderr = &writer.interface;
-
-    if (str) |s| {
-        zig.stringEscape(s, stderr) catch {};
-        _ = stderr.write("\n") catch {};
-    } else {
-        _ = stderr.write("<null>\n") catch {};
-    }
-}
 
 // Not necessarily whitespace, but it's
 // fine if we can ignore the NUL byte.
