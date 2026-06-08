@@ -29,11 +29,11 @@ const Parser = struct {
     const s_charge_now  = "CHARGE_NOW";
     const s_energy_now  = "ENERGY_NOW";
 
-    const status: V      = ((.{0} ** (SZ - s_status.len))      ++ s_status).*;
-    const full_design: V = ((.{0} ** (SZ - s_full_design.len)) ++ s_full_design).*;
-    const full: V        = ((.{0} ** (SZ - s_full.len))        ++ s_full).*;
-    const charge_now: V  = ((.{0} ** (SZ - s_charge_now.len))  ++ s_charge_now).*;
-    const energy_now: V  = ((.{0} ** (SZ - s_energy_now.len))  ++ s_energy_now).*;
+    const status:      V = (@as([SZ - s_status.len]u8,      @splat(0)) ++ s_status).*;
+    const full_design: V = (@as([SZ - s_full_design.len]u8, @splat(0)) ++ s_full_design).*;
+    const full:        V = (@as([SZ - s_full.len]u8,        @splat(0)) ++ s_full).*;
+    const charge_now:  V = (@as([SZ - s_charge_now.len]u8,  @splat(0)) ++ s_charge_now).*;
+    const energy_now:  V = (@as([SZ - s_energy_now.len]u8,  @splat(0)) ++ s_energy_now).*;
 
     const checks: [5]struct {V, usize, Key} = .{
         .{status,      (SZ - s_status.len),      Key.status},

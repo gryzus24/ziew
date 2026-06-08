@@ -9,7 +9,6 @@ const umem = @import("util/mem.zig");
 const enums = std.enums;
 const fs = std.fs;
 const linux = std.os.linux;
-const mem = std.mem;
 
 // == public types ============================================================
 

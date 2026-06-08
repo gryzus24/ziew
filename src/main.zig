@@ -91,10 +91,8 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     @memcpy(buf[pos..][0..n], buf[buf.len - n ..]);
     pos += n;
 
-    for (0..7 -| n) |_| {
-        buf[pos] = ' ';
-        pos += 1;
-    }
+    const pad: [7]u8 = @splat(' ');
+    while (pos < pad.len) : (pos += 1) buf[pos] = pad[pos];
 
     n = @min(diag.line.len, buf.len - pos);
     @memcpy(buf[pos..][0..n], diag.line[0..n]);
@@ -106,7 +104,7 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     const beg = @min(diag.field.beg, buf.len);
     const end = @min(diag.field.end, buf.len);
     if (beg < end) {
-        l.log(" " ** 7);
+        l.log(&pad);
         @memset(buf[0..beg], ' ');
         l.log(buf[0..beg]);
         @memset(buf[0 .. end - beg], '~');
@@ -356,7 +354,7 @@ comptime {
     if (!builtin.is_test) @export(&main, .{ .name = "main" });
 }
 pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
-    errdefer |e| log.fatal(&.{ "main: ", @errorName(e) });
+    errdefer log.fatal(&.{"main exited"});
 
     var reg: umem.Region = .init(&g_bss, "main");
 
