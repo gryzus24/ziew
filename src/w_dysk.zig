@@ -98,20 +98,16 @@ pub fn widget(
         }
         if (ret != -ext.c.EINTR) {
             const fg, const bg = w.colorForceStatic();
-            return typ.writeWidget(
-                writer,
-                fg,
-                bg,
-                &[3][]const u8{
-                    wd.getMountpoint(), ": ",
-                    switch (ret) {
-                        -ext.c.EACCES => "<no access>",
-                        -ext.c.ENOENT, -ext.c.ENOTDIR => "<not mounted>",
-                        -ext.c.ENOSYS => "<not supported>",
-                        else => "<unexpected error>",
-                    },
-                },
-            );
+            typ.writeWidgetBeg(writer, fg, bg);
+            uio.writeStr(writer, wd.getMountpoint());
+            uio.writeStr(writer, ": ");
+            uio.writeStr(writer, switch (ret) {
+                -ext.c.EACCES => "<no access>",
+                -ext.c.ENOENT, -ext.c.ENOTDIR => "<not mounted>",
+                -ext.c.ENOSYS => "<not supported>",
+                else => "<unexpected error>",
+            });
+            return;
         }
     }
     const mount = &state.mounts[wd.mount_id];

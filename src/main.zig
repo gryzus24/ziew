@@ -33,6 +33,8 @@ var g_refresh_all = false;
 
 const WRITE_FAIL_CHECK = true;
 
+const I3BAR_HEADER = "{\"version\":1}\n[[]";
+
 const Args = struct {
     config_path: ?[*:0]const u8 = null,
 
@@ -79,39 +81,73 @@ const WidgetStates = struct {
 
 fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     @branchHint(.cold);
-    const l: log.Log = .open();
-    l.log("fatal: config: ");
-    l.log(diag.note);
-    l.log("\n");
-
-    var buf: [256]u8 = undefined;
-    var pos: usize = 0;
-
-    var n = ustr.unsafeU64toa(&buf, diag.line_nr);
-    @memcpy(buf[pos..][0..n], buf[buf.len - n ..]);
-    pos += n;
 
     const pad: [7]u8 = @splat(' ');
-    while (pos < pad.len) : (pos += 1) buf[pos] = pad[pos];
+    var writer: uio.Writer = .fixed(&g_bss);
 
-    n = @min(diag.line.len, buf.len - pos);
-    @memcpy(buf[pos..][0..n], diag.line[0..n]);
-    pos += n;
+    var cur = writer.end;
+    const note = blk: {
+        uio.writeStr(&writer, "fatal: config: ");
+        uio.writeStr(&writer, diag.note);
+        break :blk writer.buffered()[cur..];
+    };
 
-    l.log(buf[0..pos]);
+    cur = writer.end;
+    const diag_line = blk: {
+        const n = ustr.unsafeU64toa(&g_bss, diag.line_nr);
+        uio.writeStr(&writer, g_bss[g_bss.len - n ..]);
+        uio.writeStr(&writer, pad[0..pad.len -| n]);
+        uio.writeStr(&writer, diag.line);
+        break :blk writer.buffered()[cur..];
+    };
+
+    cur = writer.end;
+    const diag_beg, const diag_end = .{ diag.field.beg, diag.field.end };
+    const underline = blk: {
+        if (diag_beg < diag_end) {
+            uio.writeStr(&writer, &pad);
+            uio.writeCh(&writer, ' ', diag_beg);
+            uio.writeCh(&writer, '~', diag_end - diag_beg);
+            break :blk writer.buffered()[cur..];
+        }
+        break :blk "";
+    };
+
+    const l: log.Log = .open(.file);
+    l.log(note);
     l.log("\n");
+    l.log(diag_line);
+    l.log("\n");
+    l.log(underline);
+    l.log("\n");
+    l.close();
 
-    const beg = @min(diag.field.beg, buf.len);
-    const end = @min(diag.field.end, buf.len);
-    if (beg < end) {
-        l.log(&pad);
-        @memset(buf[0..beg], ' ');
-        l.log(buf[0..beg]);
-        @memset(buf[0 .. end - beg], '~');
-        l.log(buf[0 .. end - beg]);
-        l.log("\n");
-    }
-    linux.exit(1);
+    cur = writer.end;
+    const diag_line_marked = blk: {
+        if (underline.len > 0) {
+            uio.writeStr(&writer, diag_line[0..pad.len]);
+            uio.writeStr(&writer, diag.line[0..diag_beg]);
+            uio.writeStr(&writer, ">>");
+            uio.writeStr(&writer, diag.line[diag_beg..diag_end]);
+            uio.writeStr(&writer, "<<");
+            uio.writeStr(&writer, diag.line[diag_end..]);
+            break :blk writer.buffered()[cur..];
+        }
+        break :blk "";
+    };
+
+    cur = writer.end;
+    typ.writeWidgetBeg(&writer, .init(.fg, "ff4444".*), .empty);
+    uio.writeStr(&writer, note);
+    uio.writeStr(&writer, ": ");
+    uio.writeStr(&writer, diag_line_marked);
+    const final = typ.writeWidgetEnd(writer.buffer[cur..], writer.end - cur);
+    const r = copy(&g_bss, &.{final});
+
+    _ = uio.sys_write(1, I3BAR_HEADER);
+    while (true) _ = write(r) or sleep(.{ .sec = @intCast(cur), .nsec = undefined });
+
+    unreachable;
 }
 
 fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
@@ -350,6 +386,27 @@ fn copy(dst: []u8, vecs: []const []const u8) []const u8 {
     return dst[0..pos];
 }
 
+fn write(buf: []const u8) bool {
+    while (true) {
+        const ret = uio.sys_write(1, buf);
+        if (ret >= 0) return false;
+        if (ret == -ext.c.EINTR) {
+            if (g_refresh_all) return true;
+        } else if (WRITE_FAIL_CHECK) {
+            log.fatalSys(&.{"main: write: "}, ret);
+        }
+    }
+}
+
+fn sleep(ts: linux.timespec) bool {
+    var req = ts;
+    while (true) {
+        if (linux.nanosleep(&req, &req) == 0) return false;
+        // Only EINTR is reachable here.
+        if (g_refresh_all) return true;
+    }
+}
+
 comptime {
     if (!builtin.is_test) @export(&main, .{ .name = "main" });
 }
@@ -377,7 +434,7 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
 
     const base = reg.head.ptr;
 
-    _ = uio.sys_write(1, "{\"version\":1}\n[[]");
+    _ = uio.sys_write(1, I3BAR_HEADER);
     refresh: while (true) {
         if (g_refresh_all) {
             @branchHint(.unlikely);
@@ -385,25 +442,8 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
             g_refresh_all = false;
         }
         try update(&reg, widgets, &states, bufs, vecs, sleep_dsec);
-        const p = copy(base[reg.front..reg.back], vecs);
-
-        while (true) {
-            const ret = uio.sys_write(1, p);
-            if (ret >= 0) break;
-            if (ret == -ext.c.EINTR) {
-                if (g_refresh_all)
-                    continue :refresh;
-                continue;
-            }
-            if (WRITE_FAIL_CHECK)
-                log.fatalSys(&.{"main: write: "}, ret);
-        }
-        var req = sleep_ts;
-        while (true) {
-            if (linux.nanosleep(&req, &req) == 0) break;
-            // Only EINTR is reachable here.
-            if (g_refresh_all) continue :refresh;
-        }
+        const r = copy(base[reg.front..reg.back], vecs);
+        if (write(r) or sleep(sleep_ts)) continue :refresh;
     }
     unreachable;
 }

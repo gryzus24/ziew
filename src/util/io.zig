@@ -50,7 +50,7 @@ pub inline fn close(fd: linux.fd_t) void {
     _ = linux.close(fd);
 }
 
-pub inline fn writeStr(writer: *Writer, str: []const u8) void {
+pub fn writeStr(writer: *Writer, str: []const u8) void {
     // Make sure to compute the bounds check before the `dst` pointer
     // to reuse the `writer.end` that is already in the register for
     // the `dst` pointer calculation (`writer.buffer` + `writer.end`).
@@ -65,6 +65,12 @@ pub inline fn writeStr(writer: *Writer, str: []const u8) void {
     writer.end += n;
 }
 
+pub fn writeCh(writer: *Writer, ch: u8, times: usize) void {
+    const end = @min(writer.end + times, writer.buffer.len);
+    @memset(writer.buffer[writer.end..end], ch);
+    writer.end = end;
+}
+
 // Simpler, vtable-less Writer shim.
 pub const Writer = struct {
     buffer: []u8,
@@ -72,6 +78,10 @@ pub const Writer = struct {
 
     pub fn fixed(buffer: []u8) @This() {
         return .{ .buffer = buffer, .end = 0 };
+    }
+
+    pub fn buffered(self: *@This()) []u8 {
+        return self.buffer[0..self.end];
     }
 
     pub fn unusedCapacityLen(self: *const @This()) usize {

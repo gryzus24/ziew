@@ -45,13 +45,13 @@ pub fn widget(
 
     var buf: [typ.WIDGET_BUF_WRITABLE]u8 = undefined;
 
-    const data = openAndRead(path, &buf) catch |e|
-        return typ.writeWidget(
-            writer,
-            w.fg.static,
-            w.bg.static,
-            &[3][]const u8{ basename, ": ", @errorName(e) },
-        );
+    const data = openAndRead(path, &buf) catch |e| {
+        typ.writeWidgetBeg(writer, w.fg.static, w.bg.static);
+        uio.writeStr(writer, basename);
+        uio.writeStr(writer, ": ");
+        uio.writeStr(writer, @errorName(e));
+        return;
+    };
 
     var pos: usize = 0;
     var fg = w.fg.static;

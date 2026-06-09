@@ -202,18 +202,14 @@ pub fn widget(
     var buf: [1024]u8 = undefined;
     const data = openAndRead(wd.getPath(), &buf) catch |e| {
         const fg, const bg = w.colorForceStatic();
-        return typ.writeWidget(
-            writer,
-            fg,
-            bg,
-            &[3][]const u8{
-                wd.getPsName(), ": ",
-                switch (e) {
-                    error.FileNotFound => "<not found>",
-                    else => @errorName(e),
-                },
-            },
-        );
+        typ.writeWidgetBeg(writer, fg, bg);
+        uio.writeStr(writer, wd.getPsName());
+        uio.writeStr(writer, ": ");
+        uio.writeStr(writer, switch (e) {
+            error.FileNotFound => "<not found>",
+            else => @errorName(e),
+        });
+        return;
     };
 
     var bat: Battery = .default;

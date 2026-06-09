@@ -709,7 +709,7 @@ pub fn writeWidgetBeg(writer: *uio.Writer, fg: color.Hex, bg: color.Hex) void {
     }
 }
 
-pub fn writeWidgetEnd(buffer: *[WIDGET_BUF_MAX]u8, end: usize) []const u8 {
+pub fn writeWidgetEnd(buffer: []u8, end: usize) []const u8 {
     const END_MARKER = "\"},";
     if (end < WIDGET_BUF_WRITABLE) {
         @branchHint(.likely);
@@ -718,16 +718,6 @@ pub fn writeWidgetEnd(buffer: *[WIDGET_BUF_MAX]u8, end: usize) []const u8 {
     }
     buffer[end..][0..WIDGET_BUF_TAIL].* = ("…" ++ END_MARKER).*;
     return buffer[0 .. end + WIDGET_BUF_TAIL];
-}
-
-pub fn writeWidget(
-    writer: *uio.Writer,
-    fg: color.Hex,
-    bg: color.Hex,
-    data: []const []const u8,
-) void {
-    writeWidgetBeg(writer, fg, bg);
-    for (data) |s| uio.writeStr(writer, s);
 }
 
 pub fn optBit(opt: u8) OptBit {

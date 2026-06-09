@@ -8,7 +8,7 @@ const linux = std.os.linux;
 // == private =================================================================
 
 fn openLogStrings(prefix: []const u8, strings: []const []const u8) Log {
-    const log: Log = .open();
+    const log: Log = .open(.default);
     log.log(prefix);
     for (strings) |s| log.log(s);
     return log;
@@ -17,37 +17,48 @@ fn openLogStrings(prefix: []const u8, strings: []const []const u8) Log {
 // == public ==================================================================
 
 pub const Log = struct {
-    fd: linux.fd_t,
+    stream: linux.fd_t,
+    file: linux.fd_t,
 
-    pub const nofile: Log = .{ .fd = -1 };
+    pub const Open = struct {
+        o: u32,
 
-    pub fn open() Log {
-        const path = "/tmp/ziew.log";
-        const fd = uio.openCWA(path, 0o644) catch |e| switch (e) {
-            error.AccessDenied => {
-                _ = uio.sys_write(2, "open: " ++ path ++ ": AccessDenied: ");
-                _ = uio.sys_write(2, "may be sticky - only author can modify\n");
-                return .nofile;
-            },
-            else => {
-                _ = uio.sys_write(2, "open: " ++ path ++ ": ");
-                _ = uio.sys_write(2, @errorName(e));
-                _ = uio.sys_write(2, "\n");
-                linux.exit(1);
-            },
-        };
-        return .{ .fd = fd };
+        pub const stderr: Open = .{ .o = 1 };
+        pub const file: Open = .{ .o = 2 };
+        pub const default: Open = .{ .o = stderr.o | file.o };
+    };
+
+    pub fn open(mode: Open) Log {
+        var ret: Log = .{ .stream = -1, .file = -1 };
+
+        if (mode.o & Open.stderr.o != 0)
+            ret.stream = 2;
+        if (mode.o & Open.file.o != 0) {
+            const path = "/tmp/ziew.log";
+            ret.file = uio.openCWA(path, 0o644) catch |e| switch (e) {
+                error.AccessDenied => blk: {
+                    _ = uio.sys_write(ret.stream, "open: " ++ path ++ ": AccessDenied: ");
+                    _ = uio.sys_write(ret.stream, "may be sticky - only author can modify\n");
+                    break :blk -1;
+                },
+                else => {
+                    _ = uio.sys_write(ret.stream, "open: " ++ path ++ ": ");
+                    _ = uio.sys_write(ret.stream, @errorName(e));
+                    _ = uio.sys_write(ret.stream, "\n");
+                    linux.exit(1);
+                },
+            };
+        }
+        return ret;
     }
 
     pub fn log(self: @This(), str: []const u8) void {
-        _ = uio.sys_write(2, str);
-        if (self.fd != -1)
-            _ = uio.sys_write(self.fd, str);
+        if (self.stream != -1) _ = uio.sys_write(self.stream, str);
+        if (self.file != -1) _ = uio.sys_write(self.file, str);
     }
 
     pub fn close(self: @This()) void {
-        if (self.fd != -1)
-            uio.close(self.fd);
+        if (self.file != -1) uio.close(self.file);
     }
 };
 
