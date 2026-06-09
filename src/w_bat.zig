@@ -55,9 +55,9 @@ const Battery = struct {
     const now         = @intFromEnum(Parser.Key.now);
 
     comptime {
-        std.debug.assert(state       == @intFromEnum(typ.Options.Bat.state));
-        std.debug.assert(full_design == @intFromEnum(typ.Options.Bat.fulldesign));
-        std.debug.assert(full_now    == @intFromEnum(typ.Options.Bat.fullnow));
+        std.debug.assert(state       == @intFromEnum(typ.Opts.Bat.state));
+        std.debug.assert(full_design == @intFromEnum(typ.Opts.Bat.fulldesign));
+        std.debug.assert(full_now    == @intFromEnum(typ.Opts.Bat.fullnow));
         // N/A
 
         std.debug.assert(state       == 0);
@@ -98,7 +98,7 @@ const Battery = struct {
         pairs: []const color.Active.Pair,
     ) color.Hex {
         _ = pct;
-        const opt_color: typ.Options.Bat.ColorSupported = @enumFromInt(opt);
+        const opt_color: typ.Opts.Bat.ColorSupported = @enumFromInt(opt);
 
         return switch (opt_color) {
             .state => color.firstColorEQThreshold(
@@ -235,7 +235,7 @@ pub fn widget(
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        const opt: typ.Options.Bat = @enumFromInt(part.opt);
+        const opt: typ.Opts.Bat = @enumFromInt(part.opt);
         switch (opt) {
             .state => {
                 if (Battery.State.WIDTH > writer.unusedCapacityLen()) {

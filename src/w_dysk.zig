@@ -11,13 +11,13 @@ const Mount = struct {
     fields: [8]u64,
 
     // zig fmt: off
-    const kb_total  = @intFromEnum(typ.Options.Disk.total);
-    const kb_free   = @intFromEnum(typ.Options.Disk.free);
-    const kb_avail  = @intFromEnum(typ.Options.Disk.available);
-    const kb_used   = @intFromEnum(typ.Options.Disk.used);
-    const ino_total = @intFromEnum(typ.Options.Disk.ino_total);
-    const ino_free  = @intFromEnum(typ.Options.Disk.ino_free);
-    const ino_used  = @intFromEnum(typ.Options.Disk.ino_used);
+    const kb_total  = @intFromEnum(typ.Opts.Disk.total);
+    const kb_free   = @intFromEnum(typ.Opts.Disk.free);
+    const kb_avail  = @intFromEnum(typ.Opts.Disk.available);
+    const kb_used   = @intFromEnum(typ.Opts.Disk.used);
+    const ino_total = @intFromEnum(typ.Opts.Disk.ino_total);
+    const ino_free  = @intFromEnum(typ.Opts.Disk.ino_free);
+    const ino_used  = @intFromEnum(typ.Opts.Disk.ino_used);
 
     comptime {
         std.debug.assert(kb_total  == 0);
@@ -50,7 +50,7 @@ const MountPair = struct {
         const value = unt.Percent(
             mount.fields[opt],
             mount.fields[
-                if (typ.optBit(opt) & typ.Options.Disk.INO_MASK != 0)
+                if (typ.optBit(opt) & typ.Opts.Disk.INO_MASK != 0)
                     Mount.ino_total
                 else
                     Mount.kb_total
@@ -138,7 +138,7 @@ pub fn widget(
             nu = unt.Percent(
                 curr.fields[part.opt],
                 curr.fields[
-                    if (bit & typ.Options.Disk.INO_MASK != 0)
+                    if (bit & typ.Opts.Disk.INO_MASK != 0)
                         Mount.ino_total
                     else
                         Mount.kb_total
@@ -151,7 +151,7 @@ pub fn widget(
                 w.interval,
                 part.flags,
             );
-            nu = if (bit & typ.Options.Disk.INO_MASK != 0)
+            nu = if (bit & typ.Opts.Disk.INO_MASK != 0)
                 unt.UnitSI(value)
             else
                 unt.SizeKb(value);

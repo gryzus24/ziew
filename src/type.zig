@@ -12,7 +12,7 @@ const linux = std.os.linux;
 
 // == public types ============================================================
 
-// `Widget.Id` or `OptionTypes` hash.
+// `Widget.Id` or `OptTypes` hash.
 pub const WidOptHash = u32;
 
 // 1/10th of a second.
@@ -192,13 +192,13 @@ pub const Widget = struct {
                 pub const zero: Mask = .{ .bits = 0 };
 
                 pub fn inet(self: @This()) bool {
-                    return self.bits & optBit(@intFromEnum(Options.Net.inet)) != 0;
+                    return self.bits & optBit(@intFromEnum(Opts.Net.inet)) != 0;
                 }
                 pub fn flags(self: @This()) bool {
-                    return self.bits & optBit(@intFromEnum(Options.Net.flags)) != 0;
+                    return self.bits & optBit(@intFromEnum(Opts.Net.flags)) != 0;
                 }
                 pub fn state(self: @This()) bool {
-                    return self.bits & optBit(@intFromEnum(Options.Net.state)) != 0;
+                    return self.bits & optBit(@intFromEnum(Opts.Net.state)) != 0;
                 }
             };
 
@@ -392,7 +392,7 @@ pub const Widget = struct {
     };
 };
 
-pub const Options = struct {
+pub const Opts = struct {
     pub const Time = enum(u8) {
         time,
         @"1",
@@ -563,14 +563,14 @@ pub const Options = struct {
     };
 };
 
-const OptionTypes = &.{
-    Options.Time, Options.Mem, Options.Cpu,  Options.Disk,
-    Options.Net,  Options.Bat, Options.Read,
+const OptTypes = &.{
+    Opts.Time, Opts.Mem, Opts.Cpu,  Opts.Disk,
+    Opts.Net,  Opts.Bat, Opts.Read,
 };
 
 comptime {
-    if (Widget.NR_WIDGETS != OptionTypes.len)
-        @compileError("Adjust OptionTypes");
+    if (Widget.NR_WIDGETS != OptTypes.len)
+        @compileError("Adjust OptTypes");
 }
 
 fn makeHashes(comptime Enum: type) []const WidOptHash {
@@ -611,13 +611,13 @@ pub fn strWid(str: []const u8) ?Widget.Id {
 
 pub const WID__OPTION_HASHES: [Widget.NR_WIDGETS][]const WidOptHash = blk: {
     var w: [Widget.NR_WIDGETS][]const WidOptHash = undefined;
-    for (OptionTypes, 0..) |T, i| w[i] = makeHashes(T);
+    for (OptTypes, 0..) |T, i| w[i] = makeHashes(T);
     break :blk w;
 };
 
 pub const WID__OPTIONS_PCT_PREFIX_SUPPORTED: [Widget.NR_WIDGETS][]const bool = blk: {
     var w: [Widget.NR_WIDGETS][]const bool = undefined;
-    for (OptionTypes, 0..) |T, i| {
+    for (OptTypes, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
         var support: [len]bool = @splat(false);
         for (enums.values(T.PctPrefix)) |v|
@@ -628,20 +628,20 @@ pub const WID__OPTIONS_PCT_PREFIX_SUPPORTED: [Widget.NR_WIDGETS][]const bool = b
     break :blk w;
 };
 
-const OptionColorSupport = struct {
-    no_pct: bool,
+const OptColorSupport = struct {
+    bare: bool,
     pct: bool,
 
-    const none: OptionColorSupport = .{ .no_pct = false, .pct = false };
+    const none: OptColorSupport = .{ .bare = false, .pct = false };
 };
 
-pub const WID__OPTIONS_COLOR_SUPPORT: [Widget.NR_WIDGETS][]const OptionColorSupport = blk: {
-    var w: [Widget.NR_WIDGETS][]const OptionColorSupport = undefined;
-    for (OptionTypes, 0..) |T, i| {
+pub const WID__OPTIONS_COLOR_SUPPORT: [Widget.NR_WIDGETS][]const OptColorSupport = blk: {
+    var w: [Widget.NR_WIDGETS][]const OptColorSupport = undefined;
+    for (OptTypes, 0..) |T, i| {
         const len = @typeInfo(T).@"enum".fields.len;
-        var support: [len]OptionColorSupport = @splat(.none);
+        var support: [len]OptColorSupport = @splat(.none);
         for (enums.values(T.ColorBare)) |v|
-            support[@intFromEnum(v)].no_pct = true;
+            support[@intFromEnum(v)].bare = true;
         for (enums.values(T.ColorPct)) |v|
             support[@intFromEnum(v)].pct = true;
         const final = support;

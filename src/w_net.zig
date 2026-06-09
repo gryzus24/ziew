@@ -46,23 +46,23 @@ const IFace = struct {
     fields: [16]u64,
 
     // zig fmt: off
-    const __off         = typ.Options.Net.NETDEV_OFF;
-    const rx_bytes      = @intFromEnum(typ.Options.Net.rx_bytes) - __off;
-    const rx_pkts       = @intFromEnum(typ.Options.Net.rx_pkts) - __off;
-    const rx_errs       = @intFromEnum(typ.Options.Net.rx_errs) - __off;
-    const rx_drop       = @intFromEnum(typ.Options.Net.rx_drop) - __off;
-    const rx_fifo       = @intFromEnum(typ.Options.Net.rx_fifo) - __off;
-    const rx_frame      = @intFromEnum(typ.Options.Net.rx_frame) - __off;
-    const rx_compressed = @intFromEnum(typ.Options.Net.rx_compressed) - __off;
-    const rx_multicast  = @intFromEnum(typ.Options.Net.rx_multicast) - __off;
-    const tx_bytes      = @intFromEnum(typ.Options.Net.tx_bytes) - __off;
-    const tx_pkts       = @intFromEnum(typ.Options.Net.tx_pkts) - __off;
-    const tx_errs       = @intFromEnum(typ.Options.Net.tx_errs) - __off;
-    const tx_drop       = @intFromEnum(typ.Options.Net.tx_drop) - __off;
-    const tx_fifo       = @intFromEnum(typ.Options.Net.tx_fifo) - __off;
-    const tx_colls      = @intFromEnum(typ.Options.Net.tx_colls) - __off;
-    const tx_carrier    = @intFromEnum(typ.Options.Net.tx_carrier) - __off;
-    const tx_compressed = @intFromEnum(typ.Options.Net.tx_compressed) - __off;
+    const __off         = typ.Opts.Net.NETDEV_OFF;
+    const rx_bytes      = @intFromEnum(typ.Opts.Net.rx_bytes) - __off;
+    const rx_pkts       = @intFromEnum(typ.Opts.Net.rx_pkts) - __off;
+    const rx_errs       = @intFromEnum(typ.Opts.Net.rx_errs) - __off;
+    const rx_drop       = @intFromEnum(typ.Opts.Net.rx_drop) - __off;
+    const rx_fifo       = @intFromEnum(typ.Opts.Net.rx_fifo) - __off;
+    const rx_frame      = @intFromEnum(typ.Opts.Net.rx_frame) - __off;
+    const rx_compressed = @intFromEnum(typ.Opts.Net.rx_compressed) - __off;
+    const rx_multicast  = @intFromEnum(typ.Opts.Net.rx_multicast) - __off;
+    const tx_bytes      = @intFromEnum(typ.Opts.Net.tx_bytes) - __off;
+    const tx_pkts       = @intFromEnum(typ.Opts.Net.tx_pkts) - __off;
+    const tx_errs       = @intFromEnum(typ.Opts.Net.tx_errs) - __off;
+    const tx_drop       = @intFromEnum(typ.Opts.Net.tx_drop) - __off;
+    const tx_fifo       = @intFromEnum(typ.Opts.Net.tx_fifo) - __off;
+    const tx_colls      = @intFromEnum(typ.Opts.Net.tx_colls) - __off;
+    const tx_carrier    = @intFromEnum(typ.Opts.Net.tx_carrier) - __off;
+    const tx_compressed = @intFromEnum(typ.Opts.Net.tx_compressed) - __off;
 
     comptime {
         std.debug.assert(rx_bytes      == 0);
@@ -294,7 +294,7 @@ pub const State = struct {
                 enabled |= w.data.NET.opt_enabled.bits;
             }
         }
-        if (enabled & typ.Options.Net.NETDEV_MASK != 0) {
+        if (enabled & typ.Opts.Net.NETDEV_MASK != 0) {
             state.netdev = .{
                 .ifs = .{ .empty, .empty },
                 .curr = 0,
@@ -393,13 +393,13 @@ pub fn widget(
         part.str.writeBytes(writer, base);
 
         const bit = typ.optBit(part.opt);
-        if (bit & typ.Options.Net.STRING_MASK != 0) {
+        if (bit & typ.Opts.Net.STRING_MASK != 0) {
             if (@max(INET_BUF_SIZE, iff_len) > writer.unusedCapacityLen()) {
                 @branchHint(.unlikely);
                 break;
             }
             const dst = writer.buffer[writer.end..];
-            writer.end += switch (@as(typ.Options.Net.String, @enumFromInt(part.opt))) {
+            writer.end += switch (@as(typ.Opts.Net.String, @enumFromInt(part.opt))) {
                 .inet => advance: {
                     dst[0..INET_BUF_SIZE].* = inetbuf;
                     break :advance inet_len;
@@ -424,18 +424,18 @@ pub fn widget(
         }
 
         var nu: unt.NumUnit = undefined;
-        if (bit & typ.Options.Net.NETDEV_SIZE_MASK != 0) {
+        if (bit & typ.Opts.Net.NETDEV_SIZE_MASK != 0) {
             nu = unt.SizeKb(0);
         } else {
             nu = unt.UnitSI(0);
         }
         if (ifs_match) {
             @branchHint(.likely);
-            const a = new_if.?.fields[part.opt - typ.Options.Net.NETDEV_OFF];
-            const b = old_if.?.fields[part.opt - typ.Options.Net.NETDEV_OFF];
+            const a = new_if.?.fields[part.opt - typ.Opts.Net.NETDEV_OFF];
+            const b = old_if.?.fields[part.opt - typ.Opts.Net.NETDEV_OFF];
 
             const value = typ.calc(a, b, w.interval, part.flags);
-            if (bit & typ.Options.Net.NETDEV_SIZE_MASK != 0) {
+            if (bit & typ.Opts.Net.NETDEV_SIZE_MASK != 0) {
                 nu = unt.SizeBytes(value);
             } else {
                 nu = unt.UnitSI(value);

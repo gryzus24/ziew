@@ -58,7 +58,7 @@ pub fn widget(
     var bg = w.bg.static;
 
     for (parts) |*part| {
-        const opt: typ.Options.Read = @enumFromInt(part.opt);
+        const opt: typ.Opts.Read = @enumFromInt(part.opt);
         if (opt == .content) {
             fg, pos = acceptColor(data, pos, .fg);
             bg, pos = acceptColor(data, pos, .bg);
@@ -71,7 +71,7 @@ pub fn widget(
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        const opt: typ.Options.Read = @enumFromInt(part.opt);
+        const opt: typ.Opts.Read = @enumFromInt(part.opt);
 
         var src = data;
         if (opt == .content)

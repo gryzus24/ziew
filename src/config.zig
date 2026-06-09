@@ -359,7 +359,7 @@ fn strColorOpt(wid: typ.Widget.Id.ActiveColorSupported, str: []const u8) ColorOp
         0..,
     ) |support, opt_hash, opt| {
         if (hash == opt_hash) {
-            if ((support.no_pct and !pct) or (support.pct and pct)) {
+            if ((support.bare and !pct) or (support.pct and pct)) {
                 return .{ .ok = .{ .opt = @intCast(opt), .pct = pct } };
             }
             return .{ .err = .{ .str = str, .what = .unsupported } };
