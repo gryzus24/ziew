@@ -84,6 +84,13 @@ pub const Writer = struct {
         return self.buffer[0..self.end];
     }
 
+    pub fn gobble(self: *@This()) []u8 {
+        const b = self.buffered();
+        self.buffer = self.buffer[self.end..];
+        self.end = 0;
+        return b;
+    }
+
     pub fn unusedCapacityLen(self: *const @This()) usize {
         return self.buffer.len - self.end;
     }

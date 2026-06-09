@@ -85,30 +85,27 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     const pad: [7]u8 = @splat(' ');
     var writer: uio.Writer = .fixed(&g_bss);
 
-    var cur = writer.end;
     const note = blk: {
         uio.writeStr(&writer, "fatal: config: ");
         uio.writeStr(&writer, diag.note);
-        break :blk writer.buffered()[cur..];
+        break :blk writer.gobble();
     };
 
-    cur = writer.end;
     const diag_line = blk: {
         const n = ustr.unsafeU64toa(&g_bss, diag.line_nr);
         uio.writeStr(&writer, g_bss[g_bss.len - n ..]);
         uio.writeStr(&writer, pad[0..pad.len -| n]);
         uio.writeStr(&writer, diag.line);
-        break :blk writer.buffered()[cur..];
+        break :blk writer.gobble();
     };
 
-    cur = writer.end;
     const diag_beg, const diag_end = .{ diag.field.beg, diag.field.end };
     const underline = blk: {
         if (diag_beg < diag_end) {
             uio.writeStr(&writer, &pad);
             uio.writeCh(&writer, ' ', diag_beg);
             uio.writeCh(&writer, '~', diag_end - diag_beg);
-            break :blk writer.buffered()[cur..];
+            break :blk writer.gobble();
         }
         break :blk "";
     };
@@ -122,7 +119,6 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     l.log("\n");
     l.close();
 
-    cur = writer.end;
     const diag_line_marked = blk: {
         if (underline.len > 0) {
             uio.writeStr(&writer, diag_line[0..pad.len]);
@@ -131,21 +127,21 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
             uio.writeStr(&writer, diag.line[diag_beg..diag_end]);
             uio.writeStr(&writer, "<<");
             uio.writeStr(&writer, diag.line[diag_end..]);
-            break :blk writer.buffered()[cur..];
+            break :blk writer.gobble();
         }
         break :blk "";
     };
 
-    cur = writer.end;
+    const beg = writer.end;
     typ.writeWidgetBeg(&writer, .init(.fg, "ff4444".*), .empty);
     uio.writeStr(&writer, note);
     uio.writeStr(&writer, ": ");
     uio.writeStr(&writer, diag_line_marked);
-    const final = typ.writeWidgetEnd(writer.buffer[cur..], writer.end - cur);
+    const final = typ.writeWidgetEnd(writer.buffer[beg..], writer.end - beg);
     const r = copy(&g_bss, &.{final});
 
     _ = uio.sys_write(1, I3BAR_HEADER);
-    while (true) _ = write(r) or sleep(.{ .sec = @intCast(cur), .nsec = undefined });
+    while (true) _ = write(r) or sleep(.{ .sec = 5, .nsec = undefined });
 
     unreachable;
 }
