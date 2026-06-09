@@ -78,19 +78,15 @@ pub fn DivConstant(comptime d: u32, comptime dividend_max: comptime_int) MultShf
     unreachable;
 }
 
-pub inline fn cMultShiftDivMod(
-    n: u64,
-    comptime d: u32,
-    comptime dividend_max: u32,
-) struct { u64, u64 } {
+pub inline fn cMultShiftDivMod(n: u64, comptime d: u32, comptime dividend_max: u32) [2]u32 {
     const ms = comptime DivConstant(d, dividend_max);
-    const q = (n * ms.mult) >> ms.shft;
-    const r = n - (q * d);
+    const q: u32 = @intCast((n * ms.mult) >> ms.shft);
+    const r: u32 = @intCast(n - (q * d));
     return .{ q, r };
 }
 
-pub inline fn multShiftDivMod(n: u64, ms: MultShft, d: u32) struct { u64, u64 } {
-    const q = (n * ms.mult) >> ms.shft;
-    const r = n - (q * d);
+pub inline fn multShiftDivMod(n: u64, ms: MultShft, d: u32) [2]u32 {
+    const q: u32 = @intCast((n * ms.mult) >> ms.shft);
+    const r: u32 = @intCast(n - (q * d));
     return .{ q, r };
 }
