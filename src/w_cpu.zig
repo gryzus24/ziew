@@ -356,12 +356,12 @@ test "/proc/stat parser" {
     try t.expect(stat.entries[12].sys == 769 + 119 + 123 + 0);
     try t.expect(stat.entries[12].idle == 1019145);
     try t.expect(stat.entries[12].iowait == 138);
-    try t.expect(stat.stats[Stat.intr] == 1894596);
-    try t.expect(stat.stats[Stat.ctxt] == 3055158);
-    try t.expect(stat.stats[Stat.forks] == 8594);
-    try t.expect(stat.stats[Stat.running] == 1);
-    try t.expect(stat.stats[Stat.blocked] == 0);
-    try t.expect(stat.stats[Stat.softirq] == 4426117);
+    try t.expect(stat.stats[Stat.index(typ.Options.Cpu.intr)] == 1894596);
+    try t.expect(stat.stats[Stat.index(typ.Options.Cpu.ctxt)] == 3055158);
+    try t.expect(stat.stats[Stat.index(typ.Options.Cpu.forks)] == 8594);
+    try t.expect(stat.stats[Stat.index(typ.Options.Cpu.running)] == 1);
+    try t.expect(stat.stats[Stat.index(typ.Options.Cpu.blocked)] == 0);
+    try t.expect(stat.stats[Stat.index(typ.Options.Cpu.softirq)] == 4426117);
 }
 
 inline fn cpuUsageRank(curr: Cpu, prev: Cpu, comptime range: comptime_int) u8 {

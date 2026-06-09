@@ -874,8 +874,8 @@ test parse {
     r = try testParse("TIME 1962 arg \"%A %d.%m ~ %H:%M:%S\" format \"{time}\"\nFG 2ab", &reg, &scratch);
     try t.expect(r.ok.len == 1);
 
-    r = try testParse("CPU 1 format {all:.1}\nFG all", &reg, &scratch);
-    try testDiag(r, "option doesn't support thresh:#hex pairs", 2, .{ .beg = 3, .end = 6 });
+    r = try testParse("CPU 1 format {all:.1}\nFG blkbars", &reg, &scratch);
+    try testDiag(r, "option doesn't support thresh:#hex pairs", 2, .{ .beg = 3, .end = 10 });
 
     r = try testParse("CPU 1 format {all:.1}\nFG %all", &reg, &scratch);
     try testDiag(r, "option requires thresh:#hex pairs", 2, .{ .beg = 3, .end = 7 });
