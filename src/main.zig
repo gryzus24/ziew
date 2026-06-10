@@ -139,31 +139,32 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     unreachable;
 }
 
-fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
-    var path: [*:0]const u8 = undefined;
-    var path_sp: ?umem.Region.SavePoint = null;
-
-    if (config_path) |ok| {
-        path = ok;
-    } else {
-        path, path_sp = getConfigPath(reg) catch |e| switch (e) {
-            error.NoPath => {
-                log.warn(&.{"config: unknown path: using default config"});
+fn loadConfig(reg: *umem.Region, config_path: ?[:0]const u8) []typ.Widget {
+    const fd = blk: {
+        var path: [:0]const u8 = undefined;
+        if (config_path) |ok| {
+            path = ok;
+        } else {
+            path, const path_sp = getConfigPath(reg) catch |e| switch (e) {
+                error.NoPath => {
+                    log.warn(&.{"config: unknown path: using default config"});
+                    return cfg.defaultConfig(reg);
+                },
+                error.NoSpaceLeft => log.fatal(&.{"config: path too long"}),
+            };
+            // We can mark it as free immediately, as the path is referenced
+            // by open0 and possibly by log.warn inside the "fd blk", but it
+            // can't be overwritten in between.
+            reg.restore(path_sp);
+        }
+        break :blk uio.open0(path) catch |e| switch (e) {
+            error.FileNotFound, error.AccessDenied => {
+                log.warn(&.{ "config: ", @errorName(e), ": ", path });
+                log.warn(&.{"using default config"});
                 return cfg.defaultConfig(reg);
             },
-            error.NoSpaceLeft => log.fatal(&.{"config: path too long"}),
+            else => log.fatal(&.{ "config: open: ", @errorName(e) }),
         };
-    }
-    const fd_or_err = uio.open0(path);
-    if (path_sp) |ok| reg.restore(ok);
-
-    const fd = fd_or_err catch |e| switch (e) {
-        error.FileNotFound, error.AccessDenied => {
-            log.warn(&.{ "config: ", @errorName(e), ": ", mem.sliceTo(path, 0) });
-            log.warn(&.{"using default config"});
-            return cfg.defaultConfig(reg);
-        },
-        else => log.fatal(&.{ "config: open: ", @errorName(e) }),
     };
     defer uio.close(fd);
 
@@ -196,7 +197,7 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
 }
 
 const ConfigPathError = error{NoPath} || umem.Region.Error;
-const ConfigPathResult = struct { [*:0]const u8, umem.Region.SavePoint };
+const ConfigPathResult = struct { [:0]const u8, umem.Region.SavePoint };
 
 fn getConfigPath(reg: *umem.Region) ConfigPathError!ConfigPathResult {
     const sp = reg.save(u8, .front);
@@ -405,7 +406,7 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
     var reg: umem.Region = .init(&g_bss, "main");
 
     const args: Args = .read(argv[0..@intCast(argc)]);
-    const widgets = loadConfig(&reg, args.config_path);
+    const widgets = loadConfig(&reg, mem.sliceTo(args.config_path, 0));
 
     setupSignals();
 

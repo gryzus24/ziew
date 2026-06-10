@@ -518,8 +518,7 @@ pub fn defaultConfig(reg: *umem.Region) []typ.Widget {
     ;
     var buffer: uio.Buffer = .fixed(config);
     var scratch: [128]u8 align(16) = undefined;
-    const ret = parse(reg, &buffer, &scratch) catch unreachable;
-    return ret.ok;
+    return (parse(reg, &buffer, &scratch) catch unreachable).ok;
 }
 
 pub const ParseResult = union(enum) {
