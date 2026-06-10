@@ -19,7 +19,7 @@ for arg in "$@"; do
         omit-fp)      FLAGS+=(-Domit-frame-pointer) ;;
         no-oom-check) FLAGS+=(-Dmem-no-oom-check) ;;
         trace)        FLAGS+=(-Dmem-trace-allocations) ;;
-        release)      FLAGS=(-Doptimize=ReleaseSmall -Dstrip) ;;
+        release)      FLAGS+=(-Doptimize=ReleaseSmall -Dstrip) ;;
         test)         TEST=1 ;;
         *)
             printf '%s: unknown option: %s\n' "$0" "'$arg'"

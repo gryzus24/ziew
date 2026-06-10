@@ -14,16 +14,22 @@
 The configuration file of *ziew* resides at `$XDG_CONFIG_HOME/ziew/config` (usually `~/.config/ziew/config`). See the example configuration file (config) and copy it to this location.
 
 ### Prebuilt binary
-You can [download the prebuilt binary](https://github.com/gryzus24/ziew/releases/download/v0.0.13/ziew) from the Releases page. If you do not trust it you can always build directly from source.
+You can [download the prebuilt binary](https://github.com/gryzus24/ziew/releases/download/v0.0.13/ziew) from the Releases page.
 
 ### Building from source
 To build it you will need `Zig 0.16.0`. Once inside the cloned repository run:
 
 ```
-zig build -p . -Doptimize=ReleaseSmall -Dstrip
+./build.sh release
 ```
 
-The compiled binary will be placed in ./bin, from there you can copy it to somewhere in your $PATH or change the installation prefix, i.e. `-p ~/.local` to place the binary in the ~/.local/bin directory. Additionally, you can pass the `-Dmarch=native` option to tell the compiler to optimize for your local processor. For a debug build, build without the `-Doptimize` and `-Dstrip` options.
+The compiled binary will be placed in ./bin, from there you can copy it to somewhere in your $PATH. I use the above command to create the prebuilt binary, to get an even smaller one, you can experiment with the build flags:
+
+```
+./build.sh release native omit-fp no-oom-check
+```
+
+`native` to tell the compiler to optimize for your local processor, `omit-fp` to pass the -fomit-frame-pointer compiler flag, and `no-oom-check` to essentially assume a small enough configuration file for all data structures initialized from it to fit within 16 kB of memory.
 
 ## Full documentation
 
