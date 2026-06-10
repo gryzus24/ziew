@@ -110,14 +110,7 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
         break :blk "";
     };
 
-    const l: log.Log = .open(.file);
-    l.log(note);
-    l.log("\n");
-    l.log(diag_line);
-    l.log("\n");
-    l.log(underline);
-    l.log("\n");
-    l.close();
+    log.logStrings(.file, null, &.{ note, "\n", diag_line, "\n", underline }, "\n");
 
     const diag_line_marked = blk: {
         if (underline.len > 0) {
@@ -155,7 +148,7 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
     } else {
         path, path_sp = getConfigPath(reg) catch |e| switch (e) {
             error.NoPath => {
-                log.warn(&.{"unknown config file path: using defaults..."});
+                log.warn(&.{"config: unknown path: using default config"});
                 return cfg.defaultConfig(reg);
             },
             error.NoSpaceLeft => log.fatal(&.{"config: path too long"}),
@@ -167,7 +160,7 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
     const fd = fd_or_err catch |e| switch (e) {
         error.FileNotFound, error.AccessDenied => {
             log.warn(&.{ "config: ", @errorName(e), ": ", mem.sliceTo(path, 0) });
-            log.warn(&.{"using defaults..."});
+            log.warn(&.{"using default config"});
             return cfg.defaultConfig(reg);
         },
         else => log.fatal(&.{ "config: open: ", @errorName(e) }),
@@ -196,7 +189,7 @@ fn loadConfig(reg: *umem.Region, config_path: ?[*:0]const u8) []typ.Widget {
     };
 
     if (widgets.len == 0) {
-        log.warn(&.{"no widgets loaded: using defaults..."});
+        log.warn(&.{"config: no widgets loaded: using default config"});
         return cfg.defaultConfig(reg);
     }
     return widgets;

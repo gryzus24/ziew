@@ -5,17 +5,6 @@ const ustr = @import("util/str.zig");
 
 const linux = std.os.linux;
 
-// == private =================================================================
-
-fn openLogStrings(prefix: []const u8, strings: []const []const u8) Log {
-    const log: Log = .open(.default);
-    log.log(prefix);
-    for (strings) |s| log.log(s);
-    return log;
-}
-
-// == public ==================================================================
-
 pub const Log = struct {
     stream: linux.fd_t,
     file: linux.fd_t,
@@ -62,33 +51,39 @@ pub const Log = struct {
     }
 };
 
+pub fn logStrings(
+    mode: Log.Open,
+    first: ?[]const u8,
+    inner: []const []const u8,
+    last: ?[]const u8,
+) void {
+    const log: Log = .open(mode);
+    defer log.close();
+    if (first) |ok| log.log(ok);
+    for (inner) |s| log.log(s);
+    if (last) |ok| log.log(ok);
+}
+
 pub fn fatal(strings: []const []const u8) noreturn {
     @branchHint(.cold);
-    const log = openLogStrings("fatal: ", strings);
-    log.log("\n");
+    logStrings(.default, "fatal: ", strings, "\n");
     linux.exit(1);
 }
 
 pub fn fatalSys(strings: []const []const u8, sysret: isize) noreturn {
     @branchHint(.cold);
+
     std.debug.assert(sysret < 0);
+    const errno = @as(usize, @intCast(-sysret)) & 0x0fff;
 
-    const log = openLogStrings("fatal: ", strings);
-    var buf: ["4095\n".len]u8 = undefined;
+    var buf: [5]u8 = .{ undefined, undefined, undefined, undefined, '\n' };
+    const n = ustr.unsafeU64toa(buf[0 .. buf.len - 1], errno);
 
-    const n = ustr.unsafeU64toa(
-        buf[0 .. buf.len - 1],
-        @as(u64, @intCast(-sysret)) & 0x0fff,
-    );
-    buf[buf.len - 1] = '\n';
-
-    log.log(buf[buf.len - n - 1 ..]);
+    logStrings(.default, "fatal: ", strings, buf[buf.len - n - 1 ..]);
     linux.exit(1);
 }
 
 pub fn warn(strings: []const []const u8) void {
     @branchHint(.cold);
-    const log = openLogStrings("warning: ", strings);
-    defer log.close();
-    log.log("\n");
+    logStrings(.default, "warning: ", strings, "\n");
 }
