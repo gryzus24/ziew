@@ -12,14 +12,25 @@ const ustr = @import("util/str.zig");
 
 const linux = std.os.linux;
 
+// == configurable ============================================================
+
+// If you trust the kernel to be tracking CPU usage sanely, and your userspace
+// to not tell ziew to refresh multiple times within ~10 ms then you can set
+// the below option to false to avoid a division-by-zero paranoia check.
 const DELTA_ZERO_CHECK = true;
 
 // The higher the "rank zero step size" the higher the measured CPU usage has
-// to be to *not* be considered idle, i.e. "rank zero":
+// to be to *not* be considered idle (i.e. not be considered "rank zero"):
 //   - 1, any CPU usage is reported as not idle (only zero CPU usage is idle),
 //   - FRAC_MASK (~255), CPU usage <1% is reported as idle.
 const CPU_RANK_ZERO_STEP_SIZE = unt.F5608.FRAC_MASK;
+
+// If the width of Block and Braille characters is not consistent for the font
+// you use, set the below option to true to replace the blank Braille pattern
+// with a space character - setting it to false is only a micro-opimization.
 const BLK_RANK_ZERO_IS_SPACE = true;
+
+// ============================================================================
 
 const BAR_WIDTH = 3;
 
