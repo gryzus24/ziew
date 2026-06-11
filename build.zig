@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
+    const glibc = b.option(bool, "glibc", "Link dynamically against glibc") orelse false;
     const strip = b.option(bool, "strip", "Strip debug symbols") orelse false;
     const march = b.option(
         []const u8,
@@ -13,35 +14,25 @@ pub fn build(b: *std.Build) !void {
         "Disable generating frame pointer chains",
     ) orelse false;
 
+    var triple: []const u8 = "x86_64-linux-musl";
+    if (glibc)
+        triple = "x86_64-linux-gnu";
+
     const target = b.standardTargetOptions(.{
         .default_target = try std.Target.Query.parse(
             .{
-                .arch_os_abi = "x86_64-linux-musl",
+                .arch_os_abi = triple,
                 .cpu_features = march,
             },
         ),
     });
     const optimize = b.standardOptimizeOption(.{});
+    const single_threaded = true;
 
     const translate_c = b.addTranslateC(.{
         .root_source_file = b.path("src/util/ext.h"),
         .target = target,
         .optimize = optimize,
-    });
-
-    const module = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
-        .imports = &.{
-            .{
-                .name = "ext",
-                .module = translate_c.createModule(),
-            },
-        },
-        .target = target,
-        .optimize = optimize,
-        .single_threaded = true,
-        .strip = strip,
-        .omit_frame_pointer = omit_frame_pointer,
     });
 
     const mem_no_oom_check =
@@ -53,12 +44,31 @@ pub fn build(b: *std.Build) !void {
     options.addOption(bool, "mem_no_oom_check", mem_no_oom_check);
     options.addOption(bool, "mem_trace_allocations", mem_trace_allocations);
 
-    module.addOptions("config", options);
+    const module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .imports = &.{
+            .{
+                .name = "ext",
+                .module = translate_c.createModule(),
+            },
+            .{
+                .name = "config",
+                .module = options.createModule(),
+            },
+        },
+        .target = target,
+        .optimize = optimize,
+        .single_threaded = single_threaded,
+        .strip = strip,
+        .omit_frame_pointer = omit_frame_pointer,
+    });
+
     const exe = b.addExecutable(.{
         .name = "ziew",
         .root_module = module,
-        .linkage = .static,
+        .linkage = if (glibc) .dynamic else .static,
     });
+
     // Use kernel's default 8 MB stack size - avoids one prlimit call on entry.
     // (this number is sourced from the GNU_STACK program header).
     exe.stack_size = (1 << 20) * 8;

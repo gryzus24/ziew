@@ -115,9 +115,10 @@ pub fn widget(
     const curr, const prev = typ.currPrev(Mount, &mount.pair, mount.curr);
 
     // zig fmt: off
-    curr.fields[Mount.kb_total]  = (sfs.f_bsize * sfs.f_blocks) / 1024;
-    curr.fields[Mount.kb_free]   = (sfs.f_bsize * sfs.f_bfree) / 1024;
-    curr.fields[Mount.kb_avail]  = (sfs.f_bsize * sfs.f_bavail) / 1024;
+    const f_bsize: c_ulong       = @intCast(sfs.f_bsize);
+    curr.fields[Mount.kb_total]  = (f_bsize * sfs.f_blocks) / 1024;
+    curr.fields[Mount.kb_free]   = (f_bsize * sfs.f_bfree) / 1024;
+    curr.fields[Mount.kb_avail]  = (f_bsize * sfs.f_bavail) / 1024;
     curr.fields[Mount.kb_used]   = curr.fields[Mount.kb_total] - curr.fields[Mount.kb_free];
     curr.fields[Mount.ino_total] = sfs.f_files;
     curr.fields[Mount.ino_free]  = sfs.f_ffree;

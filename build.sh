@@ -1,8 +1,8 @@
 #!/bin/bash
 
 usage() {
-    printf '%s: [debug|small|fast|strip|native|omit-fp|no-oom-check|trace|
-             release|test...] \n' "$0"
+    printf '%s: [debug|small|fast|glibc|strip|native|omit-fp|
+             no-oom-check|trace|release|test...] \n' "$0"
 }
 
 CACHE_DIR=/tmp/zig-ziew
@@ -14,6 +14,7 @@ for arg in "$@"; do
         debug)        FLAGS+=(-Doptimize=Debug) ;;
         small)        FLAGS+=(-Doptimize=ReleaseSmall) ;;
         fast)         FLAGS+=(-Doptimize=ReleaseFast) ;;
+        glibc)        FLAGS+=(-Dglibc) ;;
         strip)        FLAGS+=(-Dstrip) ;;
         native)       FLAGS+=(-Dmarch=native) ;;
         omit-fp)      FLAGS+=(-Domit-frame-pointer) ;;
