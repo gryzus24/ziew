@@ -167,11 +167,12 @@ pub const LineReader = struct {
     pos: usize,
     eof: bool,
 
-    pub const Termination = error{
-        EOF,
-        NoNewline,
+    pub const AbnormalTermination = error{
+        LineTooLong,
         ReadError,
     };
+
+    pub const Termination = AbnormalTermination || error{EOF};
 
     pub fn init(b: *Buffer) @This() {
         const eof = b.read(b, b.buf.len) catch |e| switch (e) {
@@ -198,7 +199,7 @@ pub const LineReader = struct {
             }
             if (b.end == b.buf.len) {
                 // There is nothing to rebase... Line's too mighty for us.
-                if (self.pos == 0) return error.NoNewline;
+                if (self.pos == 0) return error.LineTooLong;
                 // Unfortunately we can't catch the:
                 // `buf.len` == data available, `pos == 0`, and no newline
                 // at buffer's end, not that it matters...

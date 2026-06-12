@@ -282,7 +282,7 @@ pub const State = struct {
 
     pub const empty: State = .{ .sock = 0, .netdev = null };
 
-    pub fn init(widgets: []const typ.Widget, base: [*]const u8) State {
+    pub fn init(widgets: []const typ.Widget, base: [*]const u8) !State {
         var state: State = .{
             .sock = openIoctlSocket(),
             .netdev = null,
@@ -298,8 +298,7 @@ pub const State = struct {
             state.netdev = .{
                 .ifs = .{ .empty, .empty },
                 .curr = 0,
-                .fd = uio.open0("/proc/net/dev") catch |e|
-                    log.fatal(&.{ "open: /proc/net/dev: ", @errorName(e) }),
+                .fd = uio.open0("/proc/net/dev") catch return error.NoProc,
             };
         }
         return state;

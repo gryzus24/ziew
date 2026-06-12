@@ -549,11 +549,9 @@ pub const ParseResult = union(enum) {
     }
 };
 
-pub const ParseError = error{
-    NoSpaceLeft,
-    NoNewline,
-    ReadError,
-};
+pub const ParseError =
+    error{NoSpaceLeft} ||
+    uio.LineReader.AbnormalTermination;
 
 pub fn parse(
     reg: *umem.Region,
@@ -731,6 +729,8 @@ pub fn parse(
 
     return .{ .ok = ret };
 }
+
+// == tests ===================================================================
 
 fn testParse(comptime str: []const u8, reg: *umem.Region, scratch: []align(16) u8) !ParseResult {
     var buffer: uio.Buffer = .fixed(str);

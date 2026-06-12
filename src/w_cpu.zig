@@ -467,8 +467,7 @@ pub const State = struct {
             .graph_blk = graph_blk,
             .enabled = enabled,
             .curr = 0,
-            .fd = uio.open0("/proc/stat") catch |e|
-                log.fatal(&.{ "open: /proc/stat: ", @errorName(e) }),
+            .fd = uio.open0("/proc/stat") catch return error.NoProc,
         };
     }
 

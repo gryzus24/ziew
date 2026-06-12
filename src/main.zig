@@ -180,9 +180,10 @@ fn loadConfig(reg: *umem.Region, config_path: ?[:0]const u8) []typ.Widget {
     );
 
     const ret = cfg.parse(reg, &bf.buffer, scratch) catch |e| switch (e) {
-        error.NoSpaceLeft => log.fatal(&.{"config: out of memory"}),
-        error.NoNewline => log.fatal(&.{"config: line too long"}),
-        error.ReadError => log.fatal(&.{"config: file read error"}),
+        error.NoSpaceLeft,
+        error.LineTooLong,
+        error.ReadError,
+        => log.fatal(&.{ "config: ", @errorName(e) }),
     };
     const widgets = switch (ret) {
         .ok => |w| w,
@@ -220,16 +221,14 @@ fn sa_handler(signum: linux.SIG) callconv(.c) void {
     if (signum == linux.SIG.USR1) g_refresh_all = true;
 }
 
-fn setupSignals() void {
+fn setupSignals() !void {
     const action: linux.Sigaction = .{
         .handler = .{ .handler = &sa_handler },
         .mask = linux.sigemptyset(),
         .flags = linux.SA.RESTART,
     };
-
-    if (linux.sigaction(linux.SIG.USR1, &action, null) != 0) {
-        log.fatal(&.{"sigaction failed"});
-    }
+    if (linux.sigaction(linux.SIG.USR1, &action, null) != 0)
+        return error.Sigaction;
 }
 
 fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
@@ -274,10 +273,10 @@ fn setupWidgets(reg: *umem.Region, widgets: []typ.Widget, states: *WidgetStates)
 
             if (!inited[id]) {
                 switch (w.id) {
-                    .MEM => states.mem = .init(),
+                    .MEM => states.mem = try .init(),
                     .CPU => states.cpu = try .init(reg, widgets),
                     .DISK => states.disk = try .init(reg, widgets),
-                    .NET => states.net = .init(widgets, reg.head.ptr),
+                    .NET => states.net = try .init(widgets, reg.head.ptr),
                     else => unreachable,
                 }
                 inited[id] = true;
@@ -408,7 +407,7 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
     const args: Args = .read(argv[0..@intCast(argc)]);
     const widgets = loadConfig(&reg, mem.sliceTo(args.config_path, 0));
 
-    setupSignals();
+    try setupSignals();
 
     const sleep_dsec = sleepInterval(widgets);
     const sleep_ts: linux.timespec = .{

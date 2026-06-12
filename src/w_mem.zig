@@ -130,12 +130,11 @@ pub const State = struct {
     curr: u32,
     fd: linux.fd_t,
 
-    pub fn init() State {
+    pub fn init() !State {
         return .{
             .meminfos = .{ .zero, .zero },
             .curr = 0,
-            .fd = uio.open0("/proc/meminfo") catch |e|
-                log.fatal(&.{ "open: /proc/meminfo: ", @errorName(e) }),
+            .fd = uio.open0("/proc/meminfo") catch return error.NoProc,
         };
     }
 

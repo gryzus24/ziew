@@ -24,14 +24,16 @@ pub const Log = struct {
             ret.stream = 2;
         if (mode.o & Open.file.o != 0) {
             const path = "/tmp/ziew.log";
+            const err_prefix = "open: " ++ path ++ ": ";
+
             ret.file = uio.openCWA(path, 0o644) catch |e| switch (e) {
                 error.AccessDenied => blk: {
-                    _ = uio.sys_write(ret.stream, "open: " ++ path ++ ": AccessDenied: ");
-                    _ = uio.sys_write(ret.stream, "may be sticky - only author can modify\n");
+                    _ = uio.sys_write(ret.stream, err_prefix ++
+                        "AccessDenied: may be sticky - only author can modify\n");
                     break :blk -1;
                 },
                 else => {
-                    _ = uio.sys_write(ret.stream, "open: " ++ path ++ ": ");
+                    _ = uio.sys_write(ret.stream, err_prefix);
                     _ = uio.sys_write(ret.stream, @errorName(e));
                     _ = uio.sys_write(ret.stream, "\n");
                     linux.exit(1);
