@@ -16,7 +16,7 @@ pub fn widget(
     parts: []const typ.Format.Part,
     base: [*]const u8,
 ) void {
-    const wd = w.data.TIME;
+    const wd = w.getDataConst(base);
 
     var ts: linux.timespec = undefined;
     var tm: ext.struct_tm = undefined;
@@ -30,7 +30,7 @@ pub fn widget(
 
         const dst = writer.buffer[writer.end..];
         writer.end += switch (@as(typ.Opts.Time, @enumFromInt(part.opt))) {
-            .time => ext.strftime(dst.ptr, dst.len, wd.getStrf(), &tm),
+            .time => ext.strftime(dst.ptr, dst.len, wd.data.TIME.getStrf(), &tm),
             .@"1", .@"2", .@"3", .@"4", .@"5", .@"6", .@"7", .@"8", .@"9" => advance: {
                 const DIVS: [9]u32 = comptime .{
                     100_000_000, 10_000_000, 1_000_000,

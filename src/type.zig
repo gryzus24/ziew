@@ -70,21 +70,27 @@ pub const Format = struct {
 
 pub const Widget = struct {
     id: Id,
-    data: Data,
-    interval: Interval,
+    data: WidgetData.Off,
     fg: Color,
     bg: Color,
     format: Format,
 
-    pub fn initDefault(id: Id, data: Data) @This() {
+    pub fn initDefault(id: Id, data: WidgetData.Off) Widget {
         return .{
             .id = id,
             .data = data,
-            .interval = .init(WIDGET_INTERVAL_DEFAULT),
             .fg = .{ .static = .empty },
             .bg = .{ .static = .empty },
             .format = .{ .parts = .zero, .last_str = .zero },
         };
+    }
+
+    pub fn getData(self: *const @This(), base: [*]u8) *WidgetData {
+        return @ptrCast(@alignCast(base[self.data..]));
+    }
+
+    pub fn getDataConst(self: *const @This(), base: [*]const u8) *const WidgetData {
+        return @ptrCast(@alignCast(base[self.data..]));
     }
 
     const NR_WIDGETS = @typeInfo(Id).@"enum".fields.len;
@@ -112,197 +118,6 @@ pub const Widget = struct {
             const bit = @as(u32, 1) << @intCast(@intFromEnum(self));
             return if (bit & m != 0) @enumFromInt(@intFromEnum(self)) else null;
         }
-    };
-
-    pub const Data = union {
-        TIME: *Time,
-        MEM: usize, // unused
-        CPU: usize, // unused
-        DISK: *Disk,
-        NET: *Net,
-        BAT: *Bat,
-        READ: *Read,
-
-        const SIZE_MAX = 64;
-
-        comptime {
-            std.debug.assert(@sizeOf(Time) <= SIZE_MAX);
-            // Mem
-            // Cpu
-            std.debug.assert(@sizeOf(Disk) <= SIZE_MAX);
-            std.debug.assert(@sizeOf(Net) <= SIZE_MAX);
-            std.debug.assert(@sizeOf(Bat) <= SIZE_MAX);
-            std.debug.assert(@sizeOf(Read) <= SIZE_MAX);
-        }
-
-        pub const Time = struct {
-            strf: [STRF_SIZE]u8,
-
-            const STRF_SIZE = 32;
-
-            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
-                if (arg.len >= STRF_SIZE)
-                    log.fatal(&.{"TIME: strftime format too long"});
-
-                const ret = try reg.alloc(@This(), .front);
-                @memcpy(ret.strf[0..arg.len], arg);
-                ret.strf[arg.len] = 0;
-                return ret;
-            }
-
-            pub fn getStrf(self: *const @This()) [*:0]const u8 {
-                return @ptrCast(&self.strf);
-            }
-        };
-
-        pub const Mem = void;
-        pub const Cpu = void;
-
-        pub const Disk = struct {
-            mount_id: u8,
-            len: u8,
-            mountpoint: [MOUNTPOINT_SIZE]u8,
-
-            const MOUNTPOINT_SIZE = SIZE_MAX - 1 - 1;
-
-            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
-                if (arg.len >= MOUNTPOINT_SIZE)
-                    log.fatal(&.{"DISK: mountpoint path too long"});
-
-                const ret = try reg.alloc(@This(), .front);
-                ret.mount_id = 0;
-                ret.len = @intCast(arg.len);
-                @memcpy(ret.mountpoint[0..arg.len], arg);
-                ret.mountpoint[arg.len] = 0;
-                return ret;
-            }
-
-            pub fn getMountpoint(self: *const @This()) [:0]const u8 {
-                return self.mountpoint[0..self.len :0];
-            }
-        };
-
-        pub const Net = struct {
-            ifr: linux.ifreq,
-            opt_enabled: Mask,
-
-            const Mask = struct {
-                bits: OptBit,
-
-                pub const zero: Mask = .{ .bits = 0 };
-
-                pub fn inet(self: @This()) bool {
-                    return self.bits & optBit(@intFromEnum(Opts.Net.inet)) != 0;
-                }
-                pub fn flags(self: @This()) bool {
-                    return self.bits & optBit(@intFromEnum(Opts.Net.flags)) != 0;
-                }
-                pub fn state(self: @This()) bool {
-                    return self.bits & optBit(@intFromEnum(Opts.Net.state)) != 0;
-                }
-            };
-
-            pub fn initIfr(reg: *umem.Region, arg: []const u8) !*@This() {
-                if (arg.len >= linux.IFNAMESIZE)
-                    log.fatal(&.{ "NET: interface name too long: ", arg });
-
-                const ret = try reg.alloc(@This(), .front);
-                @memset(ret.ifr.ifrn.name[0..], 0);
-                @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
-                ret.opt_enabled = .zero;
-                return ret;
-            }
-
-            pub fn gatherOptEnabled(
-                self: *@This(),
-                widget: *const Widget,
-                base: [*]const u8,
-            ) void {
-                var enabled: Mask = .zero;
-                var it: OptIterator = .init(widget, base);
-                while (it.next()) |e| enabled.bits |= optBit(e.opt);
-                self.opt_enabled = enabled;
-            }
-        };
-
-        pub const Bat = struct {
-            ps_off: u8,
-            ps_len: u8,
-            path: [PATH_SIZE]u8,
-
-            pub const PATH_SIZE = SIZE_MAX - 1 - 1;
-            pub const PS_NAME_SIZE_MAX = 12;
-
-            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
-                const prefix = "/sys/class/power_supply/";
-                const suffix = "/uevent\x00";
-                const avail = @min(PATH_SIZE - prefix.len - suffix.len, PS_NAME_SIZE_MAX);
-                comptime std.debug.assert(avail == PS_NAME_SIZE_MAX);
-
-                if (arg.len > avail)
-                    log.fatal(&.{"BAT: battery name too long"});
-
-                const ret = try reg.alloc(@This(), .front);
-                ret.ps_off = prefix.len;
-                ret.ps_len = @intCast(arg.len);
-                @memcpy(ret.path[0..prefix.len], prefix);
-                @memcpy(ret.path[prefix.len..][0..arg.len], arg);
-                @memcpy(ret.path[prefix.len + arg.len ..][0..suffix.len], suffix);
-                return ret;
-            }
-
-            pub fn getPath(self: *const @This()) [*:0]const u8 {
-                return @ptrCast(&self.path);
-            }
-
-            pub fn getPsName(self: *const @This()) []const u8 {
-                return self.path[self.ps_off..][0..self.ps_len];
-            }
-        };
-
-        pub const Read = struct {
-            basename_off: u8,
-            basename_len: u8,
-            path: [PATH_SIZE]u8,
-
-            const PATH_SIZE = SIZE_MAX - 1 - 1;
-
-            pub fn init(reg: *umem.Region, arg: []const u8) !*@This() {
-                const dirname = fs.path.dirname(arg) orelse
-                    log.fatal(&.{"READ: path must be absolute"});
-                const basename = fs.path.basename(arg);
-
-                if (dirname.len + 1 + basename.len >= PATH_SIZE)
-                    log.fatal(&.{"READ: path too long"});
-
-                var path: [PATH_SIZE]u8 = undefined;
-                var off = dirname.len;
-
-                @memcpy(path[0..dirname.len], dirname);
-                if (dirname.len > 0 and dirname[dirname.len - 1] != '/') {
-                    path[dirname.len] = '/';
-                    off += 1;
-                }
-                @memcpy(path[off..][0..basename.len], basename);
-                path[off + basename.len] = 0;
-
-                const ret = try reg.alloc(@This(), .front);
-                ret.* = .{
-                    .basename_off = @intCast(off),
-                    .basename_len = @intCast(basename.len),
-                    .path = path,
-                };
-                return ret;
-            }
-
-            pub fn getPath(self: *const @This()) [*:0]const u8 {
-                return @ptrCast(&self.path);
-            }
-
-            pub fn getBasename(self: *const @This()) []const u8 {
-                return self.path[self.basename_off..][0..self.basename_len];
-            }
-        };
     };
 
     pub const Color = union(enum) {
@@ -343,53 +158,249 @@ pub const Widget = struct {
             },
         };
     }
+};
 
-    // Iterates over each option referenced by a Widget in order:
-    //   fg, bg, parts[0], parts[1], ... etc.
-    pub const OptIterator = struct {
-        fg: Color,
-        bg: Color,
-        parts: []const Format.Part,
-        i: isize,
+pub const WidgetData = struct {
+    interval: Interval,
+    data: Data,
 
-        const Item = struct {
-            opt: u8,
-            pct: bool,
-            width: u3,
+    const Off = usize;
+
+    pub const Data = union {
+        TIME: Time,
+        MEM: usize, // unused
+        CPU: usize, // unused
+        DISK: Disk,
+        NET: Net,
+        BAT: Bat,
+        READ: Read,
+
+        const SIZE_MAX = 64 - @sizeOf(Interval);
+
+        comptime {
+            std.debug.assert(@sizeOf(Time) <= SIZE_MAX);
+            // Mem
+            // Cpu
+            std.debug.assert(@sizeOf(Disk) <= SIZE_MAX);
+            std.debug.assert(@sizeOf(Net) <= SIZE_MAX);
+            std.debug.assert(@sizeOf(Bat) <= SIZE_MAX);
+            std.debug.assert(@sizeOf(Read) <= SIZE_MAX);
+        }
+
+        pub const Time = struct {
+            strf: [STRF_SIZE]u8,
+
+            const STRF_SIZE = SIZE_MAX;
+
+            pub fn init(arg: []const u8) Time {
+                if (arg.len >= STRF_SIZE)
+                    log.fatal(&.{"TIME: strftime format too long"});
+
+                var ret: Time = undefined;
+                @memcpy(ret.strf[0..arg.len], arg);
+                ret.strf[arg.len] = 0;
+                return ret;
+            }
+
+            pub fn getStrf(self: *const @This()) [*:0]const u8 {
+                return @ptrCast(&self.strf);
+            }
         };
 
-        pub fn init(widget: *const Widget, base: [*]const u8) @This() {
-            return .{
-                .fg = widget.fg,
-                .bg = widget.bg,
-                .parts = widget.format.parts.get(base),
-                .i = -2,
-            };
-        }
+        pub const Mem = void;
+        pub const Cpu = void;
 
-        pub fn next(self: *@This()) ?Item {
-            if (self.i == -2) {
-                self.i += 1;
-                switch (self.fg) {
-                    .active => |a| return .{ .opt = a.opt, .pct = a.pct, .width = 0 },
-                    .static => {},
+        pub const Disk = struct {
+            mount_id: u8,
+            len: u8,
+            mountpoint: [MOUNTPOINT_SIZE]u8,
+
+            const MOUNTPOINT_SIZE = SIZE_MAX - 1 - 1;
+
+            pub fn init(arg: []const u8) Disk {
+                if (arg.len >= MOUNTPOINT_SIZE)
+                    log.fatal(&.{"DISK: mountpoint path too long"});
+
+                var ret: Disk = undefined;
+                ret.mount_id = 0;
+                ret.len = @intCast(arg.len);
+                @memcpy(ret.mountpoint[0..arg.len], arg);
+                ret.mountpoint[arg.len] = 0;
+                return ret;
+            }
+
+            pub fn getMountpoint(self: *const @This()) [:0]const u8 {
+                return self.mountpoint[0..self.len :0];
+            }
+        };
+
+        pub const Net = struct {
+            ifr: linux.ifreq,
+            opt_enabled: Mask,
+
+            const Mask = struct {
+                bits: OptBit,
+
+                pub const zero: Mask = .{ .bits = 0 };
+
+                pub fn inet(self: @This()) bool {
+                    return self.bits & optBit(@intFromEnum(Opts.Net.inet)) != 0;
                 }
-            }
-            if (self.i == -1) {
-                self.i += 1;
-                switch (self.bg) {
-                    .active => |a| return .{ .opt = a.opt, .pct = a.pct, .width = 0 },
-                    .static => {},
+                pub fn flags(self: @This()) bool {
+                    return self.bits & optBit(@intFromEnum(Opts.Net.flags)) != 0;
                 }
+                pub fn state(self: @This()) bool {
+                    return self.bits & optBit(@intFromEnum(Opts.Net.state)) != 0;
+                }
+            };
+
+            pub fn initIfr(arg: []const u8) Net {
+                if (arg.len >= linux.IFNAMESIZE)
+                    log.fatal(&.{ "NET: interface name too long: ", arg });
+
+                var ret: Net = undefined;
+                @memset(ret.ifr.ifrn.name[0..], 0);
+                @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
+                ret.opt_enabled = .zero;
+                return ret;
             }
-            if (self.i < self.parts.len) {
-                const p = &self.parts[@intCast(self.i)];
-                self.i += 1;
-                return .{ .opt = p.opt, .pct = p.flags.pct, .width = p.wopts.width };
+
+            pub fn gatherOptEnabled(
+                self: *@This(),
+                widget: *const Widget,
+                base: [*]const u8,
+            ) void {
+                var enabled: Mask = .zero;
+                var it: OptIterator = .init(widget, base);
+                while (it.next()) |e| enabled.bits |= optBit(e.opt);
+                self.opt_enabled = enabled;
             }
-            return null;
-        }
+        };
+
+        pub const Bat = struct {
+            ps_off: u8,
+            ps_len: u8,
+            path: [PATH_SIZE]u8,
+
+            pub const PATH_SIZE = SIZE_MAX - 1 - 1;
+            pub const PS_NAME_SIZE_MAX = 12;
+
+            pub fn init(arg: []const u8) Bat {
+                const prefix = "/sys/class/power_supply/";
+                const suffix = "/uevent\x00";
+                const avail = @min(PATH_SIZE - prefix.len - suffix.len, PS_NAME_SIZE_MAX);
+                comptime std.debug.assert(avail == PS_NAME_SIZE_MAX);
+
+                if (arg.len > avail)
+                    log.fatal(&.{"BAT: battery name too long"});
+
+                var ret: Bat = undefined;
+                ret.ps_off = prefix.len;
+                ret.ps_len = @intCast(arg.len);
+                @memcpy(ret.path[0..prefix.len], prefix);
+                @memcpy(ret.path[prefix.len..][0..arg.len], arg);
+                @memcpy(ret.path[prefix.len + arg.len ..][0..suffix.len], suffix);
+                return ret;
+            }
+
+            pub fn getPath(self: *const @This()) [*:0]const u8 {
+                return @ptrCast(&self.path);
+            }
+
+            pub fn getPsName(self: *const @This()) []const u8 {
+                return self.path[self.ps_off..][0..self.ps_len];
+            }
+        };
+
+        pub const Read = struct {
+            basename_off: u8,
+            basename_len: u8,
+            path: [PATH_SIZE]u8,
+
+            const PATH_SIZE = SIZE_MAX - 1 - 1;
+
+            pub fn init(arg: []const u8) Read {
+                const dirname = fs.path.dirname(arg) orelse
+                    log.fatal(&.{"READ: path must be absolute"});
+                const basename = fs.path.basename(arg);
+
+                if (dirname.len + 1 + basename.len >= PATH_SIZE)
+                    log.fatal(&.{"READ: path too long"});
+
+                var path: [PATH_SIZE]u8 = undefined;
+                var off = dirname.len;
+
+                @memcpy(path[0..dirname.len], dirname);
+                if (dirname.len > 0 and dirname[dirname.len - 1] != '/') {
+                    path[dirname.len] = '/';
+                    off += 1;
+                }
+                @memcpy(path[off..][0..basename.len], basename);
+                path[off + basename.len] = 0;
+
+                return .{
+                    .basename_off = @intCast(off),
+                    .basename_len = @intCast(basename.len),
+                    .path = path,
+                };
+            }
+
+            pub fn getPath(self: *const @This()) [*:0]const u8 {
+                return @ptrCast(&self.path);
+            }
+
+            pub fn getBasename(self: *const @This()) []const u8 {
+                return self.path[self.basename_off..][0..self.basename_len];
+            }
+        };
     };
+};
+
+// Iterates over each option referenced by a Widget in order:
+//   fg, bg, parts[0], parts[1], ... etc.
+pub const OptIterator = struct {
+    fg: Widget.Color,
+    bg: Widget.Color,
+    parts: []const Format.Part,
+    i: isize,
+
+    const Item = struct {
+        opt: u8,
+        pct: bool,
+        width: u3,
+    };
+
+    pub fn init(widget: *const Widget, base: [*]const u8) @This() {
+        return .{
+            .fg = widget.fg,
+            .bg = widget.bg,
+            .parts = widget.format.parts.get(base),
+            .i = -2,
+        };
+    }
+
+    pub fn next(self: *@This()) ?Item {
+        if (self.i == -2) {
+            self.i += 1;
+            switch (self.fg) {
+                .active => |a| return .{ .opt = a.opt, .pct = a.pct, .width = 0 },
+                .static => {},
+            }
+        }
+        if (self.i == -1) {
+            self.i += 1;
+            switch (self.bg) {
+                .active => |a| return .{ .opt = a.opt, .pct = a.pct, .width = 0 },
+                .static => {},
+            }
+        }
+        if (self.i < self.parts.len) {
+            const p = &self.parts[@intCast(self.i)];
+            self.i += 1;
+            return .{ .opt = p.opt, .pct = p.flags.pct, .width = p.wopts.width };
+        }
+        return null;
+    }
 };
 
 pub const Opts = struct {
@@ -776,6 +787,13 @@ pub inline fn constCurrPrev(
     i: usize,
 ) struct { *const T, *const T } {
     return .{ &items[i], &items[i ^ 1] };
+}
+
+pub fn allocConfigParserMem(reg: *umem.Region) struct { []u8, []align(16) u8 } {
+    const filebuf = reg.allocMany(u8, 2048, .back) catch unreachable;
+    const scratch: []align(16) u8 =
+        @ptrCast(reg.allocMany(u128, 512 / 16, .back) catch unreachable);
+    return .{ filebuf, scratch };
 }
 
 // == meta functions ==========================================================

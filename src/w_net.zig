@@ -282,7 +282,7 @@ pub const State = struct {
 
     pub const empty: State = .{ .sock = 0, .netdev = null };
 
-    pub fn init(widgets: []const typ.Widget, base: [*]const u8) !State {
+    pub fn init(widgets: []const typ.Widget, base: [*]u8) !State {
         var state: State = .{
             .sock = openIoctlSocket(),
             .netdev = null,
@@ -290,8 +290,9 @@ pub const State = struct {
         var enabled: typ.OptBit = 0;
         for (widgets) |*w| {
             if (w.id == .NET) {
-                w.data.NET.gatherOptEnabled(w, base);
-                enabled |= w.data.NET.opt_enabled.bits;
+                const wd = w.getData(base);
+                wd.data.NET.gatherOptEnabled(w, base);
+                enabled |= wd.data.NET.opt_enabled.bits;
             }
         }
         if (enabled & typ.Opts.Net.NETDEV_MASK != 0) {
@@ -324,10 +325,10 @@ pub fn widget(
     writer: *uio.Writer,
     w: *const typ.Widget,
     parts: []const typ.Format.Part,
-    base: [*]const u8,
+    base: [*]u8,
     state: *const State,
 ) void {
-    const wd = w.data.NET;
+    const wd = w.getData(base);
 
     var inetbuf: [INET_BUF_SIZE]u8 = undefined;
     var iffbuf: [IFF_BUF_MAX]u8 = undefined;
@@ -336,10 +337,11 @@ pub fn widget(
     var iff_len: usize = 0;
     var up = false;
 
-    if (wd.opt_enabled.inet())
-        inet_len = getInet(state.sock, &wd.ifr, &inetbuf);
-    if (wd.opt_enabled.flags() or wd.opt_enabled.state())
-        iff_len, up = getFlags(state.sock, &wd.ifr, &iffbuf);
+    const enabled = wd.data.NET.opt_enabled;
+    if (enabled.inet())
+        inet_len = getInet(state.sock, &wd.data.NET.ifr, &inetbuf);
+    if (enabled.flags() or enabled.state())
+        iff_len, up = getFlags(state.sock, &wd.data.NET.ifr, &iffbuf);
 
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
@@ -348,7 +350,7 @@ pub fn widget(
         const new, const old = typ.constCurrPrev(Interfaces, &ok.ifs, ok.curr);
 
         const Hash = @Vector(linux.IFNAMESIZE, u8);
-        const cfg_ifname: Hash = wd.ifr.ifrn.name;
+        const cfg_ifname: Hash = wd.data.NET.ifr.ifrn.name;
 
         var it = new.list.first;
         while (it) |node| : (it = node.next) {
@@ -433,7 +435,7 @@ pub fn widget(
             const a = new_if.?.fields[part.opt - typ.Opts.Net.NETDEV_OFF];
             const b = old_if.?.fields[part.opt - typ.Opts.Net.NETDEV_OFF];
 
-            const value = typ.calc(a, b, w.interval, part.flags);
+            const value = typ.calc(a, b, wd.interval, part.flags);
             if (bit & typ.Opts.Net.NETDEV_SIZE_MASK != 0) {
                 nu = unt.SizeBytes(value);
             } else {

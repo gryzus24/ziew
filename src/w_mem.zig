@@ -169,6 +169,7 @@ pub fn widget(
     base: [*]const u8,
     state: *const State,
 ) void {
+    const interval = w.getDataConst(base).interval;
     const curr, const prev = typ.constCurrPrev(Meminfo, &state.meminfos, state.curr);
 
     const fg, const bg = w.check(state, base);
@@ -184,7 +185,7 @@ pub fn widget(
         } else {
             const new, const old = .{ curr.fields[part.opt], prev.fields[part.opt] };
             const result, negative =
-                typ.calcWithOverflow(new, old, w.interval, part.flags);
+                typ.calcWithOverflow(new, old, interval, part.flags);
             nu = unt.SizeKb(result);
         }
         const wopts = part.wopts.copyAndSetNegative(negative);

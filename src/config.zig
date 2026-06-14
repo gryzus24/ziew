@@ -582,11 +582,8 @@ pub fn parse(
             .widget => |wi| {
                 current = try reg.pushVec(&widgets, .back);
                 current.* = .initDefault(wi.id, undefined);
-                if (wi.interval) |ok| {
-                    current.interval = ok;
-                } else {
+                const interval = wi.interval orelse
                     return .fail("widget requires interval", line, line_nr, .zero);
-                }
                 const arg = blk: {
                     if (current.id.checkCastTo(typ.Widget.Id.ArgRequired)) |_| {
                         if (wi.arg) |ok| break :blk line[ok.beg..ok.end];
@@ -598,7 +595,7 @@ pub fn parse(
                     if (wi.format) |ok| break :blk .{ line[ok.beg..ok.end], ok };
                     return .fail("widget requires format parameter", line, line_nr, .zero);
                 };
-                const format = switch (try acceptFormat(reg, fmt_str, current.id, arg)) {
+                current.format = switch (try acceptFormat(reg, fmt_str, current.id, arg)) {
                     .ok => |f| f,
                     .err => |e| {
                         return .fail(e.note, line, line_nr, .{
@@ -607,18 +604,22 @@ pub fn parse(
                         });
                     },
                 };
-                current.format = format;
-                // zig fmt: off
-                current.data = switch (current.id) {
-                    .TIME => .{ .TIME = try .init(reg, arg.?) },
-                    .MEM  => .{ .MEM  = undefined },
-                    .CPU  => .{ .CPU  = undefined },
-                    .DISK => .{ .DISK = try .init(reg, arg.?) },
-                    .NET  => .{ .NET  = try .initIfr(reg, arg.?) },
-                    .BAT  => .{ .BAT  = try .init(reg, arg.?) },
-                    .READ => .{ .READ = try .init(reg, arg.?) },
+                const sp = reg.save(typ.WidgetData, .front);
+                (try reg.alloc(typ.WidgetData, .front)).* = .{
+                    .interval = interval,
+                    .data = switch (current.id) {
+                        // zig fmt: off
+                        .TIME => .{ .TIME = .init(arg.?) },
+                        .MEM  => .{ .MEM  = undefined },
+                        .CPU  => .{ .CPU  = undefined },
+                        .DISK => .{ .DISK = .init(arg.?) },
+                        .NET  => .{ .NET  = .initIfr(arg.?) },
+                        .BAT  => .{ .BAT  = .init(arg.?) },
+                        .READ => .{ .READ = .init(arg.?) },
+                        // zig fmt: on
+                    },
                 };
-                // zig fmt: on
+                current.data = sp.off;
             },
             .color => |co| {
                 if (widgets.len == 0) {

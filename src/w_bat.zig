@@ -197,13 +197,13 @@ pub fn widget(
     parts: []const typ.Format.Part,
     base: [*]const u8,
 ) void {
-    const wd = w.data.BAT;
+    const wd = w.getDataConst(base);
 
     var buf: [1024]u8 = undefined;
-    const data = openAndRead(wd.getPath(), &buf) catch |e| {
+    const data = openAndRead(wd.data.BAT.getPath(), &buf) catch |e| {
         const fg, const bg = w.colorForceStatic();
         typ.writeWidgetBeg(writer, fg, bg);
-        uio.writeStr(writer, wd.getPsName());
+        uio.writeStr(writer, wd.data.BAT.getPsName());
         uio.writeStr(writer, ": ");
         uio.writeStr(writer, switch (e) {
             error.FileNotFound => "<not found>",

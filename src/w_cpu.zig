@@ -429,7 +429,7 @@ pub const State = struct {
         var blk_width: u8 = 0;
         for (widgets) |*w| {
             if (w.id == .CPU) {
-                var it: typ.Widget.OptIterator = .init(w, base);
+                var it: typ.OptIterator = .init(w, base);
                 while (it.next()) |e| {
                     if (typ.optBit(e.opt) & typ.Opts.Cpu.USAGE_MASK != 0) {
                         if (e.pct) {
@@ -547,6 +547,7 @@ pub fn widget(
     base: [*]const u8,
     state: *const State,
 ) void {
+    const interval = w.getDataConst(base).interval;
     const curr, var prev = typ.constCurrPrev(Stat, &state.stats, state.curr);
     if (nrCpusOnlineChanged(curr, prev)) {
         @branchHint(.unlikely);
@@ -575,7 +576,7 @@ pub fn widget(
                 const value, negative = typ.calcWithOverflow(
                     curr.stats[part.opt - typ.Opts.Cpu.STATS_OFF],
                     prev.stats[part.opt - typ.Opts.Cpu.STATS_OFF],
-                    w.interval,
+                    interval,
                     part.flags,
                 );
                 nu = unt.UnitSI(value);

@@ -2,7 +2,7 @@
 
 usage() {
     printf '%s: [debug|small|fast|glibc|strip|native|omit-fp|
-             no-oom-check|trace|release|test...] \n' "$0"
+             no-oom-check|config=<file>|trace|release|test...] \n' "$0"
 }
 
 CACHE_DIR=/tmp/zig-ziew
@@ -19,6 +19,7 @@ for arg in "$@"; do
         native)       FLAGS+=(-Dmarch=native) ;;
         omit-fp)      FLAGS+=(-Domit-frame-pointer) ;;
         no-oom-check) FLAGS+=(-Dmem-no-oom-check) ;;
+        config=*)     FLAGS+=("-D$arg") ;;
         trace)        FLAGS+=(-Dmem-trace-allocations) ;;
         release)      FLAGS+=(-Doptimize=ReleaseSmall -Dstrip) ;;
         test)         TEST=1 ;;
@@ -34,5 +35,9 @@ if [[ -n "$TEST" ]]; then
     zig build --cache-dir "$CACHE_DIR" "${FLAGS[@]}" test
     set +x
 else
-    zig build --summary none --cache-dir "$CACHE_DIR" -p . "${FLAGS[@]}"
+    zig build \
+        --summary none \
+        --error-style minimal \
+        --cache-dir "$CACHE_DIR" \
+        -p . "${FLAGS[@]}"
 fi

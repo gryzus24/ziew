@@ -65,12 +65,14 @@ const MountPair = struct {
 pub const State = struct {
     mounts: []MountPair,
 
-    pub fn init(reg: *umem.Region, widgets: []typ.Widget) !@This() {
+    pub fn init(reg: *umem.Region, widgets: []const typ.Widget) !@This() {
+        const base = reg.head.ptr;
+
         var id: u8 = 0;
         var mounts: []MountPair = &.{};
         for (widgets) |*w| {
             if (w.id == .DISK) {
-                w.data.DISK.mount_id = id;
+                w.getData(base).data.DISK.mount_id = id;
                 id += 1;
                 const ret = try reg.pushVec(&mounts, .front);
                 ret.* = .zero;
@@ -87,11 +89,11 @@ pub fn widget(
     base: [*]const u8,
     state: *const State,
 ) void {
-    const wd = w.data.DISK;
+    const wd = w.getDataConst(base);
 
     var sfs: ext.struct_statfs = undefined;
     while (true) {
-        const ret = ext.sys_statfs(wd.getMountpoint(), &sfs);
+        const ret = ext.sys_statfs(wd.data.DISK.getMountpoint(), &sfs);
         if (ret == 0) {
             @branchHint(.likely);
             break;
@@ -99,7 +101,7 @@ pub fn widget(
         if (ret != -ext.c.EINTR) {
             const fg, const bg = w.colorForceStatic();
             typ.writeWidgetBeg(writer, fg, bg);
-            uio.writeStr(writer, wd.getMountpoint());
+            uio.writeStr(writer, wd.data.DISK.getMountpoint());
             uio.writeStr(writer, ": ");
             uio.writeStr(writer, switch (ret) {
                 -ext.c.EACCES => "<no access>",
@@ -110,7 +112,7 @@ pub fn widget(
             return;
         }
     }
-    const mount = &state.mounts[wd.mount_id];
+    const mount = &state.mounts[wd.data.DISK.mount_id];
     mount.curr ^= 1;
     const curr, const prev = typ.currPrev(Mount, &mount.pair, mount.curr);
 
@@ -149,7 +151,7 @@ pub fn widget(
             const value, negative = typ.calcWithOverflow(
                 curr.fields[part.opt],
                 prev.fields[part.opt],
-                w.interval,
+                wd.interval,
                 part.flags,
             );
             nu = if (bit & typ.Opts.Disk.INO_MASK != 0)

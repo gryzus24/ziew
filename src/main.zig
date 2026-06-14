@@ -31,9 +31,31 @@ var g_bss: [0x4000 - 0x580 - 64 - 0x40]u8 align(64) = undefined;
 // USR1 signal latch.
 var g_refresh_all = false;
 
-const WRITE_FAIL_CHECK = true;
-
 const I3BAR_HEADER = "{\"version\":1}\n[[]";
+
+const WRITE_FAIL_CHECK = true;
+const CONFIG_EMBEDDED = @import("config").is_embedding_config;
+
+const WidgetSeq = blk: {
+    if (CONFIG_EMBEDDED) {
+        const __widg = @embedFile("config.widgets");
+        const len = @divExact(__widg.len, @sizeOf(typ.Widget));
+        break :blk *const [len]typ.Widget;
+    }
+    break :blk []const typ.Widget;
+};
+
+inline fn embedWidgets() WidgetSeq {
+    const __widg = @embedFile("config.widgets");
+    const __widg_aligned: [__widg.len]u8 align(@alignOf(typ.Widget)) = __widg.*;
+    return @ptrCast(&__widg_aligned);
+}
+
+inline fn embedIntervals() *const [embedWidgets().len]typ.DeciSec {
+    const __intr = @embedFile("config.intervals");
+    const __intr_aligned: [__intr.len]u8 align(@alignOf(typ.DeciSec)) = __intr.*;
+    return @ptrCast(&__intr_aligned);
+}
 
 const Args = struct {
     config_path: ?[*:0]const u8 = null,
@@ -139,7 +161,7 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     unreachable;
 }
 
-fn loadConfig(reg: *umem.Region, config_path: ?[:0]const u8) []typ.Widget {
+fn loadConfig(reg: *umem.Region, config_path: ?[:0]const u8) WidgetSeq {
     const fd = blk: {
         var path: [:0]const u8 = undefined;
         if (config_path) |ok| {
@@ -171,13 +193,8 @@ fn loadConfig(reg: *umem.Region, config_path: ?[:0]const u8) []typ.Widget {
     const parse_bentry = reg.save(u8, .back);
     defer reg.restore(parse_bentry);
 
-    var bf: uio.BufferedFile = .init(
-        fd,
-        reg.allocMany(u8, 2048, .back) catch unreachable,
-    );
-    const scratch: []align(16) u8 = @ptrCast(
-        reg.allocMany(u128, 512 / 16, .back) catch unreachable,
-    );
+    const filebuf, const scratch = typ.allocConfigParserMem(reg);
+    var bf: uio.BufferedFile = .init(fd, filebuf);
 
     const ret = cfg.parse(reg, &bf.buffer, scratch) catch |e| switch (e) {
         error.NoSpaceLeft,
@@ -231,52 +248,55 @@ fn setupSignals() !void {
         return error.Sigaction;
 }
 
-fn sleepInterval(widgets: []const typ.Widget) typ.DeciSec {
+fn sleepInterval(intervals: []const typ.UDeciSec) typ.DeciSec {
     var min: typ.UDeciSec = typ.WIDGET_INTERVAL_MAX;
     var gcd: typ.UDeciSec = 0;
-    for (widgets) |*w| {
-        // Intervals of `WIDGET_INTERVAL_MAX` are
-        // treated as "refresh once and forget".
-        const interval: typ.UDeciSec = @intCast(w.interval.set);
+
+    for (intervals) |interval| {
+        // Intervals of `WIDGET_INTERVAL_MAX` are treated as "refresh once and forget".
         if (interval != typ.WIDGET_INTERVAL_MAX) {
             min = @min(min, interval);
-            gcd = misc.gcd(if (gcd == 0) interval else gcd, interval);
+            gcd = if (gcd == 0) interval else misc.gcd(gcd, interval);
         }
     }
-    if (gcd < min) {
+    if (gcd < min)
         log.warn(&.{"GCD of intervals < shortest interval, widget updates will be inexact"});
-    }
+
     // NOTE: gcd is the obvious choice here, but it might prove
     //       disastrous if the interval is misconfigured...
     return @intCast(min);
 }
 
-fn setupWidgets(reg: *umem.Region, widgets: []typ.Widget, states: *WidgetStates) !void {
+fn index(id: typ.Widget.Id) usize {
+    return @intFromEnum(id) -% 1;
+}
+comptime {
+    std.debug.assert(index(typ.Widget.Id.MEM) == 0);
+    std.debug.assert(index(typ.Widget.Id.CPU) == 1);
+    std.debug.assert(index(typ.Widget.Id.DISK) == 2);
+    std.debug.assert(index(typ.Widget.Id.NET) == 3);
+}
+
+fn setupWidgets(
+    reg: *umem.Region,
+    widgets: WidgetSeq,
+    states: *WidgetStates,
+) !void {
+    const base = reg.head.ptr;
+
     var intrvl: [4]typ.DeciSec = @splat(typ.WIDGET_INTERVAL_MAX);
     var inited: [4]bool = @splat(false);
 
-    const Fn = struct {
-        fn index(id: typ.Widget.Id) usize {
-            return @intFromEnum(id) -% 1;
-        }
-        comptime {
-            std.debug.assert(index(typ.Widget.Id.MEM) == 0);
-            std.debug.assert(index(typ.Widget.Id.CPU) == 1);
-            std.debug.assert(index(typ.Widget.Id.DISK) == 2);
-            std.debug.assert(index(typ.Widget.Id.NET) == 3);
-        }
-    };
-
     for (widgets) |*w| switch (w.id) {
         .MEM, .CPU, .DISK, .NET => {
-            const id = Fn.index(w.id);
+            const id = index(w.id);
 
             if (!inited[id]) {
                 switch (w.id) {
                     .MEM => states.mem = try .init(),
                     .CPU => states.cpu = try .init(reg, widgets),
                     .DISK => states.disk = try .init(reg, widgets),
-                    .NET => states.net = try .init(widgets, reg.head.ptr),
+                    .NET => states.net = try .init(widgets, base),
                     else => unreachable,
                 }
                 inited[id] = true;
@@ -284,21 +304,27 @@ fn setupWidgets(reg: *umem.Region, widgets: []typ.Widget, states: *WidgetStates)
             // DISK widgets perform per mountpoint updates,
             // no need to clamp the interval.
             switch (w.id) {
-                .MEM, .CPU, .NET => intrvl[id] = @min(intrvl[id], w.interval.set),
+                .MEM,
+                .CPU,
+                .NET,
+                => intrvl[id] = @min(intrvl[id], w.getDataConst(base).interval.set),
                 else => {},
             }
         },
         else => {},
     };
     for (widgets) |*w| switch (w.id) {
-        .MEM, .CPU, .NET => w.interval.set = intrvl[Fn.index(w.id)],
+        .MEM,
+        .CPU,
+        .NET,
+        => w.getData(base).interval.set = intrvl[index(w.id)],
         else => {},
     };
 }
 
 fn update(
     reg: *umem.Region,
-    widgets: []typ.Widget,
+    widgets: WidgetSeq,
     states: *WidgetStates,
     bufs: [][typ.WIDGET_BUF_MAX]u8,
     vecs: [][]const u8,
@@ -315,8 +341,9 @@ fn update(
     var updated: Update = .{ .net = states.net.netdev == null };
 
     for (widgets, 0..) |*w, i| {
-        w.interval.now -= sleep_dsec;
-        if (w.interval.now <= 0) {
+        const wd = w.getData(base);
+        wd.interval.now -= sleep_dsec;
+        if (wd.interval.now <= 0) {
             var fw: uio.Writer = .fixed(bufs[i][0..typ.WIDGET_BUF_WRITABLE]);
             const parts = w.format.parts.get(base);
             switch (w.id) {
@@ -348,7 +375,7 @@ fn update(
             }
             w.format.last_str.writeBytes(&fw, base);
             vecs[i] = typ.writeWidgetEnd(&bufs[i], fw.end);
-            w.interval.now = w.interval.set;
+            wd.interval.now = wd.interval.set;
         }
     }
 }
@@ -402,14 +429,38 @@ comptime {
 pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
     errdefer log.fatal(&.{"main exited"});
 
-    var reg: umem.Region = .init(&g_bss, "main");
-
-    const args: Args = .read(argv[0..@intCast(argc)]);
-    const widgets = loadConfig(&reg, mem.sliceTo(args.config_path, 0));
-
     try setupSignals();
 
-    const sleep_dsec = sleepInterval(widgets);
+    var reg: umem.Region = blk: {
+        if (CONFIG_EMBEDDED) {
+            var stack: [g_bss.len]u8 align(16) = undefined;
+            break :blk .init(&stack, "main");
+        }
+        break :blk .init(&g_bss, "main");
+    };
+    const widgets = blk: {
+        if (CONFIG_EMBEDDED) {
+            _ = try reg.writeStr(@embedFile("config.data"), .front);
+            break :blk comptime embedWidgets();
+        }
+        const args: Args = .read(argv[0..@intCast(argc)]);
+        break :blk loadConfig(&reg, mem.sliceTo(args.config_path, 0));
+    };
+    const base = reg.head.ptr;
+
+    const sleep_dsec = blk: {
+        if (CONFIG_EMBEDDED) {
+            break :blk comptime sleepInterval(@ptrCast(embedIntervals()));
+        }
+        const sp = reg.save(typ.DeciSec, .front);
+        var intervals = try reg.allocMany(typ.DeciSec, widgets.len, .front);
+        reg.restore(sp);
+
+        for (widgets, 0..) |*w, i| {
+            intervals[i] = @intCast(w.getDataConst(base).interval.set);
+        }
+        break :blk sleepInterval(@ptrCast(intervals));
+    };
     const sleep_ts: linux.timespec = .{
         .sec = @divTrunc(sleep_dsec, 10),
         .nsec = @rem(sleep_dsec, 10) * (time.ns_per_s / 10),
@@ -421,13 +472,11 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
     const vecs = try reg.allocMany([]const u8, widgets.len, .front);
     const bufs = try reg.allocMany([typ.WIDGET_BUF_MAX]u8, widgets.len, .front);
 
-    const base = reg.head.ptr;
-
     _ = uio.sys_write(1, I3BAR_HEADER);
     refresh: while (true) {
         if (g_refresh_all) {
             @branchHint(.unlikely);
-            for (widgets) |*w| w.interval.now = 0;
+            for (widgets) |*w| w.getData(base).interval.now = 0;
             g_refresh_all = false;
         }
         try update(&reg, widgets, &states, bufs, vecs, sleep_dsec);
