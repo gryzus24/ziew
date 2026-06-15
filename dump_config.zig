@@ -44,7 +44,7 @@ fn real_main(argc: c_int, argv: [*]const [*:0]const u8) !void {
         const sp = reg.save(typ.DeciSec, .front);
         var intervals = try reg.allocMany(typ.DeciSec, widgets.len, .front);
         for (widgets, 0..) |*w, i| {
-            intervals[i] = w.getDataConst(base).interval.set;
+            intervals[i] = w.readInterval(base).set;
         }
         break :blk reg.head[sp.off..][0 .. @sizeOf(typ.DeciSec) * intervals.len];
     };

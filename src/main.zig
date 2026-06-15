@@ -307,7 +307,7 @@ fn setupWidgets(
                 .MEM,
                 .CPU,
                 .NET,
-                => intrvl[id] = @min(intrvl[id], w.getDataConst(base).interval.set),
+                => intrvl[id] = @min(intrvl[id], w.readInterval(base).set),
                 else => {},
             }
         },
@@ -317,7 +317,7 @@ fn setupWidgets(
         .MEM,
         .CPU,
         .NET,
-        => w.getData(base).interval.set = intrvl[index(w.id)],
+        => w.getInterval(base).set = intrvl[index(w.id)],
         else => {},
     };
 }
@@ -341,9 +341,9 @@ fn update(
     var updated: Update = .{ .net = states.net.netdev == null };
 
     for (widgets, 0..) |*w, i| {
-        const wd = w.getData(base);
-        wd.interval.now -= sleep_dsec;
-        if (wd.interval.now <= 0) {
+        const interval = w.getInterval(base);
+        interval.now -= sleep_dsec;
+        if (interval.now <= 0) {
             var fw: uio.Writer = .fixed(bufs[i][0..typ.WIDGET_BUF_WRITABLE]);
             const parts = w.format.parts.get(base);
             switch (w.id) {
@@ -375,7 +375,7 @@ fn update(
             }
             w.format.last_str.writeBytes(&fw, base);
             vecs[i] = typ.writeWidgetEnd(&bufs[i], fw.end);
-            wd.interval.now = wd.interval.set;
+            interval.now = interval.set;
         }
     }
 }
@@ -457,7 +457,7 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
         reg.restore(sp);
 
         for (widgets, 0..) |*w, i| {
-            intervals[i] = @intCast(w.getDataConst(base).interval.set);
+            intervals[i] = @intCast(w.readInterval(base).set);
         }
         break :blk sleepInterval(@ptrCast(intervals));
     };
@@ -476,7 +476,7 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
     refresh: while (true) {
         if (g_refresh_all) {
             @branchHint(.unlikely);
-            for (widgets) |*w| w.getData(base).interval.now = 0;
+            for (widgets) |*w| w.getInterval(base).now = 0;
             g_refresh_all = false;
         }
         try update(&reg, widgets, &states, bufs, vecs, sleep_dsec);

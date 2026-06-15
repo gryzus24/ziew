@@ -169,7 +169,7 @@ pub fn widget(
     base: [*]const u8,
     state: *const State,
 ) void {
-    const interval = w.getDataConst(base).interval;
+    const interval = w.readInterval(base);
     const curr, const prev = typ.constCurrPrev(Meminfo, &state.meminfos, state.curr);
 
     const fg, const bg = w.check(state, base);

@@ -595,6 +595,17 @@ pub fn parse(
                     if (wi.format) |ok| break :blk .{ line[ok.beg..ok.end], ok };
                     return .fail("widget requires format parameter", line, line_nr, .zero);
                 };
+                current.data = switch (current.id) {
+                    // zig fmt: off
+                    .TIME => try typ.WidgetData(.TIME).init(reg, interval, arg.?),
+                    .MEM  => try typ.WidgetData(null).init(reg, interval),
+                    .CPU  => try typ.WidgetData(null).init(reg, interval),
+                    .DISK => try typ.WidgetData(.DISK).init(reg, interval, arg.?),
+                    .NET  => try typ.WidgetData(.NET).init(reg, interval, arg.?),
+                    .BAT  => try typ.WidgetData(.BAT).init(reg, interval, arg.?),
+                    .READ => try typ.WidgetData(.READ).init(reg, interval, arg.?),
+                    // zig fmt: on
+                };
                 current.format = switch (try acceptFormat(reg, fmt_str, current.id, arg)) {
                     .ok => |f| f,
                     .err => |e| {
@@ -604,22 +615,6 @@ pub fn parse(
                         });
                     },
                 };
-                const sp = reg.save(typ.WidgetData, .front);
-                (try reg.alloc(typ.WidgetData, .front)).* = .{
-                    .interval = interval,
-                    .data = switch (current.id) {
-                        // zig fmt: off
-                        .TIME => .{ .TIME = .init(arg.?) },
-                        .MEM  => .{ .MEM  = undefined },
-                        .CPU  => .{ .CPU  = undefined },
-                        .DISK => .{ .DISK = .init(arg.?) },
-                        .NET  => .{ .NET  = .initIfr(arg.?) },
-                        .BAT  => .{ .BAT  = .init(arg.?) },
-                        .READ => .{ .READ = .init(arg.?) },
-                        // zig fmt: on
-                    },
-                };
-                current.data = sp.off;
             },
             .color => |co| {
                 if (widgets.len == 0) {

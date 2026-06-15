@@ -547,7 +547,7 @@ pub fn widget(
     base: [*]const u8,
     state: *const State,
 ) void {
-    const interval = w.getDataConst(base).interval;
+    const interval = w.readInterval(base);
     const curr, var prev = typ.constCurrPrev(Stat, &state.stats, state.curr);
     if (nrCpusOnlineChanged(curr, prev)) {
         @branchHint(.unlikely);

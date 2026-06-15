@@ -70,12 +70,14 @@ pub const Format = struct {
 
 pub const Widget = struct {
     id: Id,
-    data: WidgetData.Off,
+    data: Off,
     fg: Color,
     bg: Color,
     format: Format,
 
-    pub fn initDefault(id: Id, data: WidgetData.Off) Widget {
+    const Off = usize;
+
+    pub fn initDefault(id: Id, data: Off) Widget {
         return .{
             .id = id,
             .data = data,
@@ -85,12 +87,30 @@ pub const Widget = struct {
         };
     }
 
-    pub fn getData(self: *const @This(), base: [*]u8) *WidgetData {
-        return @ptrCast(@alignCast(base[self.data..]));
+    pub fn getInterval(self: *const @This(), base: [*]u8) *Interval {
+        const ptr: *WidgetData(null) = @ptrCast(@alignCast(base[self.data..]));
+        return &ptr.interval;
     }
 
-    pub fn getDataConst(self: *const @This(), base: [*]const u8) *const WidgetData {
-        return @ptrCast(@alignCast(base[self.data..]));
+    pub fn readInterval(self: *const @This(), base: [*]const u8) Interval {
+        const ptr: *const WidgetData(null) = @ptrCast(@alignCast(base[self.data..]));
+        return ptr.interval;
+    }
+
+    pub fn getData(
+        self: *const @This(),
+        comptime wid: Widget.Id,
+        base: [*]u8,
+    ) *Data(wid) {
+        return @ptrCast(@alignCast(base[self.data + @sizeOf(WidgetData(wid)) ..]));
+    }
+
+    pub fn getDataConst(
+        self: *const @This(),
+        comptime wid: Widget.Id,
+        base: [*]const u8,
+    ) *const Data(wid) {
+        return @ptrCast(@alignCast(base[self.data + @sizeOf(WidgetData(wid)) ..]));
     }
 
     const NR_WIDGETS = @typeInfo(Id).@"enum".fields.len;
@@ -160,81 +180,49 @@ pub const Widget = struct {
     }
 };
 
-pub const WidgetData = struct {
-    interval: Interval,
-    data: Data,
+fn Data(wid: Widget.Id) type {
+    return switch (wid) {
+        .TIME => struct {
+            strf: void,
 
-    const Off = usize;
+            const STRF_SIZE_MAX = 56;
 
-    pub const Data = union {
-        TIME: Time,
-        MEM: usize, // unused
-        CPU: usize, // unused
-        DISK: Disk,
-        NET: Net,
-        BAT: Bat,
-        READ: Read,
-
-        const SIZE_MAX = 64 - @sizeOf(Interval);
-
-        comptime {
-            std.debug.assert(@sizeOf(Time) <= SIZE_MAX);
-            // Mem
-            // Cpu
-            std.debug.assert(@sizeOf(Disk) <= SIZE_MAX);
-            std.debug.assert(@sizeOf(Net) <= SIZE_MAX);
-            std.debug.assert(@sizeOf(Bat) <= SIZE_MAX);
-            std.debug.assert(@sizeOf(Read) <= SIZE_MAX);
-        }
-
-        pub const Time = struct {
-            strf: [STRF_SIZE]u8,
-
-            const STRF_SIZE = SIZE_MAX;
-
-            pub fn init(arg: []const u8) Time {
-                if (arg.len >= STRF_SIZE)
+            pub fn init(reg: *umem.Region, arg: []const u8) !void {
+                if (arg.len >= STRF_SIZE_MAX)
                     log.fatal(&.{"TIME: strftime format too long"});
 
-                var ret: Time = undefined;
-                @memcpy(ret.strf[0..arg.len], arg);
-                ret.strf[arg.len] = 0;
-                return ret;
+                _ = try reg.writeStrZ(arg, .front);
             }
 
             pub fn getStrf(self: *const @This()) [*:0]const u8 {
-                return @ptrCast(&self.strf);
+                return flex([*:0]const u8, self);
             }
-        };
-
-        pub const Mem = void;
-        pub const Cpu = void;
-
-        pub const Disk = struct {
+        },
+        .MEM, .CPU => unreachable,
+        .DISK => struct {
             mount_id: u8,
             len: u8,
-            mountpoint: [MOUNTPOINT_SIZE]u8,
+            mountpoint: void,
 
-            const MOUNTPOINT_SIZE = SIZE_MAX - 1 - 1;
+            const MOUNTPOINT_SIZE_MAX = 54;
 
-            pub fn init(arg: []const u8) Disk {
-                if (arg.len >= MOUNTPOINT_SIZE)
+            pub fn init(reg: *umem.Region, arg: []const u8) !void {
+                if (arg.len >= MOUNTPOINT_SIZE_MAX)
                     log.fatal(&.{"DISK: mountpoint path too long"});
 
-                var ret: Disk = undefined;
-                ret.mount_id = 0;
-                ret.len = @intCast(arg.len);
-                @memcpy(ret.mountpoint[0..arg.len], arg);
-                ret.mountpoint[arg.len] = 0;
-                return ret;
+                (try reg.alloc(@This(), .front)).* = .{
+                    .mount_id = 0,
+                    .len = @intCast(arg.len),
+                    .mountpoint = undefined,
+                };
+                _ = try reg.writeStrZ(arg, .front);
             }
 
             pub fn getMountpoint(self: *const @This()) [:0]const u8 {
-                return self.mountpoint[0..self.len :0];
+                return flex([*]const u8, self)[0..self.len :0];
             }
-        };
-
-        pub const Net = struct {
+        },
+        .NET => struct {
             ifr: linux.ifreq,
             opt_enabled: Mask,
 
@@ -254,15 +242,14 @@ pub const WidgetData = struct {
                 }
             };
 
-            pub fn initIfr(arg: []const u8) Net {
+            pub fn init(reg: *umem.Region, arg: []const u8) !void {
                 if (arg.len >= linux.IFNAMESIZE)
                     log.fatal(&.{ "NET: interface name too long: ", arg });
 
-                var ret: Net = undefined;
-                @memset(ret.ifr.ifrn.name[0..], 0);
-                @memcpy(ret.ifr.ifrn.name[0..arg.len], arg);
-                ret.opt_enabled = .zero;
-                return ret;
+                var ptr = try reg.alloc(@This(), .front);
+                @memset(ptr.ifr.ifrn.name[0..], 0);
+                @memcpy(ptr.ifr.ifrn.name[0..arg.len], arg);
+                ptr.opt_enabled = .zero;
             }
 
             pub fn gatherOptEnabled(
@@ -275,59 +262,55 @@ pub const WidgetData = struct {
                 while (it.next()) |e| enabled.bits |= optBit(e.opt);
                 self.opt_enabled = enabled;
             }
-        };
-
-        pub const Bat = struct {
+        },
+        .BAT => struct {
             ps_off: u8,
             ps_len: u8,
-            path: [PATH_SIZE]u8,
+            path: void,
 
-            pub const PATH_SIZE = SIZE_MAX - 1 - 1;
-            pub const PS_NAME_SIZE_MAX = 12;
+            const prefix = "/sys/class/power_supply/";
+            const suffix = "/uevent\x00";
 
-            pub fn init(arg: []const u8) Bat {
-                const prefix = "/sys/class/power_supply/";
-                const suffix = "/uevent\x00";
-                const avail = @min(PATH_SIZE - prefix.len - suffix.len, PS_NAME_SIZE_MAX);
-                comptime std.debug.assert(avail == PS_NAME_SIZE_MAX);
+            pub const PS_NAME_SIZE_MAX = 8;
 
-                if (arg.len > avail)
+            pub fn init(reg: *umem.Region, arg: []const u8) !void {
+                if (arg.len > PS_NAME_SIZE_MAX)
                     log.fatal(&.{"BAT: battery name too long"});
 
-                var ret: Bat = undefined;
-                ret.ps_off = prefix.len;
-                ret.ps_len = @intCast(arg.len);
-                @memcpy(ret.path[0..prefix.len], prefix);
-                @memcpy(ret.path[prefix.len..][0..arg.len], arg);
-                @memcpy(ret.path[prefix.len + arg.len ..][0..suffix.len], suffix);
-                return ret;
+                (try reg.alloc(@This(), .front)).* = .{
+                    .ps_off = prefix.len,
+                    .ps_len = @intCast(arg.len),
+                    .path = undefined,
+                };
+                _ = try reg.writeStr(prefix, .front);
+                _ = try reg.writeStr(arg, .front);
+                _ = try reg.writeStr(suffix, .front);
             }
 
             pub fn getPath(self: *const @This()) [*:0]const u8 {
-                return @ptrCast(&self.path);
+                return flex([*:0]const u8, self);
             }
 
             pub fn getPsName(self: *const @This()) []const u8 {
-                return self.path[self.ps_off..][0..self.ps_len];
+                return flex([*]const u8, self)[self.ps_off..][0..self.ps_len];
             }
-        };
-
-        pub const Read = struct {
+        },
+        .READ => struct {
             basename_off: u8,
             basename_len: u8,
-            path: [PATH_SIZE]u8,
+            path: void,
 
-            const PATH_SIZE = SIZE_MAX - 1 - 1;
+            const PATH_SIZE_MAX = 54;
 
-            pub fn init(arg: []const u8) Read {
+            pub fn init(reg: *umem.Region, arg: []const u8) !void {
                 const dirname = fs.path.dirname(arg) orelse
                     log.fatal(&.{"READ: path must be absolute"});
                 const basename = fs.path.basename(arg);
 
-                if (dirname.len + 1 + basename.len >= PATH_SIZE)
+                if (dirname.len + 1 + basename.len >= PATH_SIZE_MAX)
                     log.fatal(&.{"READ: path too long"});
 
-                var path: [PATH_SIZE]u8 = undefined;
+                var path: [PATH_SIZE_MAX]u8 = undefined;
                 var off = dirname.len;
 
                 @memcpy(path[0..dirname.len], dirname);
@@ -336,25 +319,63 @@ pub const WidgetData = struct {
                     off += 1;
                 }
                 @memcpy(path[off..][0..basename.len], basename);
-                path[off + basename.len] = 0;
 
-                return .{
+                (try reg.alloc(@This(), .front)).* = .{
                     .basename_off = @intCast(off),
                     .basename_len = @intCast(basename.len),
-                    .path = path,
+                    .path = undefined,
                 };
+                _ = try reg.writeStrZ(path[0 .. off + basename.len], .front);
             }
 
             pub fn getPath(self: *const @This()) [*:0]const u8 {
-                return @ptrCast(&self.path);
+                return flex([*:0]const u8, self);
             }
 
             pub fn getBasename(self: *const @This()) []const u8 {
-                return self.path[self.basename_off..][0..self.basename_len];
+                return flex([*]const u8, self)[self.basename_off..][0..self.basename_len];
+            }
+        },
+    };
+}
+
+pub fn WidgetData(wid: ?Widget.Id) type {
+    const alignment = blk: {
+        var w = 0;
+        for (@typeInfo(Widget.Id).@"enum".fields) |field| {
+            const e: Widget.Id = @enumFromInt(field.value);
+            if (e == .MEM or e == .CPU) continue;
+            w = @max(w, @alignOf(Data(e)));
+        }
+        break :blk w;
+    };
+    if (wid) |ok| {
+        return struct {
+            interval: Interval align(alignment),
+            data: void,
+
+            pub fn init(reg: *umem.Region, interval: Interval, arg: []const u8) !Widget.Off {
+                const sp = reg.save(@This(), .front);
+                (try reg.alloc(@This(), .front)).* = .{
+                    .interval = interval,
+                    .data = undefined,
+                };
+                try Data(ok).init(reg, arg);
+                return sp.off;
             }
         };
-    };
-};
+    } else {
+        return struct {
+            interval: Interval align(alignment),
+
+            pub fn init(reg: *umem.Region, interval: Interval) !Widget.Off {
+                const sp = reg.save(@This(), .front);
+                (try reg.alloc(@This(), .front)).* = .{ .interval = interval };
+                return sp.off;
+            }
+        };
+    }
+}
 
 // Iterates over each option referenced by a Widget in order:
 //   fg, bg, parts[0], parts[1], ... etc.
@@ -794,6 +815,11 @@ pub fn allocConfigParserMem(reg: *umem.Region) struct { []u8, []align(16) u8 } {
     const scratch: []align(16) u8 =
         @ptrCast(reg.allocMany(u128, 512 / 16, .back) catch unreachable);
     return .{ filebuf, scratch };
+}
+
+pub fn flex(comptime T: type, base: anytype) T {
+    const off = @sizeOf(@typeInfo(@TypeOf(base)).pointer.child);
+    return @ptrFromInt(@intFromPtr(base) + off);
 }
 
 // == meta functions ==========================================================

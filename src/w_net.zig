@@ -290,9 +290,9 @@ pub const State = struct {
         var enabled: typ.OptBit = 0;
         for (widgets) |*w| {
             if (w.id == .NET) {
-                const wd = w.getData(base);
-                wd.data.NET.gatherOptEnabled(w, base);
-                enabled |= wd.data.NET.opt_enabled.bits;
+                const wd = w.getData(.NET, base);
+                wd.gatherOptEnabled(w, base);
+                enabled |= wd.opt_enabled.bits;
             }
         }
         if (enabled & typ.Opts.Net.NETDEV_MASK != 0) {
@@ -328,7 +328,8 @@ pub fn widget(
     base: [*]u8,
     state: *const State,
 ) void {
-    const wd = w.getData(base);
+    const interval = w.readInterval(base);
+    const wd = w.getData(.NET, base);
 
     var inetbuf: [INET_BUF_SIZE]u8 = undefined;
     var iffbuf: [IFF_BUF_MAX]u8 = undefined;
@@ -337,11 +338,11 @@ pub fn widget(
     var iff_len: usize = 0;
     var up = false;
 
-    const enabled = wd.data.NET.opt_enabled;
+    const enabled = wd.opt_enabled;
     if (enabled.inet())
-        inet_len = getInet(state.sock, &wd.data.NET.ifr, &inetbuf);
+        inet_len = getInet(state.sock, &wd.ifr, &inetbuf);
     if (enabled.flags() or enabled.state())
-        iff_len, up = getFlags(state.sock, &wd.data.NET.ifr, &iffbuf);
+        iff_len, up = getFlags(state.sock, &wd.ifr, &iffbuf);
 
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
@@ -350,7 +351,7 @@ pub fn widget(
         const new, const old = typ.constCurrPrev(Interfaces, &ok.ifs, ok.curr);
 
         const Hash = @Vector(linux.IFNAMESIZE, u8);
-        const cfg_ifname: Hash = wd.data.NET.ifr.ifrn.name;
+        const cfg_ifname: Hash = wd.ifr.ifrn.name;
 
         var it = new.list.first;
         while (it) |node| : (it = node.next) {
@@ -435,7 +436,7 @@ pub fn widget(
             const a = new_if.?.fields[part.opt - typ.Opts.Net.NETDEV_OFF];
             const b = old_if.?.fields[part.opt - typ.Opts.Net.NETDEV_OFF];
 
-            const value = typ.calc(a, b, wd.interval, part.flags);
+            const value = typ.calc(a, b, interval, part.flags);
             if (bit & typ.Opts.Net.NETDEV_SIZE_MASK != 0) {
                 nu = unt.SizeBytes(value);
             } else {

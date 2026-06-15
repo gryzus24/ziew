@@ -72,7 +72,7 @@ pub const State = struct {
         var mounts: []MountPair = &.{};
         for (widgets) |*w| {
             if (w.id == .DISK) {
-                w.getData(base).data.DISK.mount_id = id;
+                w.getData(.DISK, base).mount_id = id;
                 id += 1;
                 const ret = try reg.pushVec(&mounts, .front);
                 ret.* = .zero;
@@ -89,11 +89,12 @@ pub fn widget(
     base: [*]const u8,
     state: *const State,
 ) void {
-    const wd = w.getDataConst(base);
+    const interval = w.readInterval(base);
+    const wd = w.getDataConst(.DISK, base);
 
     var sfs: ext.struct_statfs = undefined;
     while (true) {
-        const ret = ext.sys_statfs(wd.data.DISK.getMountpoint(), &sfs);
+        const ret = ext.sys_statfs(wd.getMountpoint(), &sfs);
         if (ret == 0) {
             @branchHint(.likely);
             break;
@@ -101,7 +102,7 @@ pub fn widget(
         if (ret != -ext.c.EINTR) {
             const fg, const bg = w.colorForceStatic();
             typ.writeWidgetBeg(writer, fg, bg);
-            uio.writeStr(writer, wd.data.DISK.getMountpoint());
+            uio.writeStr(writer, wd.getMountpoint());
             uio.writeStr(writer, ": ");
             uio.writeStr(writer, switch (ret) {
                 -ext.c.EACCES => "<no access>",
@@ -112,7 +113,7 @@ pub fn widget(
             return;
         }
     }
-    const mount = &state.mounts[wd.data.DISK.mount_id];
+    const mount = &state.mounts[wd.mount_id];
     mount.curr ^= 1;
     const curr, const prev = typ.currPrev(Mount, &mount.pair, mount.curr);
 
@@ -151,7 +152,7 @@ pub fn widget(
             const value, negative = typ.calcWithOverflow(
                 curr.fields[part.opt],
                 prev.fields[part.opt],
-                wd.interval,
+                interval,
                 part.flags,
             );
             nu = if (bit & typ.Opts.Disk.INO_MASK != 0)

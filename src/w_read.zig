@@ -40,7 +40,7 @@ pub fn widget(
     parts: []const typ.Format.Part,
     base: [*]const u8,
 ) void {
-    const wd = w.getDataConst(base).data.READ;
+    const wd = w.getDataConst(.READ, base);
     const path, const basename = .{ wd.getPath(), wd.getBasename() };
 
     var buf: [typ.WIDGET_BUF_WRITABLE]u8 = undefined;
