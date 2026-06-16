@@ -275,14 +275,8 @@ fn Data(wid: Widget.Id) type {
                     .ps_len = @intCast(arg.len),
                     .path = undefined,
                 };
-                const a = 0;
-                const b = prefix.len;
-                const c = b + arg.len;
-                const d = c + suffix.len;
-                const path = try reg.allocMany(u8, d, .front);
-                @memcpy(path[a..b], prefix);
-                @memcpy(path[b..c], arg);
-                @memcpy(path[c..d], suffix);
+                const path = try reg.allocMany(u8, prefix.len + arg.len + suffix.len, .front);
+                uio.memcpyMany(path, .{ prefix, arg, suffix });
             }
 
             pub fn getPath(self: *const @This()) [*:0]const u8 {
@@ -303,7 +297,8 @@ fn Data(wid: Widget.Id) type {
                     log.fatal(&.{"READ: path must be absolute"});
                 const basename = fs.path.basename(arg);
 
-                if (dirname.len + 1 + basename.len > 0xff)
+                const path_len = dirname.len + 1 + basename.len;
+                if (path_len > 0xff)
                     log.fatal(&.{"READ: path too long"});
 
                 (try reg.alloc(@This(), .front)).* = .{
@@ -311,15 +306,8 @@ fn Data(wid: Widget.Id) type {
                     .basename_len = @intCast(basename.len),
                     .path = undefined,
                 };
-                const a = 0;
-                const b = a + dirname.len;
-                const c = b + 1;
-                const d = c + basename.len;
-                const path = try reg.allocMany(u8, d + 1, .front);
-                @memcpy(path[a..b], dirname);
-                @memcpy(path[b..c], "/");
-                @memcpy(path[c..d], basename);
-                path[d] = 0;
+                const path = try reg.allocMany(u8, path_len + 1, .front);
+                uio.memcpyMany(path, .{ dirname, "/", basename, "\x00" });
             }
 
             pub fn getPath(self: *const @This()) [*:0]const u8 {

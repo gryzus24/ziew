@@ -71,6 +71,19 @@ pub fn writeCh(writer: *Writer, ch: u8, times: usize) void {
     writer.end = end;
 }
 
+pub fn memcpyMany(dst: []u8, strings: anytype) void {
+    var len: usize = 0;
+    inline for (strings) |s| len += s.len;
+    const n = @min(len, dst.len);
+
+    var a, var b = [2]usize{ 0, 0 };
+    inline for (strings) |s| {
+        b = @min(b + s.len, n);
+        @memcpy(dst[a..b], s[0 .. b - a]);
+        a = b;
+    }
+}
+
 // Simpler, vtable-less Writer shim.
 pub const Writer = struct {
     buffer: []u8,
