@@ -185,12 +185,7 @@ fn Data(wid: Widget.Id) type {
         .TIME => struct {
             strf: void,
 
-            const STRF_SIZE_MAX = 56;
-
             pub fn init(reg: *umem.Region, arg: []const u8) !void {
-                if (arg.len >= STRF_SIZE_MAX)
-                    log.fatal(&.{"TIME: strftime format too long"});
-
                 _ = try reg.writeStrZ(arg, .front);
             }
 
@@ -204,10 +199,8 @@ fn Data(wid: Widget.Id) type {
             len: u8,
             mountpoint: void,
 
-            const MOUNTPOINT_SIZE_MAX = 54;
-
             pub fn init(reg: *umem.Region, arg: []const u8) !void {
-                if (arg.len >= MOUNTPOINT_SIZE_MAX)
+                if (arg.len > 0xff)
                     log.fatal(&.{"DISK: mountpoint path too long"});
 
                 (try reg.alloc(@This(), .front)).* = .{
@@ -282,9 +275,14 @@ fn Data(wid: Widget.Id) type {
                     .ps_len = @intCast(arg.len),
                     .path = undefined,
                 };
-                _ = try reg.writeStr(prefix, .front);
-                _ = try reg.writeStr(arg, .front);
-                _ = try reg.writeStr(suffix, .front);
+                const a = 0;
+                const b = prefix.len;
+                const c = b + arg.len;
+                const d = c + suffix.len;
+                const path = try reg.allocMany(u8, d, .front);
+                @memcpy(path[a..b], prefix);
+                @memcpy(path[b..c], arg);
+                @memcpy(path[c..d], suffix);
             }
 
             pub fn getPath(self: *const @This()) [*:0]const u8 {
@@ -300,32 +298,28 @@ fn Data(wid: Widget.Id) type {
             basename_len: u8,
             path: void,
 
-            const PATH_SIZE_MAX = 54;
-
             pub fn init(reg: *umem.Region, arg: []const u8) !void {
                 const dirname = fs.path.dirname(arg) orelse
                     log.fatal(&.{"READ: path must be absolute"});
                 const basename = fs.path.basename(arg);
 
-                if (dirname.len + 1 + basename.len >= PATH_SIZE_MAX)
+                if (dirname.len + 1 + basename.len > 0xff)
                     log.fatal(&.{"READ: path too long"});
 
-                var path: [PATH_SIZE_MAX]u8 = undefined;
-                var off = dirname.len;
-
-                @memcpy(path[0..dirname.len], dirname);
-                if (dirname.len > 0 and dirname[dirname.len - 1] != '/') {
-                    path[dirname.len] = '/';
-                    off += 1;
-                }
-                @memcpy(path[off..][0..basename.len], basename);
-
                 (try reg.alloc(@This(), .front)).* = .{
-                    .basename_off = @intCast(off),
+                    .basename_off = @intCast(dirname.len + 1),
                     .basename_len = @intCast(basename.len),
                     .path = undefined,
                 };
-                _ = try reg.writeStrZ(path[0 .. off + basename.len], .front);
+                const a = 0;
+                const b = a + dirname.len;
+                const c = b + 1;
+                const d = c + basename.len;
+                const path = try reg.allocMany(u8, d + 1, .front);
+                @memcpy(path[a..b], dirname);
+                @memcpy(path[b..c], "/");
+                @memcpy(path[c..d], basename);
+                path[d] = 0;
             }
 
             pub fn getPath(self: *const @This()) [*:0]const u8 {
