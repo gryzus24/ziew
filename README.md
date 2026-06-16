@@ -29,7 +29,11 @@ The compiled binary will be placed in ./bin, from there you can copy it to somew
 ./build.sh release native omit-fp no-oom-check
 ```
 
-`native` to tell the compiler to optimize for your local processor, `omit-fp` to pass the -fomit-frame-pointer compiler flag, and `no-oom-check` to essentially assume a small enough configuration file for all data structures initialized from it to fit within 16 kB of memory.
+`native` to tell the compiler to optimize for your local processor, `omit-fp` to pass the -fomit-frame-pointer compiler flag, and `no-oom-check` to essentially assume a small enough configuration file for all data structures initialized from it to fit within 16 kB of memory. At last, you can pass the `glibc` flag to produce an executable dynamically linked against glibc.
+
+### Embedding a configuration file into the executable
+
+Use the `config=/path/to/config` build option to make the final binary even smaller by embedding a configuration file into it, but at the expense of not being able to load any other configuration file at program start-up.
 
 ## Full documentation
 
