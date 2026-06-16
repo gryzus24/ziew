@@ -218,20 +218,22 @@ const ConfigPathError = error{NoPath} || umem.Region.Error;
 const ConfigPathResult = struct { [:0]const u8, umem.Region.SavePoint };
 
 fn getConfigPath(reg: *umem.Region) ConfigPathError!ConfigPathResult {
-    const sp = reg.save(u8, .front);
-    var n: usize = 0;
+    const keys: [2][:0]const u8 =
+        .{ "XDG_CONFIG_HOME", "HOME" };
+    const suffixa: [2][:0]const u8 =
+        .{ "/ziew/config\x00", "/.config/ziew/config\x00" };
 
-    if (std.c.getenv("XDG_CONFIG_HOME")) |ok| {
-        n += (try reg.writeStr(mem.sliceTo(ok, 0), .front)).len;
-        n += (try reg.writeStr("/ziew/config\x00", .front)).len;
-    } else if (std.c.getenv("HOME")) |ok| {
-        n += (try reg.writeStr(mem.sliceTo(ok, 0), .front)).len;
-        n += (try reg.writeStr("/.config/ziew/config\x00", .front)).len;
-    } else {
-        log.warn(&.{"neither $HOME nor $XDG_CONFIG_HOME set!"});
-        return error.NoPath;
+    for (keys, suffixa) |key, suffix| {
+        if (std.c.getenv(key)) |ok| {
+            const prefix = mem.sliceTo(ok, 0);
+            const sp = reg.save(u8, .front);
+            const path = try reg.allocMany(u8, prefix.len + suffix.len, .front);
+            uio.memcpyMany(path, .{ prefix, suffix });
+            return .{ path[0 .. path.len - 1 :0], sp };
+        }
     }
-    return .{ reg.slice(u8, sp, n)[0 .. n - 1 :0], sp };
+    log.warn(&.{"neither $HOME nor $XDG_CONFIG_HOME set!"});
+    return error.NoPath;
 }
 
 fn sa_handler(signum: linux.SIG) callconv(.c) void {
