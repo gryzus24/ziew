@@ -45,16 +45,36 @@ const WidgetSeq = blk: {
     break :blk []const typ.Widget;
 };
 
-inline fn embedWidgets() WidgetSeq {
+fn embedWidgets() WidgetSeq {
     const __widg = @embedFile("config.widgets");
     const __widg_aligned: [__widg.len]u8 align(@alignOf(typ.Widget)) = __widg.*;
     return @ptrCast(&__widg_aligned);
 }
 
-inline fn embedIntervals() *const [embedWidgets().len]typ.DeciSec {
+fn embedIntervals() *const [embedWidgets().len]typ.DeciSec {
     const __intr = @embedFile("config.intervals");
     const __intr_aligned: [__intr.len]u8 align(@alignOf(typ.DeciSec)) = __intr.*;
     return @ptrCast(&__intr_aligned);
+}
+
+fn embedWidgetIds() *const [embedWidgets().len]typ.Widget.Id {
+    const __wids = @embedFile("config.widget_ids");
+    const __wids_aligned: [__wids.len]u8 align(@alignOf(typ.Widget.Id)) = __wids.*;
+    return @ptrCast(&__wids_aligned);
+}
+
+const __widgets_present: [typ.Widget.NR_WIDGETS]bool = blk: {
+    if (CONFIG_EMBEDDED) {
+        var present: [typ.Widget.NR_WIDGETS]bool = @splat(false);
+        for (embedWidgetIds()) |wid|
+            present[@intFromEnum(wid)] = true;
+        break :blk present;
+    }
+    break :blk @splat(true);
+};
+
+inline fn hasWid(comptime wid: typ.Widget.Id) bool {
+    return __widgets_present[@intFromEnum(wid)];
 }
 
 const Args = struct {
@@ -94,11 +114,18 @@ const Args = struct {
     }
 };
 
-const WidgetStates = struct {
-    mem: w_mem.State = undefined,
-    cpu: w_cpu.State = undefined,
-    disk: w_dysk.State = undefined,
-    net: w_net.State = .empty,
+pub const WidgetStates = struct {
+    mem: if (hasWid(.MEM)) w_mem.State else void,
+    cpu: if (hasWid(.CPU)) w_cpu.State else void,
+    disk: if (hasWid(.DISK)) w_dysk.State else void,
+    net: if (hasWid(.NET)) w_net.State else void,
+
+    pub const empty: WidgetStates = .{
+        .mem = undefined,
+        .cpu = undefined,
+        .disk = undefined,
+        .net = if (hasWid(.NET)) .empty else undefined,
+    };
 };
 
 fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
@@ -295,10 +322,18 @@ fn setupWidgets(reg: *umem.Region, widgets: WidgetSeq, states: *WidgetStates) !v
     };
     for (initialize) |wid| switch (wid) {
         .TIME => {},
-        .MEM => states.mem = try .init(),
-        .CPU => states.cpu = try .init(reg, widgets),
-        .DISK => states.disk = try .init(reg, widgets),
-        .NET => states.net = try .init(widgets, base),
+        .MEM => if (hasWid(.MEM)) {
+            states.mem = try .init();
+        },
+        .CPU => if (hasWid(.CPU)) {
+            states.cpu = try .init(reg, widgets);
+        },
+        .DISK => if (hasWid(.DISK)) {
+            states.disk = try .init(reg, widgets);
+        },
+        .NET => if (hasWid(.NET)) {
+            states.net = try .init(widgets, base);
+        },
         else => unreachable,
     };
     // DISK widgets perform per mountpoint updates - no need to clamp the interval.
@@ -318,13 +353,14 @@ fn update(
 ) !void {
     const base = reg.head.ptr;
 
-    const Update = packed struct(u32) {
+    var updated: packed struct(u32) {
         net: bool = false,
         mem: bool = false,
         cpu: bool = false,
         _: u29 = 0,
-    };
-    var updated: Update = .{ .net = states.net.netdev == null };
+    } = .{};
+    if (hasWid(.NET))
+        updated.net = states.net.netdev == null;
 
     for (widgets, 0..) |*w, i| {
         const interval = w.getInterval(base);
@@ -333,31 +369,35 @@ fn update(
             var fw: uio.Writer = .fixed(bufs[i][0..typ.WIDGET_BUF_WRITABLE]);
             const parts = w.format.parts.get(base);
             switch (w.id) {
-                .TIME => w_time.widget(&fw, w, parts, base),
-                .MEM => {
+                .TIME => if (hasWid(.TIME))
+                    w_time.widget(&fw, w, parts, base),
+                .MEM => if (hasWid(.MEM)) {
                     if (!updated.mem) {
                         try w_mem.update(&states.mem);
                         updated.mem = true;
                     }
                     w_mem.widget(&fw, w, parts, base, &states.mem);
                 },
-                .CPU => {
+                .CPU => if (hasWid(.CPU)) {
                     if (!updated.cpu) {
                         try w_cpu.update(&states.cpu);
                         updated.cpu = true;
                     }
                     w_cpu.widget(&fw, w, parts, base, &states.cpu);
                 },
-                .DISK => w_dysk.widget(&fw, w, parts, base, &states.disk),
-                .NET => {
+                .DISK => if (hasWid(.DISK))
+                    w_dysk.widget(&fw, w, parts, base, &states.disk),
+                .NET => if (hasWid(.NET)) {
                     if (!updated.net) {
                         try w_net.update(reg, &states.net.netdev.?);
                         updated.net = true;
                     }
                     w_net.widget(&fw, w, parts, base, &states.net);
                 },
-                .BAT => w_bat.widget(&fw, w, parts, base),
-                .READ => w_read.widget(&fw, w, parts, base),
+                .BAT => if (hasWid(.BAT))
+                    w_bat.widget(&fw, w, parts, base),
+                .READ => if (hasWid(.READ))
+                    w_read.widget(&fw, w, parts, base),
             }
             w.format.last_str.writeBytes(&fw, base);
             vecs[i] = typ.writeWidgetEnd(&bufs[i], fw.end);
@@ -452,7 +492,7 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
         .nsec = @rem(sleep_dsec, 10) * (time.ns_per_s / 10),
     };
 
-    var states: WidgetStates = .{};
+    var states: WidgetStates = .empty;
     try setupWidgets(&reg, widgets, &states);
 
     const vecs = try reg.allocMany([]const u8, widgets.len, .front);

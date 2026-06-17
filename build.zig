@@ -100,6 +100,9 @@ pub fn build(b: *std.Build) !void {
         main_mod.addAnonymousImport("config.intervals", .{
             .root_source_file = dump_exe_run.addOutputFileArg("config.intervals"),
         });
+        main_mod.addAnonymousImport("config.widget_ids", .{
+            .root_source_file = dump_exe_run.addOutputFileArg("config.widget_ids"),
+        });
     }
 
     const main_exe = b.addExecutable(.{
