@@ -113,7 +113,7 @@ pub const Widget = struct {
         return @ptrCast(@alignCast(base[self.data + @sizeOf(WidgetData(wid)) ..]));
     }
 
-    const NR_WIDGETS = @typeInfo(Id).@"enum".fields.len;
+    pub const NR_WIDGETS = @typeInfo(Id).@"enum".fields.len;
 
     pub const Id = enum(u8) {
         TIME,
@@ -180,7 +180,7 @@ pub const Widget = struct {
     }
 };
 
-fn Data(wid: Widget.Id) type {
+fn Data(comptime wid: Widget.Id) type {
     return switch (wid) {
         .TIME => struct {
             strf: void,
@@ -321,7 +321,7 @@ fn Data(wid: Widget.Id) type {
     };
 }
 
-pub fn WidgetData(wid: ?Widget.Id) type {
+pub fn WidgetData(comptime wid: ?Widget.Id) type {
     const alignment = blk: {
         var w = 0;
         for (@typeInfo(Widget.Id).@"enum".fields) |field| {
@@ -437,6 +437,8 @@ pub const Opts = struct {
         pub const PctPrefix = @This();
         pub const ColorPct = PctPrefix;
         pub const ColorBare = enum(u8) {};
+
+        pub const NR_OPTS = @typeInfo(Mem).@"enum".fields.len;
     };
 
     pub const Cpu = enum(u8) {
