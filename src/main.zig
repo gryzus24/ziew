@@ -279,47 +279,31 @@ comptime {
     std.debug.assert(index(typ.Widget.Id.NET) == 3);
 }
 
-fn setupWidgets(
-    reg: *umem.Region,
-    widgets: WidgetSeq,
-    states: *WidgetStates,
-) !void {
+fn setupWidgets(reg: *umem.Region, widgets: WidgetSeq, states: *WidgetStates) !void {
     const base = reg.head.ptr;
 
-    var intrvl: [4]typ.DeciSec = @splat(typ.WIDGET_INTERVAL_MAX);
-    var inited: [4]bool = @splat(false);
+    var initialize: [4]typ.Widget.Id = @splat(.TIME);
+    var intervals: [4]typ.DeciSec = @splat(typ.WIDGET_INTERVAL_MAX);
 
     for (widgets) |*w| switch (w.id) {
         .MEM, .CPU, .DISK, .NET => {
             const id = index(w.id);
-
-            if (!inited[id]) {
-                switch (w.id) {
-                    .MEM => states.mem = try .init(),
-                    .CPU => states.cpu = try .init(reg, widgets),
-                    .DISK => states.disk = try .init(reg, widgets),
-                    .NET => states.net = try .init(widgets, base),
-                    else => unreachable,
-                }
-                inited[id] = true;
-            }
-            // DISK widgets perform per mountpoint updates,
-            // no need to clamp the interval.
-            switch (w.id) {
-                .MEM,
-                .CPU,
-                .NET,
-                => intrvl[id] = @min(intrvl[id], w.readInterval(base).set),
-                else => {},
-            }
+            initialize[id] = w.id;
+            intervals[id] = @min(intervals[id], w.readInterval(base).set);
         },
         else => {},
     };
+    for (initialize) |wid| switch (wid) {
+        .TIME => {},
+        .MEM => states.mem = try .init(),
+        .CPU => states.cpu = try .init(reg, widgets),
+        .DISK => states.disk = try .init(reg, widgets),
+        .NET => states.net = try .init(widgets, base),
+        else => unreachable,
+    };
+    // DISK widgets perform per mountpoint updates - no need to clamp the interval.
     for (widgets) |*w| switch (w.id) {
-        .MEM,
-        .CPU,
-        .NET,
-        => w.getInterval(base).set = intrvl[index(w.id)],
+        .MEM, .CPU, .NET => w.getInterval(base).set = intervals[index(w.id)],
         else => {},
     };
 }
