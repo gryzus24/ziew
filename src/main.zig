@@ -296,49 +296,45 @@ fn sleepInterval(intervals: []const typ.UDeciSec) typ.DeciSec {
     return @intCast(min);
 }
 
-fn index(id: typ.Widget.Id) usize {
-    return @intFromEnum(id) -% 1;
+inline fn windex(wid: typ.Widget.Id) u32 {
+    return @intFromEnum(wid) -% 1;
+}
+inline fn wbit(wid: typ.Widget.Id) u32 {
+    return @as(u32, 1) << @intCast(windex(wid));
 }
 comptime {
-    std.debug.assert(index(typ.Widget.Id.MEM) == 0);
-    std.debug.assert(index(typ.Widget.Id.CPU) == 1);
-    std.debug.assert(index(typ.Widget.Id.DISK) == 2);
-    std.debug.assert(index(typ.Widget.Id.NET) == 3);
+    std.debug.assert(windex(typ.Widget.Id.MEM) == 0);
+    std.debug.assert(windex(typ.Widget.Id.CPU) == 1);
+    std.debug.assert(windex(typ.Widget.Id.DISK) == 2);
+    std.debug.assert(windex(typ.Widget.Id.NET) == 3);
 }
 
 fn setupWidgets(reg: *umem.Region, widgets: WidgetSeq, states: *WidgetStates) !void {
     const base = reg.head.ptr;
 
-    var initialize: [4]typ.Widget.Id = @splat(.TIME);
+    var initialize: u32 = 0;
     var intervals: [4]typ.DeciSec = @splat(typ.WIDGET_INTERVAL_MAX);
 
     for (widgets) |*w| switch (w.id) {
         .MEM, .CPU, .DISK, .NET => {
-            const id = index(w.id);
-            initialize[id] = w.id;
+            const id = windex(w.id);
+            initialize |= wbit(w.id);
             intervals[id] = @min(intervals[id], w.readInterval(base).set);
         },
         else => {},
     };
-    for (initialize) |wid| switch (wid) {
-        .TIME => {},
-        .MEM => if (hasWid(.MEM)) {
-            states.mem = try .init();
-        },
-        .CPU => if (hasWid(.CPU)) {
-            states.cpu = try .init(reg, widgets);
-        },
-        .DISK => if (hasWid(.DISK)) {
-            states.disk = try .init(reg, widgets);
-        },
-        .NET => if (hasWid(.NET)) {
-            states.net = try .init(widgets, base);
-        },
-        else => unreachable,
-    };
+    if (hasWid(.MEM) and wbit(.MEM) & initialize != 0)
+        states.mem = try .init();
+    if (hasWid(.CPU) and wbit(.CPU) & initialize != 0)
+        states.cpu = try .init(reg, widgets);
+    if (hasWid(.DISK) and wbit(.DISK) & initialize != 0)
+        states.disk = try .init(reg, widgets);
+    if (hasWid(.NET) and wbit(.NET) & initialize != 0)
+        states.net = try .init(widgets, base);
+
     // DISK widgets perform per mountpoint updates - no need to clamp the interval.
     for (widgets) |*w| switch (w.id) {
-        .MEM, .CPU, .NET => w.getInterval(base).set = intervals[index(w.id)],
+        .MEM, .CPU, .NET => w.getInterval(base).set = intervals[windex(w.id)],
         else => {},
     };
 }
