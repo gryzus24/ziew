@@ -113,7 +113,7 @@ pub const Widget = struct {
         return @ptrCast(@alignCast(base[self.data + @sizeOf(WidgetData(wid)) ..]));
     }
 
-    pub const NR_WIDGETS = @typeInfo(Id).@"enum".fields.len;
+    pub const NR_WIDGETS = enumFields(Id).len;
 
     pub const Id = enum(u8) {
         TIME,
@@ -193,7 +193,7 @@ fn Data(comptime wid: Widget.Id) type {
                 return flex([*:0]const u8, self);
             }
         },
-        .MEM, .CPU => unreachable,
+        .MEM, .CPU => void,
         .DISK => struct {
             mount_id: u8,
             len: u8,
@@ -324,11 +324,8 @@ fn Data(comptime wid: Widget.Id) type {
 pub fn WidgetData(comptime wid: ?Widget.Id) type {
     const alignment = blk: {
         var w = 0;
-        for (@typeInfo(Widget.Id).@"enum".fields) |field| {
-            const e: Widget.Id = @enumFromInt(field.value);
-            if (e == .MEM or e == .CPU) continue;
-            w = @max(w, @alignOf(Data(e)));
-        }
+        for (enums.values(Widget.Id)) |v|
+            w = @max(w, @alignOf(Data(v)));
         break :blk w;
     };
     if (wid) |ok| {
@@ -358,53 +355,6 @@ pub fn WidgetData(comptime wid: ?Widget.Id) type {
         };
     }
 }
-
-// Iterates over each option referenced by a Widget in order:
-//   fg, bg, parts[0], parts[1], ... etc.
-pub const OptIterator = struct {
-    fg: Widget.Color,
-    bg: Widget.Color,
-    parts: []const Format.Part,
-    i: isize,
-
-    const Item = struct {
-        opt: u8,
-        pct: bool,
-        width: u3,
-    };
-
-    pub fn init(widget: *const Widget, base: [*]const u8) @This() {
-        return .{
-            .fg = widget.fg,
-            .bg = widget.bg,
-            .parts = widget.format.parts.get(base),
-            .i = -2,
-        };
-    }
-
-    pub fn next(self: *@This()) ?Item {
-        if (self.i == -2) {
-            self.i += 1;
-            switch (self.fg) {
-                .active => |a| return .{ .opt = a.opt, .pct = a.pct, .width = 0 },
-                .static => {},
-            }
-        }
-        if (self.i == -1) {
-            self.i += 1;
-            switch (self.bg) {
-                .active => |a| return .{ .opt = a.opt, .pct = a.pct, .width = 0 },
-                .static => {},
-            }
-        }
-        if (self.i < self.parts.len) {
-            const p = &self.parts[@intCast(self.i)];
-            self.i += 1;
-            return .{ .opt = p.opt, .pct = p.flags.pct, .width = p.wopts.width };
-        }
-        return null;
-    }
-};
 
 pub const Opts = struct {
     pub const Time = enum(u8) {
@@ -437,8 +387,6 @@ pub const Opts = struct {
         pub const PctPrefix = @This();
         pub const ColorPct = PctPrefix;
         pub const ColorBare = enum(u8) {};
-
-        pub const NR_OPTS = @typeInfo(Mem).@"enum".fields.len;
     };
 
     pub const Cpu = enum(u8) {
@@ -589,9 +537,9 @@ comptime {
         @compileError("Adjust OptTypes");
 }
 
-fn makeHashes(comptime Enum: type) []const WidOptHash {
+fn makeHashes(comptime E: type) []const WidOptHash {
     @setEvalBranchQuota(2000);
-    const fields = @typeInfo(Enum).@"enum".fields;
+    const fields = enumFields(E);
     var hashes: [fields.len]WidOptHash = undefined;
     for (fields, 0..) |field, i|
         hashes[i] = widOptHash(field.name);
@@ -606,6 +554,53 @@ fn makeHashes(comptime Enum: type) []const WidOptHash {
 }
 
 // == public ==================================================================
+
+// Iterates over each option referenced by a Widget in order:
+//   fg, bg, parts[0], parts[1], ... etc.
+pub const OptIterator = struct {
+    fg: Widget.Color,
+    bg: Widget.Color,
+    parts: []const Format.Part,
+    i: isize,
+
+    const Item = struct {
+        opt: u8,
+        pct: bool,
+        width: u3,
+    };
+
+    pub fn init(widget: *const Widget, base: [*]const u8) @This() {
+        return .{
+            .fg = widget.fg,
+            .bg = widget.bg,
+            .parts = widget.format.parts.get(base),
+            .i = -2,
+        };
+    }
+
+    pub fn next(self: *@This()) ?Item {
+        if (self.i == -2) {
+            self.i += 1;
+            switch (self.fg) {
+                .active => |a| return .{ .opt = a.opt, .pct = a.pct, .width = 0 },
+                .static => {},
+            }
+        }
+        if (self.i == -1) {
+            self.i += 1;
+            switch (self.bg) {
+                .active => |a| return .{ .opt = a.opt, .pct = a.pct, .width = 0 },
+                .static => {},
+            }
+        }
+        if (self.i < self.parts.len) {
+            const p = &self.parts[@intCast(self.i)];
+            self.i += 1;
+            return .{ .opt = p.opt, .pct = p.flags.pct, .width = p.wopts.width };
+        }
+        return null;
+    }
+};
 
 pub fn widOptHash(str: []const u8) WidOptHash {
     var r: WidOptHash = 5381;
@@ -634,8 +629,7 @@ pub const WID__OPTION_HASHES: [Widget.NR_WIDGETS][]const WidOptHash = blk: {
 pub const WID__OPTIONS_PCT_PREFIX_SUPPORTED: [Widget.NR_WIDGETS][]const bool = blk: {
     var w: [Widget.NR_WIDGETS][]const bool = undefined;
     for (OptTypes, 0..) |T, i| {
-        const len = @typeInfo(T).@"enum".fields.len;
-        var support: [len]bool = @splat(false);
+        var support: [enumFields(T).len]bool = @splat(false);
         for (enums.values(T.PctPrefix)) |v|
             support[@intFromEnum(v)] = true;
         const final = support;
@@ -654,8 +648,7 @@ const OptColorSupport = struct {
 pub const WID__OPTIONS_COLOR_SUPPORT: [Widget.NR_WIDGETS][]const OptColorSupport = blk: {
     var w: [Widget.NR_WIDGETS][]const OptColorSupport = undefined;
     for (OptTypes, 0..) |T, i| {
-        const len = @typeInfo(T).@"enum".fields.len;
-        var support: [len]OptColorSupport = @splat(.none);
+        var support: [enumFields(T).len]OptColorSupport = @splat(.none);
         for (enums.values(T.ColorBare)) |v|
             support[@intFromEnum(v)].bare = true;
         for (enums.values(T.ColorPct)) |v|
@@ -808,6 +801,10 @@ pub fn flex(comptime T: type, base: anytype) T {
 
 // == meta functions ==========================================================
 
+pub fn enumFields(comptime E: type) []const std.builtin.Type.EnumField {
+    return @typeInfo(E).@"enum".fields;
+}
+
 pub fn EnumSubset(comptime E: type, comptime fields: []const E) type {
     const E_enum = @typeInfo(E).@"enum";
 
@@ -860,14 +857,12 @@ pub fn EnumUnion(comptime E: type, comptime A: type, comptime B: type) type {
 }
 
 pub fn MaskFromEnum(comptime E: type) comptime_int {
-    const E_enum = @typeInfo(E).@"enum";
-
-    if (E_enum.fields.len == 0)
-        @compileError("Provided an empty enum");
-
     var mask = 0;
-    for (E_enum.fields) |field| {
+    for (enumFields(E)) |field| {
         mask |= 1 << field.value;
+    }
+    if (mask == 0) {
+        @compileError("Provided an empty enum");
     }
     return mask;
 }

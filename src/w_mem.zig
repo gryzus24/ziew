@@ -1,6 +1,5 @@
 const std = @import("std");
 const color = @import("color.zig");
-const log = @import("log.zig");
 const typ = @import("type.zig");
 const unt = @import("unit.zig");
 
@@ -14,7 +13,7 @@ const Meminfo = struct {
     const NR_FIELDS = 8;
 
     comptime {
-        std.debug.assert(NR_FIELDS == typ.Opts.Mem.NR_OPTS);
+        std.debug.assert(NR_FIELDS == typ.enumFields(typ.Opts.Mem).len);
     }
 
     const zero: Meminfo = .{ .fields = @splat(0) };
