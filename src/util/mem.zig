@@ -218,9 +218,18 @@ pub fn MemSlice(T: type) type {
         }
 
         pub fn writeBytes(self: @This(), writer: *uio.Writer, base: [*]const u8) void {
-            if (self.len == 0) return;
-            const bytes = base[self.off..][0 .. @sizeOf(T) * self.len];
-            return uio.writeStr(writer, bytes);
+            const free: isize = @bitCast(writer.unusedCapacityLen() -% 8);
+            const nr_bytes = @sizeOf(T) * self.len;
+            // Test if "nr_bytes <= 8 && 8 <= free" holds with just one
+            // branch by "taking away" 8 bytes from the potentiality of
+            // optimal execution near the boundary.
+            if (nr_bytes <= @min(8, free)) {
+                @branchHint(.likely);
+                writer.buffer[writer.end..][0..8].* = base[self.off..][0..8].*;
+                writer.end += nr_bytes;
+            } else {
+                uio.writeStr(writer, base[self.off..][0..nr_bytes]);
+            }
         }
     };
 }
