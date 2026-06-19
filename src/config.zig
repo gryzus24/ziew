@@ -45,10 +45,11 @@ const Splitter = struct {
                     continue :next .ret_inclusive;
                 if (ustr.isWhitespace(c))
                     continue :next .ret_exclusive;
-                if (c != '"')
-                    continue :next .out;
-                beg += 1;
-                continue :next .in;
+                if (c == '"' and self.i - 1 == beg) {
+                    beg += 1;
+                    continue :next .in;
+                }
+                continue :next .out;
             },
             .in => {
                 const c, self.i = accept(self.buf, self.i) orelse
@@ -797,6 +798,9 @@ test parse {
 
     r = try testParse("CPU 1 format\n", &reg, &scratch);
     try testDiag(r, "widget requires format parameter", 1, .zero);
+
+    r = try testParse("CPU 1 a\"format\n", &reg, &scratch);
+    try testDiag(r, "bad key", 1, .{ .beg = 6, .end = 14 });
 
     r = try testParse("CPU 1 format \"\n", &reg, &scratch);
     try t.expect(r.ok.len == 1);
