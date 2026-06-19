@@ -175,7 +175,7 @@ fn getInet(sock: linux.fd_t, ifr: *linux.ifreq, out: *[INET_BUF_SIZE]u8) usize {
     const ret: isize = @bitCast(linux.ioctl(sock, linux.SIOCGIFADDR, @intFromPtr(ifr)));
     return switch (ret) {
         0 => blk: {
-            const addr: linux.sockaddr.in = @bitCast(ifr.ifru.addr);
+            const addr: *linux.sockaddr.in = @ptrCast(&ifr.ifru.addr);
 
             const tuplets: [4]u32 = .{
                 (addr.addr >> 0) & 0xff,

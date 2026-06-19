@@ -6,7 +6,6 @@ const unt = @import("unit.zig");
 const uio = @import("util/io.zig");
 const umem = @import("util/mem.zig");
 
-const enums = std.enums;
 const fs = std.fs;
 const linux = std.os.linux;
 
@@ -113,7 +112,7 @@ pub const Widget = struct {
         return @ptrCast(@alignCast(base[self.data + @sizeOf(WidgetData(wid)) ..]));
     }
 
-    pub const NR_WIDGETS = enumFields(Id).len;
+    pub const NR_WIDGETS = enumNrFields(Id);
 
     pub const Id = enum(u8) {
         TIME,
@@ -312,8 +311,8 @@ fn Data(comptime wid: Widget.Id) type {
 pub fn WidgetData(comptime wid: ?Widget.Id) type {
     const alignment = blk: {
         var w = 0;
-        for (enums.values(Widget.Id)) |v|
-            w = @max(w, @alignOf(Data(v)));
+        for (@typeInfo(Widget.Id).@"enum".field_values) |v|
+            w = @max(w, @alignOf(Data(@enumFromInt(v))));
         break :blk w;
     };
     if (wid) |ok| {
@@ -357,9 +356,9 @@ pub const Opts = struct {
         @"8",
         @"9",
 
-        pub const PctPrefix = enum(u8) {};
-        pub const ColorPct = enum(u8) {};
-        pub const ColorBare = enum(u8) {};
+        pub const PctPrefix = enum {};
+        pub const ColorPct = enum {};
+        pub const ColorBare = enum {};
     };
 
     pub const Mem = enum(u8) {
@@ -374,7 +373,7 @@ pub const Opts = struct {
 
         pub const PctPrefix = @This();
         pub const ColorPct = PctPrefix;
-        pub const ColorBare = enum(u8) {};
+        pub const ColorBare = enum {};
     };
 
     pub const Cpu = enum(u8) {
@@ -433,7 +432,7 @@ pub const Opts = struct {
 
         pub const PctPrefix = @This();
         pub const ColorPct = PctPrefix;
-        pub const ColorBare = enum(u8) {};
+        pub const ColorBare = enum {};
 
         pub const INO_MASK = MaskFromEnum(Ino);
     };
@@ -477,8 +476,8 @@ pub const Opts = struct {
             .rx_bytes, .tx_bytes,
         });
 
-        pub const PctPrefix = enum(u8) {};
-        pub const ColorPct = enum(u8) {};
+        pub const PctPrefix = enum {};
+        pub const ColorPct = enum {};
         pub const ColorBare = EnumSubset(@This(), &.{
             .state,
         });
@@ -509,9 +508,9 @@ pub const Opts = struct {
         content,
         raw,
 
-        pub const PctPrefix = enum(u8) {};
-        pub const ColorBare = enum(u8) {};
-        pub const ColorPct = enum(u8) {};
+        pub const PctPrefix = enum {};
+        pub const ColorBare = enum {};
+        pub const ColorPct = enum {};
     };
 };
 
@@ -527,14 +526,14 @@ comptime {
 
 fn makeHashes(comptime E: type) []const WidOptHash {
     @setEvalBranchQuota(2000);
-    const fields = enumFields(E);
-    var hashes: [fields.len]WidOptHash = undefined;
-    for (fields, 0..) |field, i|
-        hashes[i] = widOptHash(field.name);
-    for (fields, hashes, 1..) |field, hash, i| {
-        for (fields[i..], hashes[i..]) |other, other_hash| {
+    const field_names = @typeInfo(E).@"enum".field_names;
+    var hashes: [field_names.len]WidOptHash = undefined;
+    for (field_names, 0..) |field, i|
+        hashes[i] = widOptHash(field);
+    for (field_names, hashes, 1..) |field, hash, i| {
+        for (field_names[i..], hashes[i..]) |other, other_hash| {
             if (hash == other_hash)
-                @compileError("collision: " ++ field.name ++ "=" ++ other.name);
+                @compileError("collision: " ++ field ++ "=" ++ other);
         }
     }
     const final = hashes;
@@ -619,9 +618,9 @@ pub const WID__OPTION_HASHES: [Widget.NR_WIDGETS][]const WidOptHash = blk: {
 pub const WID__OPTIONS_PCT_PREFIX_SUPPORTED: [Widget.NR_WIDGETS][]const bool = blk: {
     var w: [Widget.NR_WIDGETS][]const bool = undefined;
     for (OptTypes, 0..) |T, i| {
-        var support: [enumFields(T).len]bool = @splat(false);
-        for (enums.values(T.PctPrefix)) |v|
-            support[@intFromEnum(v)] = true;
+        var support: [enumNrFields(T)]bool = @splat(false);
+        for (@typeInfo(T.PctPrefix).@"enum".field_values) |v|
+            support[v] = true;
         const final = support;
         w[i] = &final;
     }
@@ -638,11 +637,11 @@ const OptColorSupport = struct {
 pub const WID__OPTIONS_COLOR_SUPPORT: [Widget.NR_WIDGETS][]const OptColorSupport = blk: {
     var w: [Widget.NR_WIDGETS][]const OptColorSupport = undefined;
     for (OptTypes, 0..) |T, i| {
-        var support: [enumFields(T).len]OptColorSupport = @splat(.none);
-        for (enums.values(T.ColorBare)) |v|
-            support[@intFromEnum(v)].bare = true;
-        for (enums.values(T.ColorPct)) |v|
-            support[@intFromEnum(v)].pct = true;
+        var support: [enumNrFields(T)]OptColorSupport = @splat(.none);
+        for (@typeInfo(T.ColorBare).@"enum".field_values) |v|
+            support[v].bare = true;
+        for (@typeInfo(T.ColorPct).@"enum".field_values) |v|
+            support[v].pct = true;
         const final = support;
         w[i] = &final;
     }
@@ -790,18 +789,18 @@ pub fn allocConfigParserMem(reg: *umem.Region) struct { []u8, []align(16) u8 } {
 
 // == meta functions ==========================================================
 
-pub fn enumFields(comptime E: type) []const std.builtin.Type.EnumField {
-    return @typeInfo(E).@"enum".fields;
+pub fn enumNrFields(comptime E: type) comptime_int {
+    return @typeInfo(E).@"enum".field_names.len;
 }
 
 pub fn EnumSubset(comptime E: type, comptime fields: []const E) type {
     const E_enum = @typeInfo(E).@"enum";
 
-    if (!E_enum.is_exhaustive)
+    if (E_enum.mode != .exhaustive)
         @compileError("Provided enum must be exhaustive");
     if (fields.len == 0)
         @compileError("Attempted to create an empty enum");
-    if (fields.len > E_enum.fields.len)
+    if (fields.len > E_enum.field_names.len)
         @compileError("Provided at least one duplicate enum field");
 
     var names: [fields.len][]const u8 = undefined;
@@ -818,16 +817,19 @@ pub fn EnumUnion(comptime E: type, comptime A: type, comptime B: type) type {
     const A_enum = @typeInfo(A).@"enum";
     const B_enum = @typeInfo(B).@"enum";
 
-    if (!E_enum.is_exhaustive or !A_enum.is_exhaustive or !B_enum.is_exhaustive)
+    if (E_enum.mode != .exhaustive or
+        A_enum.mode != .exhaustive or
+        B_enum.mode != .exhaustive)
         @compileError("Provided enums must be exhaustive");
-    if (A_enum.fields.len == 0 or B_enum.fields.len == 0)
+    if (A_enum.field_names.len == 0 or B_enum.field_names.len == 0)
         @compileError("One of provided enums is empty");
-    if (A_enum.fields.len > E_enum.fields.len or B_enum.fields.len > E_enum.fields.len)
+    if (A_enum.field_names.len > E_enum.field_names.len or
+        B_enum.field_names.len > E_enum.field_names.len)
         @compileError("Provided at least one duplicate enum field");
 
     var a, var b = .{ 0, 0 };
-    for (A_enum.fields) |field| a |= 1 << field.value;
-    for (B_enum.fields) |field| b |= 1 << field.value;
+    for (A_enum.field_values) |v| a |= 1 << v;
+    for (B_enum.field_values) |v| b |= 1 << v;
 
     const mask: u64 = a | b;
     const size = @popCount(mask);
@@ -846,8 +848,8 @@ pub fn EnumUnion(comptime E: type, comptime A: type, comptime B: type) type {
 
 pub fn MaskFromEnum(comptime E: type) comptime_int {
     var mask = 0;
-    for (enumFields(E)) |field| {
-        mask |= 1 << field.value;
+    for (@typeInfo(E).@"enum".field_values) |v| {
+        mask |= 1 << v;
     }
     if (mask == 0) {
         @compileError("Provided an empty enum");
@@ -857,7 +859,7 @@ pub fn MaskFromEnum(comptime E: type) comptime_int {
 
 pub fn FlexField(comptime T: type) type {
     const Ptr = @typeInfo(T).pointer;
-    if (Ptr.is_const) {
+    if (Ptr.attrs.@"const") {
         return struct {
             pub fn get(self: *const @This()) T {
                 return @ptrCast(self);
@@ -868,10 +870,10 @@ pub fn FlexField(comptime T: type) type {
             Ptr.size,
             .{
                 .@"const" = true,
-                .@"volatile" = Ptr.is_volatile,
-                .@"allowzero" = Ptr.is_allowzero,
-                .@"addrspace" = Ptr.address_space,
-                .@"align" = Ptr.alignment,
+                .@"volatile" = Ptr.attrs.@"volatile",
+                .@"allowzero" = Ptr.attrs.@"allowzero",
+                .@"addrspace" = Ptr.attrs.@"addrspace",
+                .@"align" = Ptr.attrs.@"align",
             },
             Ptr.child,
             Ptr.sentinel(),

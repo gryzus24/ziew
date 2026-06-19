@@ -128,7 +128,7 @@ pub fn build(b: *std.Build) !void {
 
     // LTO is needed to cull unused symbols from the executable.
     // (mainly Zig's libc reimplementation of some musl symbols).
-    if (optimize != .Debug)
+    if (optimize != .debug)
         main_exe.lto = .full;
 
     const no_bin = b.option(bool, "no-bin", "Skip emitting binary") orelse false;

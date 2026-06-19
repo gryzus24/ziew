@@ -121,7 +121,7 @@ pub const Region = struct {
                 break :alloc self.head[self.back..][0..alloc_size];
             },
         };
-        if (builtin.mode == .Debug)
+        if (builtin.optimize == .debug)
             @memset(allocation, 0xaa);
 
         // `mem.bytesAsSlice` does some paranoia checks before the cast

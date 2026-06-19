@@ -11,7 +11,7 @@ pub inline fn sys_write(fd: linux.fd_t, str: []const u8) isize {
 }
 
 pub inline fn sys_writev(fd: linux.fd_t, vs: anytype) isize {
-    const len = @typeInfo(@TypeOf(vs)).@"struct".fields.len;
+    const len = @typeInfo(@TypeOf(vs)).@"struct".field_names.len;
     var iovs: [len]posix.iovec_const = undefined;
     inline for (vs, 0..) |s, i| iovs[i] = .{ .base = s.ptr, .len = s.len };
     return @bitCast(linux.writev(fd, &iovs, iovs.len));

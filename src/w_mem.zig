@@ -13,7 +13,7 @@ const Meminfo = struct {
     const NR_FIELDS = 8;
 
     comptime {
-        std.debug.assert(NR_FIELDS == typ.enumFields(typ.Opts.Mem).len);
+        std.debug.assert(NR_FIELDS == typ.enumNrFields(typ.Opts.Mem));
     }
 
     const zero: Meminfo = .{ .fields = @splat(0) };
