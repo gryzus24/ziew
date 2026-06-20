@@ -349,12 +349,13 @@ test "/proc/stat parser" {
         \\softirq 4426117 14101 3005 4 13791 895 0 4659 16049 6 4977
         \\
     ;
-    var tmem: [4096]u8 align(32) = undefined;
-    var reg: umem.Region = .init(&tmem, "cputest");
+    var stack: [4096]u8 align(32) = undefined;
+    var reg: umem.Region = .init(&stack, "cpu-test");
 
     const buf = try reg.allocMany(u8, s.len, .front);
     @memcpy(buf, s);
     var stat: Stat = try .initZero(&reg, 12);
+
     parseProcStat(buf, &stat);
     try t.expect(stat.entries[0].user == 46232 + 14);
     try t.expect(stat.entries[0].sys == 14383 + 2994 + 1212 + 0);

@@ -254,43 +254,53 @@ inline fn parseProcNetDev(
 
 test "/proc/net/dev parser" {
     const t = std.testing;
-    const s =
+    const s1 =
         \\Inter-|   Receive                                                |  Transmit
         \\face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
         \\lo:     100       2    0    0    0     0          0         0      100       2    0    0    0     0       0          0
         \\enp5s0: 2010181142 1586293    0  983    0     0          0      1085 19488012  140072    0    0    0     0       0          0
         \\
     ;
-    var buf: [4096]u8 align(16) = undefined;
-    @memcpy(buf[0..s.len], s);
-    var reg: umem.Region = .init(&buf, "nettest");
-    var ifs: Interfaces = .empty;
-    try parseProcNetDev(buf[0..s.len], &ifs, &reg);
+    const s2 =
+        \\Inter-|   Receive                                                |  Transmit
+        \\ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+        \\    lo:    2961      31    1    2    3     4          5         6     2961      31    7    8    9    10      11         12
+        \\enpXXXXsY: 1538949947999 1234849    0  745    0     0          0       871 36684676  169487    0    0    0     0       0          123
+        \\
+    ;
+    const cases: [2][]const u8 = .{ s1, s2 };
+    const results: [2][2][16]u64 = .{
+        .{
+            .{ 100, 2, 0, 0, 0, 0, 0, 0, 100, 2, 0, 0, 0, 0, 0, 0 },
+            .{ 2010181142, 1586293, 0, 983, 0, 0, 0, 1085, 19488012, 140072, 0, 0, 0, 0, 0, 0 },
+        },
+        .{
+            .{ 2961, 31, 1, 2, 3, 4, 5, 6, 2961, 31, 7, 8, 9, 10, 11, 12 },
+            .{ 1538949947999, 1234849, 0, 745, 0, 0, 0, 871, 36684676, 169487, 0, 0, 0, 0, 0, 123 },
+        },
+    };
+    for (cases, results) |case, result| {
+        var stack: [4096]u8 align(16) = undefined;
+        var reg: umem.Region = .init(&stack, "net-test");
+        const buf = try reg.allocMany(u8, case.len, .front);
+        @memcpy(buf, case);
 
-    const it = ifs.list.first.?;
+        var ifs: Interfaces = .empty;
+        try parseProcNetDev(buf, &ifs, &reg);
 
-    const eth: *IFace = @fieldParentPtr("node", it);
-    const lo: *IFace = @fieldParentPtr("node", it.next.?);
-    try t.expect(it.next.?.next == null);
+        const it = ifs.list.first.?;
+        const eth: *IFace = @fieldParentPtr("node", it);
+        const lo: *IFace = @fieldParentPtr("node", it.next.?);
+        try t.expect(it.next.?.next == null);
 
-    try t.expect(eth.fields[0] == 2010181142);
-    try t.expect(eth.fields[1] == 1586293);
-    try t.expect(eth.fields[2] == 0);
-    try t.expect(eth.fields[3] == 983);
-    try t.expect(eth.fields[4] == 0);
-    try t.expect(eth.fields[5] == 0);
-    try t.expect(eth.fields[6] == 0);
-    try t.expect(eth.fields[7] == 1085);
-    try t.expect(eth.fields[8] == 19488012);
-    try t.expect(eth.fields[9] == 140072);
-    try t.expect(std.mem.eql(u64, eth.fields[10..16], &@as([6]u64, @splat(0))));
-
-    try t.expect(lo.fields[0] == 100);
-    try t.expect(lo.fields[1] == 2);
-    try t.expect(std.mem.eql(u64, lo.fields[2..8], &@as([6]u64, @splat(0))));
-    try t.expect(lo.fields[8] == 100);
-    try t.expect(lo.fields[9] == 2);
-    try t.expect(std.mem.eql(u64, lo.fields[10..16], &@as([6]u64, @splat(0))));
+        const lo_result, const eth_result = result;
+        for (lo.fields, lo_result) |field, r| {
+            try t.expect(field == r);
+        }
+        for (eth.fields, eth_result) |field, r| {
+            try t.expect(field == r);
+        }
+    }
 }
 
 // == public ==================================================================
