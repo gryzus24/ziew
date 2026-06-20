@@ -204,10 +204,14 @@ inline fn parseProcNetDev(
 ) !void {
     var nls: ustr.IndexIterator(u8, '\n') = .init(buf);
 
+    var skip: usize = 2;
     var last: usize = undefined;
-    last = nls.next() orelse unreachable;
-    last = nls.next() orelse unreachable;
     while (nls.next()) |nl| {
+        if (skip != 0) {
+            skip -= 1;
+            last = nl;
+            continue;
+        }
         const line = buf[last + 1 .. nl];
         last = nl;
 
@@ -215,14 +219,35 @@ inline fn parseProcNetDev(
         while (line[i] == ' ') : (i += 1) {}
         var j = i;
         while (line[j] != ':') : (j += 1) {}
+
         var new_if = try ifs.allocIf(reg);
         new_if.setName(line[i..j]);
         j += 1;
 
-        for (0..new_if.fields.len) |fi| {
-            while (line[j] == ' ') : (j += 1) {}
-            new_if.fields[fi], j = ustr.atouForwardUntilOrEOF(u64, line, j, ' ');
-            j += 1;
+        const block_size = 64;
+        const Block = @Vector(block_size, u8);
+        const spaces: Block = @splat(' ');
+
+        var fi: usize = 0;
+
+        outer: while (j < line.len) {
+            // Will read past the end of line, but as the number of fields is
+            // bounded it shouldn't really matter (unless the page immediately
+            // after the one backing "buf" is not mapped, which isn't the case
+            // here).
+            const block: Block = line.ptr[j..][0..block_size].*;
+
+            var digits: u64 = @bitCast(block != spaces);
+            while (digits != 0) {
+                new_if.fields[fi], const k =
+                    ustr.atouForwardUntilOrEOF(u64, line, j + @ctz(digits), ' ');
+                fi += 1;
+                if (fi == new_if.fields.len)
+                    break :outer;
+
+                digits >>= @intCast(k - j);
+                j = k;
+            }
         }
     }
 }
