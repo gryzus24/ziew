@@ -41,7 +41,7 @@ pub fn widget(
     base: [*]const u8,
 ) void {
     const wd = w.getDataConst(.READ, base);
-    const path, const basename = .{ wd.getPath(), wd.getBasename() };
+    const path, const basename = .{ wd.path.get(), wd.getBasename() };
 
     var buf: [typ.WIDGET_BUF_WRITABLE]u8 = undefined;
 

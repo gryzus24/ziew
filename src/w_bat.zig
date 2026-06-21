@@ -200,7 +200,7 @@ pub fn widget(
     const wd = w.getDataConst(.BAT, base);
 
     var buf: [1024]u8 = undefined;
-    const data = openAndRead(wd.getPath(), &buf) catch |e| {
+    const data = openAndRead(wd.path.get(), &buf) catch |e| {
         const fg, const bg = w.colorForceStatic();
         typ.writeWidgetBeg(writer, fg, bg);
         uio.writeStr(writer, wd.getPsName());

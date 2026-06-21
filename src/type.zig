@@ -183,21 +183,17 @@ pub const Widget = struct {
 fn Data(comptime wid: Widget.Id) type {
     return switch (wid) {
         .TIME => struct {
-            strf: void,
+            strf: FlexField([*:0]const u8),
 
             pub fn init(reg: *umem.Region, arg: []const u8) !void {
                 _ = try reg.writeStrZ(arg, .front);
-            }
-
-            pub fn getStrf(self: *const @This()) [*:0]const u8 {
-                return flex([*:0]const u8, self);
             }
         },
         .MEM, .CPU => void,
         .DISK => struct {
             mount_id: u8,
             len: u8,
-            mountpoint: void,
+            mountpoint: FlexField([*:0]const u8),
 
             pub fn init(reg: *umem.Region, arg: []const u8) !void {
                 if (arg.len > 0xff)
@@ -212,7 +208,7 @@ fn Data(comptime wid: Widget.Id) type {
             }
 
             pub fn getMountpoint(self: *const @This()) [:0]const u8 {
-                return flex([*]const u8, self)[0..self.len :0];
+                return self.mountpoint.get()[0..self.len :0];
             }
         },
         .NET => struct {
@@ -259,7 +255,7 @@ fn Data(comptime wid: Widget.Id) type {
         .BAT => struct {
             ps_off: u8,
             ps_len: u8,
-            path: void,
+            path: FlexField([*:0]const u8),
 
             const prefix = "/sys/class/power_supply/";
             const suffix = "/uevent\x00";
@@ -279,18 +275,14 @@ fn Data(comptime wid: Widget.Id) type {
                 uio.memcpyMany(path, .{ prefix, arg, suffix });
             }
 
-            pub fn getPath(self: *const @This()) [*:0]const u8 {
-                return flex([*:0]const u8, self);
-            }
-
             pub fn getPsName(self: *const @This()) []const u8 {
-                return flex([*]const u8, self)[self.ps_off..][0..self.ps_len];
+                return self.path.get()[self.ps_off..][0..self.ps_len];
             }
         },
         .READ => struct {
             basename_off: u8,
             basename_len: u8,
-            path: void,
+            path: FlexField([*:0]const u8),
 
             pub fn init(reg: *umem.Region, arg: []const u8) !void {
                 const dirname = fs.path.dirname(arg) orelse
@@ -310,12 +302,8 @@ fn Data(comptime wid: Widget.Id) type {
                 uio.memcpyMany(path, .{ dirname, "/", basename, "\x00" });
             }
 
-            pub fn getPath(self: *const @This()) [*:0]const u8 {
-                return flex([*:0]const u8, self);
-            }
-
             pub fn getBasename(self: *const @This()) []const u8 {
-                return flex([*]const u8, self)[self.basename_off..][0..self.basename_len];
+                return self.path.get()[self.basename_off..][0..self.basename_len];
             }
         },
     };
@@ -794,11 +782,6 @@ pub fn allocConfigParserMem(reg: *umem.Region) struct { []u8, []align(16) u8 } {
     return .{ filebuf, scratch };
 }
 
-pub fn flex(comptime T: type, base: anytype) T {
-    const off = @sizeOf(@typeInfo(@TypeOf(base)).pointer.child);
-    return @ptrFromInt(@intFromPtr(base) + off);
-}
-
 // == meta functions ==========================================================
 
 pub fn enumFields(comptime E: type) []const std.builtin.Type.EnumField {
@@ -865,4 +848,36 @@ pub fn MaskFromEnum(comptime E: type) comptime_int {
         @compileError("Provided an empty enum");
     }
     return mask;
+}
+
+pub fn FlexField(comptime T: type) type {
+    const Ptr = @typeInfo(T).pointer;
+    if (Ptr.is_const) {
+        return struct {
+            pub fn get(self: *const @This()) T {
+                return @ptrCast(self);
+            }
+        };
+    } else {
+        const ConstT = @Pointer(
+            Ptr.size,
+            .{
+                .@"const" = true,
+                .@"volatile" = Ptr.is_volatile,
+                .@"allowzero" = Ptr.is_allowzero,
+                .@"addrspace" = Ptr.address_space,
+                .@"align" = Ptr.alignment,
+            },
+            Ptr.child,
+            Ptr.sentinel(),
+        );
+        return struct {
+            pub fn get(self: *const @This()) ConstT {
+                return @ptrCast(self);
+            }
+            pub fn getMutable(self: *@This()) T {
+                return @ptrCast(self);
+            }
+        };
+    }
 }

@@ -30,7 +30,7 @@ pub fn widget(
 
         const dst = writer.buffer[writer.end..];
         writer.end += switch (@as(typ.Opts.Time, @enumFromInt(part.opt))) {
-            .time => ext.strftime(dst.ptr, dst.len, wd.getStrf(), &tm),
+            .time => ext.strftime(dst.ptr, dst.len, wd.strf.get(), &tm),
             .@"1", .@"2", .@"3", .@"4", .@"5", .@"6", .@"7", .@"8", .@"9" => advance: {
                 const DIVS: [9]u32 = comptime .{
                     100_000_000, 10_000_000, 1_000_000,

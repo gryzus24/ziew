@@ -158,7 +158,7 @@ const Stat = struct {
 const Graph = struct {
     cur: u32,
     mask: u32,
-    ring: void,
+    ring: typ.FlexField([*]u8),
 
     const SampleSize = u8;
     const SAMPLES_PER_BYTE = 8 / @bitSizeOf(SampleSize);
@@ -180,14 +180,6 @@ const Graph = struct {
         return self;
     }
 
-    inline fn ringPtr(self: *@This()) [*]u8 {
-        return @ptrFromInt(@intFromPtr(self) + @offsetOf(Graph, "ring"));
-    }
-
-    inline fn constRingPtr(self: *const @This()) [*]const u8 {
-        return @ptrFromInt(@intFromPtr(self) + @offsetOf(Graph, "ring"));
-    }
-
     inline fn offMaskShiftU4(i: usize) struct { usize, u8, u3 } {
         comptime std.debug.assert(@bitSizeOf(SampleSize) == 4);
         const shift: u3 = @intCast((i & 1) * 4);
@@ -197,28 +189,29 @@ const Graph = struct {
     inline fn blot(self: *@This(), __n: SampleSize) void {
         const n: u8 = __n;
         const cur = self.cur;
-        const ring = self.ringPtr();
-        if (SampleSize == u8) {
-            ring[cur] = n;
-        } else if (SampleSize == u4) {
-            const off, const mask, const shift = offMaskShiftU4(cur);
-            ring[off] = (ring[off] & ~mask) | @shlExact(n, shift);
-        } else {
-            @compileError("Unimplemented SampleSize");
+        const ring = self.ring.getMutable();
+        switch (SampleSize) {
+            u8 => ring[cur] = n,
+            u4 => {
+                const off, const mask, const shift = offMaskShiftU4(cur);
+                ring[off] = (ring[off] & ~mask) | @shlExact(n, shift);
+            },
+            else => @compileError("Unimplemented SampleSize"),
         }
         self.cur = (cur + 1) & self.mask;
     }
 
     inline fn at(self: *const @This(), __i: usize) SampleSize {
         const i = __i & self.mask;
-        if (SampleSize == u8) {
-            return self.constRingPtr()[i];
-        } else if (SampleSize == u4) {
-            const off, const mask, const shift = offMaskShiftU4(i);
-            return @intCast(@shrExact(self.constRingPtr()[off] & mask, shift));
-        } else {
-            @compileError("Unimplemented SampleSize");
-        }
+        const ring = self.ring.get();
+        return switch (SampleSize) {
+            u8 => ring[i],
+            u4 => {
+                const off, const mask, const shift = offMaskShiftU4(i);
+                return @intCast(@shrExact(ring[off] & mask, shift));
+            },
+            else => @compileError("Unimplemented SampleSize"),
+        };
     }
 };
 
