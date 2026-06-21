@@ -23,8 +23,9 @@
 # are nicely divisible by the shortest interval.
 # In this case 200 and 300 are all multiples of 20 so it's fine.
 
-# You might want to adjust the interface name.
-NET 20 arg enp5s0 format "{arg} {inet}"
+# You might want to change the interface name, to see all of them use
+# the `ip a` command or `awk -F: 'NR>2 {print $1}' /proc/net/dev`.
+NET 20 arg eth0 format "{arg} {inet}"
 # 0 - interface down, 1 - interface up.
 # Valid RGB value formats: a44, #a44, aa4444, #aa4444.
 FG state 0:a44 1:4a4
@@ -33,29 +34,39 @@ FG state 0:a44 1:4a4
 # '<' and '>' align output to the left and to the right with automatic
 # precision adjustment while preserving the width.
 #
-# Values are presented as given by the kernel, but you can force the program
-# to present them as the difference between two widget refreshes by using
-# the '@d' flag after option's name.
-# There is also a quiet flag '@q' that suppresses output if the value equals 0.
-NET 20 arg enp5s0 format "RxTx {rx_bytes:>}/{tx_bytes:>} {rx_pkts@dq:>2}/{tx_pkts@dq:<2}"
-FG 686
+# Values are presented as given by the kernel, but you can force the
+# program to display them as the difference between two widget refreshes
+# by using the '@d' flag after option's name. The '@a' flag abbreviates
+# the displayed value by replacing the decimal point with the unit
+# symbol. There is also a quiet flag '@q' that suppresses output if the
+# value equals 0.
+NET 20 arg eth0 format "{rx_bytes@a:<} {rx_pkts@ad:2} ↓↑ {tx_pkts@ad:<2} {tx_bytes@a}"
+FG 7a7
 
-# Get space available on / every 20 seconds.
-#DISK 200 arg / format "{arg} {available:>}"
+# Get space available on / every 20 seconds and display the number of
+# added/deleted files (inodes) since the last update.
+DISK 200 arg / format "{arg} {available:^}{ino_used@dq}"
+FG %used 80:aa0 90:a20
+
+# Difference in number of forks, interrupts, and context switches -
+# great for identifying misbehaving programs.
+CPU 20 format "FIC {forks@adq:2} {intr@adq:3} {ctxt@adq:3}"
+FG forks 100:aa0
 
 # You can visualize how busy each CPU core is with the 'blkbars' option,
 # If you have a lot of cores and want to save some horizontal space you
-# can also use the 'brlbars' option.
-CPU 20 format "{blkbars} {all:>3} {sys:>3}"
+# can also use the 'brlbars' option. 'blkgraph' displays a graph of CPU
+# utilization over time.
+CPU 20 format "{brlbars} {%all@a:3} {%sys@a:2} {blkgraph:3}"
 # Default to #999 from 0 up to 47%, default color from 48% to 59%
 # and gradient of yellow (at 60% cpu usage) to red (at 90% and above).
 # Threshold values must be given in ascending order.
 FG %all 0:999 48: 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 
-MEM 20 format "MEM {%used:>} {free:>} [{cached:>}]"
+MEM 20 format "MEM {%used@a} {free@a} [{cached@a}]"
 FG %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
 
-MEM 20 format "{dirty@q:>.0}:{writeback@q:>.0}"
+MEM 20 format "{dirty@aq:.0}:{writeback@aq:.0}"
 FG 999
 
 # Get battery info from /sys/class/power_supply/BAT<n>.
@@ -66,8 +77,9 @@ FG state       1:4a4 2:4a4
 # 0 to 14%: red, 15% to 24%: faint yellow, 25% and up: default color.
 BG %fulldesign 0:a00 15:220 25:
 
-# See strftime(3) for details about the format.
-TIME 20 arg "%A %d.%m ~ %H:%M:%S" format "{time}"
-FG bb9
+# See strftime(3) for details about the format. To get the decimal parts
+# of a second, use numbers from '1' to '9' as an option.
+TIME 20 arg "%A %d.%m - %H:%M:%S" format "{time}.{3}"
+FG aa8
 
 # vim: ft=config
