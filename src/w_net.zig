@@ -40,6 +40,8 @@ comptime {
         @compileError("Bad IFF_BIT_NAMES_ALPHA sum");
 }
 
+const IfnameVec = @Vector(linux.IFNAMESIZE, u8);
+
 const IFace = struct {
     node: std.SinglyLinkedList.Node,
     name: [linux.IFNAMESIZE]u8,
@@ -83,12 +85,6 @@ const IFace = struct {
         std.debug.assert(tx_compressed == 15);
     }
     // zig fmt: on
-
-    fn setName(self: *@This(), name: []const u8) void {
-        self.name[0..16].* = @splat(0);
-        // note: length check omitted
-        for (0..name.len) |i| self.name[i] = name[i];
-    }
 };
 
 const Interfaces = struct {
@@ -112,6 +108,58 @@ const Interfaces = struct {
         while (self.list.popFirst()) |node| {
             self.free.prepend(node);
         }
+    }
+
+    inline fn find(self: *const @This(), name: IfnameVec) ?*IFace {
+        var it = self.list.first;
+        while (it) |node| : (it = node.next) {
+            const iface: *IFace = @fieldParentPtr("node", node);
+            if (@reduce(.And, iface.name == name))
+                return iface;
+        }
+        return null;
+    }
+};
+
+const NetDevIterator = struct {
+    nls: ustr.IndexIterator(u8, '\n'),
+    skip: usize,
+    last: usize,
+
+    const Result = struct {
+        line: []const u8,
+        name: [linux.IFNAMESIZE]u8,
+        i: usize,
+    };
+
+    fn init(buf: []const u8) @This() {
+        return .{ .nls = .init(buf), .skip = 2, .last = 0 };
+    }
+
+    inline fn next(self: *@This()) ?Result {
+        while (self.nls.next()) |nl| {
+            if (self.skip != 0) {
+                self.skip -= 1;
+                self.last = nl;
+                continue;
+            }
+            const line = self.nls.buf[self.last + 1 .. nl];
+            self.last = nl;
+
+            var i: usize = 0;
+            while (line[i] == ' ') : (i += 1) {}
+
+            var j: usize = 0;
+            var name: [linux.IFNAMESIZE]u8 = @splat(0);
+
+            while (line[i] != ':') : ({
+                i += 1;
+                j += 1;
+            }) name[j] = line[i];
+
+            return .{ .line = line, .name = name, .i = i + 1 };
+        }
+        return null;
     }
 };
 
@@ -202,51 +250,35 @@ inline fn parseProcNetDev(
     ifs: *Interfaces,
     reg: *umem.Region,
 ) !void {
-    var nls: ustr.IndexIterator(u8, '\n') = .init(buf);
-
-    var skip: usize = 2;
-    var last: usize = undefined;
-    while (nls.next()) |nl| {
-        if (skip != 0) {
-            skip -= 1;
-            last = nl;
-            continue;
-        }
-        const line = buf[last + 1 .. nl];
-        last = nl;
-
-        var i: usize = 0;
-        while (line[i] == ' ') : (i += 1) {}
-        var j = i;
-        while (line[j] != ':') : (j += 1) {}
-
+    var it: NetDevIterator = .init(buf);
+    while (it.next()) |e| {
         var new_if = try ifs.allocIf(reg);
-        new_if.setName(line[i..j]);
-        j += 1;
+        new_if.name = e.name;
 
         const block_size = 64;
         const Block = @Vector(block_size, u8);
         const spaces: Block = @splat(' ');
 
+        var i = e.i;
         var fi: usize = 0;
 
-        outer: while (j < line.len) {
+        outer: while (i < e.line.len) {
             // Will read past the end of line, but as the number of fields is
             // bounded it shouldn't really matter (unless the page immediately
             // after the one backing "buf" is not mapped, which isn't the case
             // here).
-            const block: Block = line.ptr[j..][0..block_size].*;
+            const block: Block = e.line.ptr[i..][0..block_size].*;
 
             var digits: u64 = @bitCast(block != spaces);
             while (digits != 0) {
-                new_if.fields[fi], const k =
-                    ustr.atouForwardUntilOrEOF(u64, line, j + @ctz(digits), ' ');
+                new_if.fields[fi], const j =
+                    ustr.atouForwardUntilOrEOF(u64, e.line, i + @ctz(digits), ' ');
                 fi += 1;
                 if (fi == new_if.fields.len)
                     break :outer;
 
-                digits >>= @intCast(k - j);
-                j = k;
+                digits >>= @intCast(j - i);
+                i = j;
             }
         }
     }
@@ -381,32 +413,10 @@ pub fn widget(
 
     var new_if: ?*IFace = null;
     var old_if: ?*IFace = null;
-    var ifs_match = false;
     if (state.netdev) |*ok| {
         const new, const old = typ.constCurrPrev(Interfaces, &ok.ifs, ok.curr);
-
-        const Hash = @Vector(linux.IFNAMESIZE, u8);
-        const cfg_ifname: Hash = wd.ifr.ifrn.name;
-
-        var it = new.list.first;
-        while (it) |node| : (it = node.next) {
-            const iface: *IFace = @fieldParentPtr("node", node);
-            const ifname: Hash = iface.name;
-            if (@reduce(.And, ifname == cfg_ifname)) {
-                new_if = iface;
-                break;
-            }
-        }
-        it = old.list.first;
-        while (it) |node| : (it = node.next) {
-            const iface: *IFace = @fieldParentPtr("node", node);
-            const ifname: Hash = iface.name;
-            if (@reduce(.And, ifname == cfg_ifname)) {
-                old_if = iface;
-                break;
-            }
-        }
-        ifs_match = new_if != null and old_if != null;
+        new_if = new.find(wd.ifr.ifrn.name);
+        old_if = old.find(wd.ifr.ifrn.name);
     }
 
     const Handler = struct {
@@ -466,7 +476,7 @@ pub fn widget(
         } else {
             nu = unt.UnitSI(0);
         }
-        if (ifs_match) {
+        if (new_if != null and old_if != null) {
             @branchHint(.likely);
             const a = new_if.?.fields[part.opt - typ.Opts.Net.NETDEV_OFF];
             const b = old_if.?.fields[part.opt - typ.Opts.Net.NETDEV_OFF];
