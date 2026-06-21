@@ -133,7 +133,7 @@ pub const Region = struct {
     }
 
     pub inline fn alloc(self: *@This(), comptime T: type, comptime where: Where) Error!*T {
-        return @ptrCast(try self.allocMany(T, 1, where));
+        return &(try self.allocMany(T, 1, where))[0];
     }
 
     pub inline fn writeStr(self: *@This(), str: []const u8, comptime where: Where) Error![]const u8 {
