@@ -131,17 +131,24 @@ const Stat = struct {
     nr_cpux_entries: usize,
     stats: [6]u64,
 
-    fn index(opt: typ.Opts.Cpu) usize {
-        return @intFromEnum(opt) -% typ.Opts.Cpu.STATS_OFF;
-    }
+    // zig fmt: off
+    const __off   = typ.Opts.Cpu.STATS_OFF;
+    const intr    = @intFromEnum(typ.Opts.Cpu.intr) - __off;
+    const softirq = @intFromEnum(typ.Opts.Cpu.softirq) - __off;
+    const blocked = @intFromEnum(typ.Opts.Cpu.blocked) - __off;
+    const running = @intFromEnum(typ.Opts.Cpu.running) - __off;
+    const forks   = @intFromEnum(typ.Opts.Cpu.forks) - __off;
+    const ctxt    = @intFromEnum(typ.Opts.Cpu.ctxt) - __off;
+
     comptime {
-        std.debug.assert(index(typ.Opts.Cpu.intr) == 0);
-        std.debug.assert(index(typ.Opts.Cpu.softirq) == 1);
-        std.debug.assert(index(typ.Opts.Cpu.blocked) == 2);
-        std.debug.assert(index(typ.Opts.Cpu.running) == 3);
-        std.debug.assert(index(typ.Opts.Cpu.forks) == 4);
-        std.debug.assert(index(typ.Opts.Cpu.ctxt) == 5);
+        std.debug.assert(intr    == 0);
+        std.debug.assert(softirq == 1);
+        std.debug.assert(blocked == 2);
+        std.debug.assert(running == 3);
+        std.debug.assert(forks   == 4);
+        std.debug.assert(ctxt    == 5);
     }
+    // zig fmt: on
 
     fn initZero(reg: *umem.Region, nr_possible_cpus: u32) !@This() {
         // First entry is the cumulative stat of every CPU.
@@ -241,6 +248,10 @@ fn atouVecForwardUntil(buf: []const u8, i: usize, char: u8) struct { u64, usize 
 }
 
 inline fn parseProcStat(buf: []const u8, out: *Stat) void {
+    const Block = @Vector(32, u8);
+    const spaces: Block = @splat(' ');
+    const newlines: Block = @splat('\n');
+
     var cpu: usize = 0;
     var i = "cpu  ".len;
     while (true) {
@@ -260,60 +271,54 @@ inline fn parseProcStat(buf: []const u8, out: *Stat) void {
         ptr.iowait = fields[4];
         // zig fmt: on
 
-        // cpuXX  41208 ... 1061 0 [0] 0\n
-        i += "0 0\n".len;
-        // cpuXX  41208 ... 1061 0 0 0\n[c] (best case)
-        while (buf[i] <= '9') : (i += 1) {}
-        if (buf[i] == 'i') break;
+        // Read 32 bytes in hope there are at least two spaces there.
+        //   "0 0\ncpuXX YYYY"[i+1..]
+        const block: Block = buf[i + 1 ..][0..32].*;
+        const mask: u32 = @bitCast(block == spaces);
 
-        i += "cpuX".len;
-        while (buf[i] != ' ') : (i += 1) {}
-        i += 1;
+        // Jump to the second space-1 (-1 because of buf[i+1..]).
+        i += @ctz(mask & (mask - 1));
+        if (buf[i] == 'r') {
+            break;
+        }
+        i += 2;
         cpu += 1;
     }
     // Value of `Stat.nr_cpux_entries` may change - CPUs might go online/offline.
     out.nr_cpux_entries = cpu;
 
-    i += "intr ".len;
-    out.stats[Stat.index(typ.Opts.Cpu.intr)], _ =
-        ustr.atouForwardUntil(u64, buf, i, ' ');
-
-    const Block = @Vector(32, u8);
+    i += 2;
+    out.stats[Stat.intr], _ = ustr.atouForwardUntil(u64, buf, i, ' ');
 
     // We have some numbers to skip, use this opportunity to align the pointer
     // and make sure we don't catch the $'\n' at `buf[buf.len - 1]`.
     i = (buf.len - 1) & ~@as(usize, 31);
     while (true) : (i -= 32) {
         const block: Block = buf[i - 32 ..][0..32].*;
-        const mask: u32 = @bitCast(block == @as(Block, @splat('\n')));
+        const mask: u32 = @bitCast(block == newlines);
         if (mask != 0) {
             i -= @clz(mask);
             i += "softirq ".len;
             break;
         }
     }
-    out.stats[Stat.index(typ.Opts.Cpu.softirq)], _ =
-        ustr.atouForwardUntil(u64, buf, i, ' ');
+    out.stats[Stat.softirq], _ = ustr.atouForwardUntil(u64, buf, i, ' ');
     i -= "\nsoftirq X".len;
 
-    out.stats[Stat.index(typ.Opts.Cpu.blocked)], i =
-        ustr.atouBackwardUntil(u64, buf, i, ' ');
+    out.stats[Stat.blocked], i = ustr.atouBackwardUntil(u64, buf, i, ' ');
     i -= "\nprocs_blocked ".len;
 
-    out.stats[Stat.index(typ.Opts.Cpu.running)], i =
-        ustr.atouBackwardUntil(u64, buf, i, ' ');
+    out.stats[Stat.running], i = ustr.atouBackwardUntil(u64, buf, i, ' ');
     i -= "\nprocs_running ".len;
 
-    out.stats[Stat.index(typ.Opts.Cpu.forks)], i =
-        ustr.atouBackwardUntil(u64, buf, i, ' ');
+    out.stats[Stat.forks], i = ustr.atouBackwardUntil(u64, buf, i, ' ');
     i -= "\nprocesses ".len;
-    const block: Block = buf[i - 32 ..][0..32].*;
-    const mask: u32 = @bitCast(block == @as(Block, @splat('\n')));
-    i -= @clz(mask);
-    i -= 2;
+    i -= "btime 123456789A".len;
 
-    out.stats[Stat.index(typ.Opts.Cpu.ctxt)], _ =
-        ustr.atouBackwardUntil(u64, buf, i, ' ');
+    while (buf[i] != '\n') : (i -= 1) {}
+    i -= 1;
+
+    out.stats[Stat.ctxt], _ = ustr.atouBackwardUntil(u64, buf, i, ' ');
 }
 
 test "/proc/stat parser" {
@@ -333,9 +338,9 @@ test "/proc/stat parser" {
         \\cpu9 749 0 378 1019750 122 47 24 0 0 0
         \\cpu10 690 0 295 1019943 136 37 19 0 0 0
         \\cpu11 858 0 769 1019145 138 119 123 0 0 0
-        \\intr 1894596 0 33004 0 0 0 0 0 0 0 8008 0 0 182 0 0 0 0 0 0 0 0 0 0 0
+        \\intr 1894596 0 330 0 0 0 0 0 0 0 88 0 0 18 0 0 0 0 0 0 0 0 0 0 0
         \\ctxt 3055158
-        \\btime 17137
+        \\btime 1799999999
         \\processes 8594
         \\procs_running 1
         \\procs_blocked 0
@@ -361,12 +366,12 @@ test "/proc/stat parser" {
     try t.expect(stat.entries[12].sys == 769 + 119 + 123 + 0);
     try t.expect(stat.entries[12].idle == 1019145);
     try t.expect(stat.entries[12].iowait == 138);
-    try t.expect(stat.stats[Stat.index(typ.Opts.Cpu.intr)] == 1894596);
-    try t.expect(stat.stats[Stat.index(typ.Opts.Cpu.ctxt)] == 3055158);
-    try t.expect(stat.stats[Stat.index(typ.Opts.Cpu.forks)] == 8594);
-    try t.expect(stat.stats[Stat.index(typ.Opts.Cpu.running)] == 1);
-    try t.expect(stat.stats[Stat.index(typ.Opts.Cpu.blocked)] == 0);
-    try t.expect(stat.stats[Stat.index(typ.Opts.Cpu.softirq)] == 4426117);
+    try t.expect(stat.stats[Stat.intr] == 1894596);
+    try t.expect(stat.stats[Stat.ctxt] == 3055158);
+    try t.expect(stat.stats[Stat.forks] == 8594);
+    try t.expect(stat.stats[Stat.running] == 1);
+    try t.expect(stat.stats[Stat.blocked] == 0);
+    try t.expect(stat.stats[Stat.softirq] == 4426117);
 }
 
 inline fn cpuUsageRank(curr: Cpu, prev: Cpu, comptime range: comptime_int) u8 {
@@ -473,7 +478,7 @@ pub const State = struct {
     ) color.Hex {
         const curr, const prev = typ.constCurrPrev(Stat, &self.stats, self.curr);
         const opt_color: typ.Opts.Cpu.ColorSupported = @enumFromInt(opt);
-        const id = Stat.index(@enumFromInt(opt));
+        const id = opt -% typ.Opts.Cpu.STATS_OFF;
 
         const value = switch (opt_color) {
             .all, .user, .sys, .iowait => blk: {
