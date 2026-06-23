@@ -154,8 +154,11 @@ pub const State = struct {
 };
 
 pub fn update(state: *State) error{ReadError}!void {
-    var buf: [8192]u8 = undefined;
-    const n = try uio.pread(state.fd, &buf, 0);
+    var buf: [4096]u8 = undefined;
+    // /proc/meminfo is implemented as a single_show seq_file so
+    // if I understand the code correctly it shouldn't need more
+    // than a single page of memory and also isn't re-entrant.
+    const n = try uio.pread(state.fd, &buf, .single);
 
     state.curr ^= 1;
     parseProcMeminfo(buf[0..n], &state.meminfos[state.curr]);

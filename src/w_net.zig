@@ -378,8 +378,11 @@ pub fn update(
     state: *State.NetDev,
 ) error{ NoSpaceLeft, ReadError }!void {
     var buf: [4096]u8 = undefined;
-    const n = try uio.pread(state.fd, &buf, 0);
-    if (n == buf.len) log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
+    // Make sure to use the .all mode when reading
+    // into a buffer larger than a single page.
+    const n = try uio.pread(state.fd, &buf, .single);
+    if (n == buf.len)
+        log.fatal(&.{"NET: /proc/net/dev doesn't fit in 1 page"});
 
     state.curr ^= 1;
     const iface = &state.ifs[state.curr];

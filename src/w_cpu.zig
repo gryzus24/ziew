@@ -500,8 +500,11 @@ pub const State = struct {
 
 pub fn update(state: *State) error{ReadError}!void {
     var buf: [8192]u8 = undefined;
-    const n = try uio.pread(state.fd, &buf, 0);
-    if (n == buf.len) log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
+    // Reading /proc/stat in .single mode appears to work across page
+    // boundaries, but if anything changes make it use the .all mode.
+    const n = try uio.pread(state.fd, &buf, .single);
+    if (n == buf.len)
+        log.fatal(&.{"CPU: /proc/stat doesn't fit in 2 pages"});
 
     state.curr ^= 1;
     const curr, var prev = typ.currPrev(Stat, &state.stats, state.curr);

@@ -119,7 +119,7 @@ const Battery = struct {
 fn openAndRead(path: [*:0]const u8, buf: []u8) ![]const u8 {
     const fd = try uio.open0(path);
     defer uio.close(fd);
-    const n = try uio.pread(fd, buf, 0);
+    const n = try uio.pread(fd, buf, .single);
     if (n == 0) return error.EmptyUevent;
     return buf[0..n];
 }

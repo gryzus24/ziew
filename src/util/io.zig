@@ -21,14 +21,35 @@ pub inline fn sys_pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) isize {
     return @bitCast(linux.pread(fd, buf.ptr, buf.len, off));
 }
 
-pub inline fn pread(fd: linux.fd_t, buf: []u8, off: linux.off_t) error{ReadError}!usize {
+pub inline fn pread(
+    fd: linux.fd_t,
+    buf: []u8,
+    comptime mode: enum { single, all },
+) error{ReadError}!usize {
+    var n: usize = 0;
     while (true) {
-        const ret = sys_pread(fd, buf, off);
-        if (ret >= 0) {
-            @branchHint(.likely);
-            return @intCast(ret);
+        const ret = sys_pread(fd, buf[n..], @intCast(n));
+        switch (mode) {
+            .single => {
+                if (ret >= 0) {
+                    @branchHint(.likely);
+                    return @intCast(ret);
+                }
+            },
+            .all => {
+                // The "all" mode desperately wants to fill the buffer.
+                if (ret > 0) {
+                    n += @intCast(ret);
+                    if (n < buf.len)
+                        continue;
+                    return n;
+                }
+                if (ret == 0)
+                    return n;
+            },
         }
-        if (ret != -ext.c.EINTR) return error.ReadError;
+        if (ret != -ext.c.EINTR)
+            return error.ReadError;
     }
 }
 
