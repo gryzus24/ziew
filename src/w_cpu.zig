@@ -92,22 +92,22 @@ const Cpu = struct {
     };
 
     inline fn __delta(self: Cpu, old: Cpu, nr_cpus: u32) Delta {
-        const V = @Vector(4, u64);
-        const a: V = .{ self.user, self.sys, self.idle, self.iowait };
-        const b: V = .{ old.user, old.sys, old.idle, old.iowait };
-        const diff = a - b;
-        const diff_total = diff[0] + diff[1] + diff[2] + diff[3];
+        // zig fmt: off
+        const diff_user   = self.user -| old.user;
+        const diff_sys    = self.sys -| old.sys;
+        const diff_idle   = self.idle -| old.idle;
+        const diff_iowait = self.iowait -| old.iowait;
+        const diff_total  = diff_user + diff_sys + diff_idle + diff_iowait;
 
         if (DELTA_ZERO_CHECK and diff_total == 0)
             return .zero;
 
-        // Doing vector multiplication isn't worth it as some
-        // callers are interested only in the `.all` value.
-        const u = diff[0] * (100 << unt.F5608.FRAC_SHIFT) * nr_cpus;
-        const s = diff[1] * (100 << unt.F5608.FRAC_SHIFT) * nr_cpus;
-        const w = diff[3] * (100 << unt.F5608.FRAC_SHIFT) * nr_cpus;
+        const pct_multiplier = (100 << unt.F5608.FRAC_SHIFT) * nr_cpus;
 
-        // zig fmt: off
+        const u = diff_user * pct_multiplier;
+        const s = diff_sys * pct_multiplier;
+        const w = diff_iowait * pct_multiplier;
+
         return .{
             .all    = .{ .u = (u + s) / diff_total },
             .user   = .{ .u = u / diff_total },
