@@ -1,7 +1,7 @@
 #!/bin/bash
 
 usage() {
-    printf '%s: [debug|small|fast|glibc|strip|native|omit-fp|
+    printf '%s: [debug|small|fast|safe|glibc|strip|native|omit-fp|
              no-oom-check|config=<file>|trace|release|test...] \n' "$0"
 }
 
@@ -14,6 +14,7 @@ for arg in "$@"; do
         debug)        FLAGS+=(-Doptimize=Debug) ;;
         small)        FLAGS+=(-Doptimize=ReleaseSmall) ;;
         fast)         FLAGS+=(-Doptimize=ReleaseFast) ;;
+        safe)         FLAGS+=(-Doptimize=ReleaseSafe) ;;
         glibc)        FLAGS+=(-Dglibc) ;;
         strip)        FLAGS+=(-Dstrip) ;;
         native)       FLAGS+=(-Dmarch=native) ;;
