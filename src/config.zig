@@ -174,7 +174,7 @@ fn acceptFormat(
         if (split.txt.end == str.len)
             break;
         // Skip all `arg` options.
-        if (mem.eql(u8, field, "arg"))
+        if (ustr.eq(field, "arg"))
             continue;
 
         var i: usize = 0;
@@ -288,7 +288,7 @@ fn acceptFormat(
             _ = try reg.writeStr(s, .front);
             len += s.len;
         }
-        if (mem.eql(u8, field, "arg")) {
+        if (ustr.eq(field, "arg")) {
             if (arg) |ok| {
                 if (ok.len > 0) {
                     _ = try reg.writeStr(ok, .front);
@@ -335,8 +335,8 @@ fn acceptPrefix(str: []const u8, prefix: u8) bool {
 const ColorIdentifier = enum { fg, bg };
 
 fn strColorIdentifier(str: []const u8) ?ColorIdentifier {
-    if (mem.eql(u8, str, "FG")) return .fg;
-    if (mem.eql(u8, str, "BG")) return .bg;
+    if (ustr.eq(str, "FG")) return .fg;
+    if (ustr.eq(str, "BG")) return .bg;
     return null;
 }
 
@@ -440,9 +440,9 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
                 }
             },
             .key => {
-                if (mem.eql(u8, field, "arg")) {
+                if (ustr.eq(field, "arg")) {
                     want = .arg;
-                } else if (mem.eql(u8, field, "format")) {
+                } else if (ustr.eq(field, "format")) {
                     want = .format;
                 } else {
                     return .fail("bad key", split);
@@ -481,7 +481,7 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
                 if (color.acceptHex(hex)) |ok| {
                     const ptr = try tmp.pushVec(&result.color.data.?.active.pairs, .front);
                     ptr.* = .{ .thresh = thresh, .hex = .init(tag, ok) };
-                } else if (hex.len == 0 or mem.eql(u8, hex, "default")) {
+                } else if (hex.len == 0 or ustr.eq(hex, "default")) {
                     const ptr = try tmp.pushVec(&result.color.data.?.active.pairs, .front);
                     ptr.* = .{ .thresh = thresh, .hex = .empty };
                 } else {

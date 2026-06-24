@@ -21,6 +21,20 @@ pub fn trimWhitespace(str: []const u8) []const u8 {
     return str[a..b];
 }
 
+pub inline fn eq(str: []const u8, comptime lit: []const u8) bool {
+    if (str.len != lit.len) return false;
+    const n = lit.len;
+    const T = @Int(.unsigned, 8 * n);
+    return switch (n) {
+        0 => @compileError("Zero-length literal"),
+        2, 3, 6 => @as(T, @bitCast(str[0..n].*)) == @as(T, @bitCast(lit[0..n].*)),
+        7 => blk: for (str, lit) |a, b| {
+            if (a != b) break :blk false;
+        } else break :blk true,
+        else => @compileError("Specialization unimplemented"),
+    };
+}
+
 // == "atou" function specialization silliness ================================
 
 fn Ret(comptime T: type) type {
