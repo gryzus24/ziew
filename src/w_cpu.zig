@@ -97,10 +97,10 @@ const Cpu = struct {
         const diff_sys    = self.sys -| old.sys;
         const diff_idle   = self.idle -| old.idle;
         const diff_iowait = self.iowait -| old.iowait;
-        const diff_total  = diff_user + diff_sys + diff_idle + diff_iowait;
+        var   diff_total  = diff_user + diff_sys + diff_idle + diff_iowait;
 
         if (DELTA_ZERO_CHECK and diff_total == 0)
-            return .zero;
+            diff_total = 1;
 
         const pct_multiplier = (100 << unt.F5608.FRAC_SHIFT) * nr_cpus;
 
