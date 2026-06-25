@@ -834,11 +834,10 @@ pub fn EnumUnion(comptime E: type, comptime A: type, comptime B: type) type {
     var values: [size]E_enum.tag_type = undefined;
 
     var i, var m = .{ 0, mask };
-    while (m != 0) : (i += 1) {
-        const lsb = m & (~m + 1);
+    while (m != 0) : (m &= m - 1) {
         const bit = @ctz(m);
         names[i], values[i] = .{ @tagName(@as(E, @enumFromInt(bit))), bit };
-        m ^= lsb;
+        i += 1;
     }
     return @Enum(E_enum.tag_type, .exhaustive, &names, &values);
 }
