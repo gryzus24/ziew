@@ -12,11 +12,11 @@ pub fn trimWhitespace(str: []const u8) []const u8 {
     // "whitespace" trimming loop I could come up with.
     var a: usize = 0;
     var b: usize = str.len;
-    var t: usize = 0;
-    while (a < b and t != b - a) {
-        t = b - a;
-        a += @intFromBool(isWhitespace(str[a]));
-        b -= @intFromBool(isWhitespace(str[b - 1]));
+    while (a < b) {
+        const t = b - a;
+        if (isWhitespace(str[a - 0])) a += 1;
+        if (isWhitespace(str[b - 1])) b -= 1;
+        if (t == b - a) break;
     }
     return str[a..b];
 }
