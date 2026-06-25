@@ -477,7 +477,7 @@ pub const State = struct {
         pairs: []const color.Active.Pair,
     ) color.Hex {
         const curr, const prev = typ.constCurrPrev(Stat, &self.stats, self.curr);
-        const opt_color: typ.Opts.Cpu.ColorSupported = @enumFromInt(opt);
+        const opt_color = typ.optAs(typ.Opts.Cpu.ColorSupported, opt);
         const id = opt -% typ.Opts.Cpu.STATS_OFF;
 
         const value = switch (opt_color) {
@@ -591,7 +591,7 @@ pub fn widget(
         const buffer = writer.buffer;
         var pos = writer.end;
 
-        const opt: typ.Opts.Cpu.Special = @enumFromInt(part.opt);
+        const opt = typ.optAs(typ.Opts.Cpu.Special, part.opt);
         switch (opt) {
             .brlbars, .blkbars => {
                 var need = curr.nr_cpux_entries * BAR_WIDTH;

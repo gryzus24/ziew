@@ -449,7 +449,7 @@ pub fn widget(
                 break;
             }
             const dst = writer.buffer[writer.end..];
-            writer.end += switch (@as(typ.Opts.Net.String, @enumFromInt(part.opt))) {
+            writer.end += switch (typ.optAs(typ.Opts.Net.String, part.opt)) {
                 .inet => advance: {
                     dst[0..INET_BUF_SIZE].* = inetbuf;
                     break :advance inet_len;

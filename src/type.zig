@@ -717,6 +717,10 @@ pub fn writeWidgetEnd(buffer: []u8, end: usize) []const u8 {
     return buffer[0 .. end + WIDGET_BUF_TAIL];
 }
 
+pub fn optAs(comptime E: type, opt: u8) E {
+    return @enumFromInt(opt);
+}
+
 pub fn optBit(opt: u8) OptBit {
     return @as(OptBit, 1) << @intCast(opt);
 }

@@ -29,7 +29,7 @@ pub fn widget(
         part.str.writeBytes(writer, base);
 
         const dst = writer.buffer[writer.end..];
-        writer.end += switch (@as(typ.Opts.Time, @enumFromInt(part.opt))) {
+        writer.end += switch (typ.optAs(typ.Opts.Time, part.opt)) {
             .time => ext.strftime(dst.ptr, dst.len, wd.strf.get(), &tm),
             .@"1", .@"2", .@"3", .@"4", .@"5", .@"6", .@"7", .@"8", .@"9" => advance: {
                 const DIVS: [9]u32 = comptime .{

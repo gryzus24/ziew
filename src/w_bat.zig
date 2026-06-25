@@ -98,9 +98,7 @@ const Battery = struct {
         pairs: []const color.Active.Pair,
     ) color.Hex {
         _ = pct;
-        const opt_color: typ.Opts.Bat.ColorSupported = @enumFromInt(opt);
-
-        return switch (opt_color) {
+        return switch (typ.optAs(typ.Opts.Bat.ColorSupported, opt)) {
             .state => color.firstColorEQThreshold(
                 @intCast(self.fields[Battery.state]),
                 pairs,
@@ -235,8 +233,7 @@ pub fn widget(
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        const opt: typ.Opts.Bat = @enumFromInt(part.opt);
-        switch (opt) {
+        switch (typ.optAs(typ.Opts.Bat, part.opt)) {
             .state => {
                 if (Battery.State.WIDTH > writer.unusedCapacityLen()) {
                     @branchHint(.unlikely);
