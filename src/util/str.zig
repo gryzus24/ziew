@@ -114,10 +114,11 @@ pub fn IndexIterator(comptime T: type, findme: T) type {
         }
 
         inline fn nextBit(self: *@This(), i: usize) usize {
-            const lsb = self.bits & (~self.bits + 1);
             const j = @ctz(self.bits);
-            self.bits ^= lsb;
-            self.i = i + @intFromBool(self.bits == 0) * @as(usize, BlockSize);
+            self.bits &= self.bits - 1;
+            self.i = i;
+            if (self.bits == 0)
+                self.i += BlockSize;
             return i + j;
         }
 
