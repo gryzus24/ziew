@@ -543,6 +543,8 @@ fn makeHashes(comptime E: type) []const WidOptHash {
 
 // == public ==================================================================
 
+pub const PAGE = 1 << 12;
+
 // Iterates over each option referenced by a Widget in order:
 //   fg, bg, parts[0], parts[1], ... etc.
 pub const OptIterator = struct {

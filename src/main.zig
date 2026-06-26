@@ -26,7 +26,7 @@ const time = std.time;
 // This is all dynamic memory available to the program.
 // Four 4K pages minus some fiddle with BSS, DATA, and alignment,
 // packing everything tightly to avoid internal fragmentation.
-var g_bss: [0x4000 - 0x580 - 64 - 0x40]u8 align(64) = undefined;
+var g_bss: [4 * typ.PAGE - 0x600 - 64]u8 align(64) = undefined;
 
 // USR1 signal latch.
 var g_refresh_all = false;

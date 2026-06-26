@@ -774,7 +774,7 @@ fn testArgMerge(
 
 test parse {
     const t = std.testing;
-    var buf: [0x2000]u8 align(64) = undefined;
+    var buf: [2 * typ.PAGE]u8 align(64) = undefined;
     var reg: umem.Region = .init(&buf, "cfgtest");
     var scratch: [256]u8 align(16) = undefined;
 

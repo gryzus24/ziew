@@ -347,7 +347,7 @@ test "/proc/stat parser" {
         \\softirq 4426117 14101 3005 4 13791 895 0 4659 16049 6 4977
         \\
     ;
-    var stack: [4096]u8 align(32) = undefined;
+    var stack: [typ.PAGE]u8 align(32) = undefined;
     var reg: umem.Region = .init(&stack, "cpu-test");
 
     const buf = try reg.allocMany(u8, s.len, .front);
@@ -499,7 +499,7 @@ pub const State = struct {
 };
 
 pub fn update(state: *State) error{ReadError}!void {
-    var buf: [8192]u8 = undefined;
+    var buf: [2 * typ.PAGE]u8 = undefined;
     // Reading /proc/stat in .single mode appears to work across page
     // boundaries, but if anything changes make it use the .all mode.
     const n = try uio.pread(state.fd, &buf, .single);

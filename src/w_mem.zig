@@ -154,7 +154,7 @@ pub const State = struct {
 };
 
 pub fn update(state: *State) error{ReadError}!void {
-    var buf: [4096]u8 = undefined;
+    var buf: [typ.PAGE]u8 = undefined;
     // /proc/meminfo is implemented as a single_show seq_file so
     // if I understand the code correctly it shouldn't need more
     // than a single page of memory and also isn't re-entrant.

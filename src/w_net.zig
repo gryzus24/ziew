@@ -312,7 +312,7 @@ test "/proc/net/dev parser" {
         },
     };
     for (cases, results) |case, result| {
-        var stack: [4096]u8 align(16) = undefined;
+        var stack: [typ.PAGE]u8 align(16) = undefined;
         var reg: umem.Region = .init(&stack, "net-test");
         const buf = try reg.allocMany(u8, case.len, .front);
         @memcpy(buf, case);
@@ -377,7 +377,7 @@ pub fn update(
     reg: *umem.Region,
     state: *State.NetDev,
 ) error{ NoSpaceLeft, ReadError }!void {
-    var buf: [4096]u8 = undefined;
+    var buf: [typ.PAGE]u8 = undefined;
     // Make sure to use the .all mode when reading
     // into a buffer larger than a single page.
     const n = try uio.pread(state.fd, &buf, .single);
