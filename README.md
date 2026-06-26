@@ -1,5 +1,7 @@
 # ziew - a tiny status generator for i3bar/swaybar
 
+<img src="https://github.com/user-attachments/assets/d52d591e-8ec1-4722-835c-fc3e82610ee0" />
+
 ## Description
 *ziew* is a more minimal alternative to *i3status*.
 
