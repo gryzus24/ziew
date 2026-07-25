@@ -19,6 +19,25 @@ pub const DeciSec = i32;
 pub const UDeciSec = u32;
 
 pub const OptBit = u32;
+pub const OptInt = u8;
+
+pub const Opt = packed struct(OptInt) {
+    u: OptInt,
+
+    pub fn fromField(comptime field: anytype) Opt {
+        comptime std.debug.assert(@typeInfo(@TypeOf(field)) == .@"enum");
+        return .{ .u = @backingInt(field) };
+    }
+
+    pub fn toBit(self: @This()) OptBit {
+        return @as(OptBit, 1) << @intCast(self.u);
+    }
+
+    pub fn toEnum(self: @This(), comptime E: type) E {
+        comptime std.debug.assert(@typeInfo(E) == .@"enum");
+        return @fromBackingInt(self.u);
+    }
+};
 
 pub const Interval = struct {
     set: DeciSec,
@@ -35,7 +54,7 @@ pub const Format = struct {
 
     pub const Part = struct {
         str: umem.MemSlice(u8),
-        opt: u8,
+        opt: Opt,
         flags: Flags,
         wopts: unt.NumUnit.WriteOptions,
 
@@ -56,7 +75,7 @@ pub const Format = struct {
             };
         };
 
-        pub fn initDefault(str: umem.MemSlice(u8), opt: u8) @This() {
+        pub fn initDefault(str: umem.MemSlice(u8), opt: Opt) @This() {
             return .{
                 .str = str,
                 .opt = opt,
@@ -134,8 +153,8 @@ pub const Widget = struct {
         pub inline fn checkCastTo(self: @This(), comptime E: type) ?E {
             const m = MaskFromEnum(E);
             comptime std.debug.assert(m <= ~@as(u32, 0));
-            const bit = @as(u32, 1) << @intCast(@intFromEnum(self));
-            return if (bit & m != 0) @enumFromInt(@intFromEnum(self)) else null;
+            const bit = @as(u32, 1) << @intCast(@backingInt(self));
+            return if (bit & m != 0) @fromBackingInt(@backingInt(self)) else null;
         }
     };
 
@@ -220,13 +239,13 @@ fn Data(comptime wid: Widget.Id) type {
                 pub const zero: Mask = .{ .bits = 0 };
 
                 pub fn inet(self: @This()) bool {
-                    return self.bits & optBit(@intFromEnum(Opts.Net.inet)) != 0;
+                    return self.bits & Opt.fromField(Opts.Net.inet).toBit() != 0;
                 }
                 pub fn flags(self: @This()) bool {
-                    return self.bits & optBit(@intFromEnum(Opts.Net.flags)) != 0;
+                    return self.bits & Opt.fromField(Opts.Net.flags).toBit() != 0;
                 }
                 pub fn state(self: @This()) bool {
-                    return self.bits & optBit(@intFromEnum(Opts.Net.state)) != 0;
+                    return self.bits & Opt.fromField(Opts.Net.state).toBit() != 0;
                 }
             };
 
@@ -247,7 +266,7 @@ fn Data(comptime wid: Widget.Id) type {
             ) void {
                 var enabled: Mask = .zero;
                 var it: OptIterator = .init(widget, base);
-                while (it.next()) |e| enabled.bits |= optBit(e.opt);
+                while (it.next()) |e| enabled.bits |= e.opt.toBit();
                 self.opt_enabled = enabled;
             }
         },
@@ -312,7 +331,7 @@ pub fn WidgetData(comptime wid: ?Widget.Id) type {
     const alignment = blk: {
         var w = 0;
         for (@typeInfo(Widget.Id).@"enum".field_values) |v|
-            w = @max(w, @alignOf(Data(@enumFromInt(v))));
+            w = @max(w, @alignOf(Data(@fromBackingInt(v))));
         break :blk w;
     };
     if (wid) |ok| {
@@ -344,7 +363,7 @@ pub fn WidgetData(comptime wid: ?Widget.Id) type {
 }
 
 pub const Opts = struct {
-    pub const Time = enum(u8) {
+    pub const Time = enum(OptInt) {
         time,
         @"1",
         @"2",
@@ -361,7 +380,7 @@ pub const Opts = struct {
         pub const ColorBare = enum {};
     };
 
-    pub const Mem = enum(u8) {
+    pub const Mem = enum(OptInt) {
         total,
         free,
         available,
@@ -376,7 +395,7 @@ pub const Opts = struct {
         pub const ColorBare = enum {};
     };
 
-    pub const Cpu = enum(u8) {
+    pub const Cpu = enum(OptInt) {
         all,
         user,
         sys,
@@ -394,7 +413,7 @@ pub const Opts = struct {
         brlgraph,
         blkgraph,
 
-        pub const STATS_OFF = @intFromEnum(Cpu.intr);
+        pub const STATS_OFF = @backingInt(Cpu.intr);
 
         pub const Usage = EnumSubset(@This(), &.{
             .all, .user, .sys, .iowait,
@@ -417,7 +436,7 @@ pub const Opts = struct {
         pub const STATS_MASK = MaskFromEnum(Stats);
     };
 
-    pub const Disk = enum(u8) {
+    pub const Disk = enum(OptInt) {
         total,
         free,
         available,
@@ -437,7 +456,7 @@ pub const Opts = struct {
         pub const INO_MASK = MaskFromEnum(Ino);
     };
 
-    pub const Net = enum(u8) {
+    pub const Net = enum(OptInt) {
         inet,
         flags,
         state,
@@ -459,7 +478,7 @@ pub const Opts = struct {
         tx_carrier,
         tx_compressed,
 
-        pub const NETDEV_OFF = @intFromEnum(Net.rx_bytes);
+        pub const NETDEV_OFF = @backingInt(Net.rx_bytes);
 
         pub const String = EnumSubset(@This(), &.{
             .inet, .flags, .state,
@@ -487,7 +506,7 @@ pub const Opts = struct {
         pub const NETDEV_SIZE_MASK = MaskFromEnum(NetDevSize);
     };
 
-    pub const Bat = enum(u8) {
+    pub const Bat = enum(OptInt) {
         state,
         fulldesign,
         fullnow,
@@ -503,7 +522,7 @@ pub const Opts = struct {
         pub const ColorSupported = EnumUnion(@This(), ColorPct, ColorBare);
     };
 
-    pub const Read = enum(u8) {
+    pub const Read = enum(OptInt) {
         basename,
         content,
         raw,
@@ -553,7 +572,7 @@ pub const OptIterator = struct {
     i: isize,
 
     const Item = struct {
-        opt: u8,
+        opt: Opt,
         pct: bool,
         width: u3,
     };
@@ -604,7 +623,7 @@ pub fn strWid(str: []const u8) ?Widget.Id {
     const hash = widOptHash(str);
     for (comptime makeHashes(Widget.Id), 0..) |wid_hash, i| {
         if (hash == wid_hash)
-            return @enumFromInt(i);
+            return @fromBackingInt(@intCast(i));
     }
     return null;
 }
@@ -678,7 +697,7 @@ pub fn writeWidgetBeg(writer: *uio.Writer, fg: color.Hex, bg: color.Hex) void {
     };
 
     const dst = writer.buffer[writer.end..];
-    switch (@intFromEnum(fg.tag) | @intFromEnum(bg.tag)) {
+    switch (@backingInt(fg.tag) | @backingInt(bg.tag)) {
         0 => {
             const s = headers[0];
             dst[0..16].* = (s ++ .{ undefined, undefined }).*;
@@ -716,14 +735,6 @@ pub fn writeWidgetEnd(buffer: []u8, end: usize) []const u8 {
     }
     buffer[end..][0..WIDGET_BUF_TAIL].* = ("…" ++ END_MARKER).*;
     return buffer[0 .. end + WIDGET_BUF_TAIL];
-}
-
-pub fn optAs(comptime E: type, opt: u8) E {
-    return @enumFromInt(opt);
-}
-
-pub fn optBit(opt: u8) OptBit {
-    return @as(OptBit, 1) << @intCast(opt);
 }
 
 pub inline fn calc(
@@ -807,7 +818,7 @@ pub fn EnumSubset(comptime E: type, comptime fields: []const E) type {
     var values: [fields.len]E_enum.tag_type = undefined;
 
     for (fields, 0..) |field, i| {
-        names[i], values[i] = .{ @tagName(field), @intFromEnum(field) };
+        names[i], values[i] = .{ @tagName(field), @backingInt(field) };
     }
     return @Enum(E_enum.tag_type, .exhaustive, &names, &values);
 }
@@ -840,7 +851,7 @@ pub fn EnumUnion(comptime E: type, comptime A: type, comptime B: type) type {
     var i, var m = .{ 0, mask };
     while (m != 0) : (m &= m - 1) {
         const bit = @ctz(m);
-        names[i], values[i] = .{ @tagName(@as(E, @enumFromInt(bit))), bit };
+        names[i], values[i] = .{ @tagName(@as(E, @fromBackingInt(bit))), bit };
         i += 1;
     }
     return @Enum(E_enum.tag_type, .exhaustive, &names, &values);

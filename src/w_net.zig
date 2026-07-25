@@ -49,22 +49,22 @@ const IFace = struct {
 
     // zig fmt: off
     const __off         = typ.Opts.Net.NETDEV_OFF;
-    const rx_bytes      = @intFromEnum(typ.Opts.Net.rx_bytes) - __off;
-    const rx_pkts       = @intFromEnum(typ.Opts.Net.rx_pkts) - __off;
-    const rx_errs       = @intFromEnum(typ.Opts.Net.rx_errs) - __off;
-    const rx_drop       = @intFromEnum(typ.Opts.Net.rx_drop) - __off;
-    const rx_fifo       = @intFromEnum(typ.Opts.Net.rx_fifo) - __off;
-    const rx_frame      = @intFromEnum(typ.Opts.Net.rx_frame) - __off;
-    const rx_compressed = @intFromEnum(typ.Opts.Net.rx_compressed) - __off;
-    const rx_multicast  = @intFromEnum(typ.Opts.Net.rx_multicast) - __off;
-    const tx_bytes      = @intFromEnum(typ.Opts.Net.tx_bytes) - __off;
-    const tx_pkts       = @intFromEnum(typ.Opts.Net.tx_pkts) - __off;
-    const tx_errs       = @intFromEnum(typ.Opts.Net.tx_errs) - __off;
-    const tx_drop       = @intFromEnum(typ.Opts.Net.tx_drop) - __off;
-    const tx_fifo       = @intFromEnum(typ.Opts.Net.tx_fifo) - __off;
-    const tx_colls      = @intFromEnum(typ.Opts.Net.tx_colls) - __off;
-    const tx_carrier    = @intFromEnum(typ.Opts.Net.tx_carrier) - __off;
-    const tx_compressed = @intFromEnum(typ.Opts.Net.tx_compressed) - __off;
+    const rx_bytes      = @backingInt(typ.Opts.Net.rx_bytes) - __off;
+    const rx_pkts       = @backingInt(typ.Opts.Net.rx_pkts) - __off;
+    const rx_errs       = @backingInt(typ.Opts.Net.rx_errs) - __off;
+    const rx_drop       = @backingInt(typ.Opts.Net.rx_drop) - __off;
+    const rx_fifo       = @backingInt(typ.Opts.Net.rx_fifo) - __off;
+    const rx_frame      = @backingInt(typ.Opts.Net.rx_frame) - __off;
+    const rx_compressed = @backingInt(typ.Opts.Net.rx_compressed) - __off;
+    const rx_multicast  = @backingInt(typ.Opts.Net.rx_multicast) - __off;
+    const tx_bytes      = @backingInt(typ.Opts.Net.tx_bytes) - __off;
+    const tx_pkts       = @backingInt(typ.Opts.Net.tx_pkts) - __off;
+    const tx_errs       = @backingInt(typ.Opts.Net.tx_errs) - __off;
+    const tx_drop       = @backingInt(typ.Opts.Net.tx_drop) - __off;
+    const tx_fifo       = @backingInt(typ.Opts.Net.tx_fifo) - __off;
+    const tx_colls      = @backingInt(typ.Opts.Net.tx_colls) - __off;
+    const tx_carrier    = @backingInt(typ.Opts.Net.tx_carrier) - __off;
+    const tx_compressed = @backingInt(typ.Opts.Net.tx_compressed) - __off;
 
     comptime {
         std.debug.assert(rx_bytes      == 0);
@@ -427,7 +427,7 @@ pub fn widget(
 
         pub fn checkPairs(
             self: @This(),
-            opt: u8,
+            opt: typ.Opt,
             pct: bool,
             pairs: []const color.Active.Pair,
         ) color.Hex {
@@ -442,14 +442,14 @@ pub fn widget(
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        const bit = typ.optBit(part.opt);
+        const bit = part.opt.toBit();
         if (bit & typ.Opts.Net.STRING_MASK != 0) {
             if (@max(INET_BUF_SIZE, iff_len) > writer.unusedCapacityLen()) {
                 @branchHint(.unlikely);
                 break;
             }
             const dst = writer.buffer[writer.end..];
-            writer.end += switch (typ.optAs(typ.Opts.Net.String, part.opt)) {
+            writer.end += switch (part.opt.toEnum(typ.Opts.Net.String)) {
                 .inet => advance: {
                     dst[0..INET_BUF_SIZE].* = inetbuf;
                     break :advance inet_len;
@@ -481,8 +481,8 @@ pub fn widget(
         }
         if (new_if != null and old_if != null) {
             @branchHint(.likely);
-            const a = new_if.?.fields[part.opt - typ.Opts.Net.NETDEV_OFF];
-            const b = old_if.?.fields[part.opt - typ.Opts.Net.NETDEV_OFF];
+            const a = new_if.?.fields[part.opt.u - typ.Opts.Net.NETDEV_OFF];
+            const b = old_if.?.fields[part.opt.u - typ.Opts.Net.NETDEV_OFF];
 
             const value = typ.calc(a, b, interval, part.flags);
             if (bit & typ.Opts.Net.NETDEV_SIZE_MASK != 0) {

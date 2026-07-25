@@ -117,7 +117,7 @@ pub noinline fn perfEventStart() [3]linux.fd_t {
     var peas: [3]linux.perf_event_attr = .{
         .{
             .type = .HARDWARE,
-            .config = @intFromEnum(linux.PERF.COUNT.HW.INSTRUCTIONS),
+            .config = @backingInt(linux.PERF.COUNT.HW.INSTRUCTIONS),
             .flags = .{
                 .disabled = true,
                 .exclude_kernel = true,
@@ -126,7 +126,7 @@ pub noinline fn perfEventStart() [3]linux.fd_t {
         },
         .{
             .type = .HARDWARE,
-            .config = @intFromEnum(linux.PERF.COUNT.HW.BRANCH_INSTRUCTIONS),
+            .config = @backingInt(linux.PERF.COUNT.HW.BRANCH_INSTRUCTIONS),
             .flags = .{
                 .disabled = true,
                 .exclude_kernel = true,
@@ -135,7 +135,7 @@ pub noinline fn perfEventStart() [3]linux.fd_t {
         },
         .{
             .type = .HARDWARE,
-            .config = @intFromEnum(linux.PERF.COUNT.HW.BRANCH_MISSES),
+            .config = @backingInt(linux.PERF.COUNT.HW.BRANCH_MISSES),
             .flags = .{
                 .disabled = true,
                 .exclude_kernel = true,

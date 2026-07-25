@@ -133,12 +133,12 @@ const Stat = struct {
 
     // zig fmt: off
     const __off   = typ.Opts.Cpu.STATS_OFF;
-    const intr    = @intFromEnum(typ.Opts.Cpu.intr) - __off;
-    const softirq = @intFromEnum(typ.Opts.Cpu.softirq) - __off;
-    const blocked = @intFromEnum(typ.Opts.Cpu.blocked) - __off;
-    const running = @intFromEnum(typ.Opts.Cpu.running) - __off;
-    const forks   = @intFromEnum(typ.Opts.Cpu.forks) - __off;
-    const ctxt    = @intFromEnum(typ.Opts.Cpu.ctxt) - __off;
+    const intr    = @backingInt(typ.Opts.Cpu.intr) - __off;
+    const softirq = @backingInt(typ.Opts.Cpu.softirq) - __off;
+    const blocked = @backingInt(typ.Opts.Cpu.blocked) - __off;
+    const running = @backingInt(typ.Opts.Cpu.running) - __off;
+    const forks   = @backingInt(typ.Opts.Cpu.forks) - __off;
+    const ctxt    = @backingInt(typ.Opts.Cpu.ctxt) - __off;
 
     comptime {
         std.debug.assert(intr    == 0);
@@ -430,16 +430,16 @@ pub const State = struct {
             if (w.id == .CPU) {
                 var it: typ.OptIterator = .init(w, base);
                 while (it.next()) |e| {
-                    if (typ.optBit(e.opt) & typ.Opts.Cpu.USAGE_MASK != 0) {
+                    if (e.opt.toBit() & typ.Opts.Cpu.USAGE_MASK != 0) {
                         if (e.pct) {
                             enabled.pct = true;
                         } else {
                             enabled.abs = true;
                         }
-                    } else if (e.opt == @intFromEnum(typ.Opts.Cpu.brlgraph)) {
+                    } else if (e.opt.toEnum(typ.Opts.Cpu) == .brlgraph) {
                         enabled.brl = true;
                         brl_width = e.width;
-                    } else if (e.opt == @intFromEnum(typ.Opts.Cpu.blkgraph)) {
+                    } else if (e.opt.toEnum(typ.Opts.Cpu) == .blkgraph) {
                         enabled.blk = true;
                         blk_width = e.width;
                     }
@@ -472,18 +472,18 @@ pub const State = struct {
 
     pub fn checkPairs(
         self: *const @This(),
-        opt: u8,
+        opt: typ.Opt,
         pct: bool,
         pairs: []const color.Active.Pair,
     ) color.Hex {
         const curr, const prev = typ.constCurrPrev(Stat, &self.stats, self.curr);
-        const opt_color = typ.optAs(typ.Opts.Cpu.ColorSupported, opt);
-        const id = opt -% typ.Opts.Cpu.STATS_OFF;
+        const opt_color = opt.toEnum(typ.Opts.Cpu.ColorSupported);
+        const id = opt.u -% typ.Opts.Cpu.STATS_OFF;
 
         const value = switch (opt_color) {
             .all, .user, .sys, .iowait => blk: {
                 const ptr = if (pct) &self.usage_pct else &self.usage_abs;
-                break :blk ptr[opt].roundU24AndTruncate();
+                break :blk ptr[opt.u].roundU24AndTruncate();
             },
             .intr, .softirq, .blocked, .running, .forks, .ctxt => blk: {
                 var stat = curr.stats[id];
@@ -520,17 +520,17 @@ pub fn update(state: *State) error{ReadError}!void {
 
     if (state.enabled.pct) {
         const delta = curr_cpu.delta(prev_cpu);
-        state.usage_pct[@intFromEnum(typ.Opts.Cpu.all)] = delta.all;
-        state.usage_pct[@intFromEnum(typ.Opts.Cpu.user)] = delta.user;
-        state.usage_pct[@intFromEnum(typ.Opts.Cpu.sys)] = delta.sys;
-        state.usage_pct[@intFromEnum(typ.Opts.Cpu.iowait)] = delta.iowait;
+        state.usage_pct[@backingInt(typ.Opts.Cpu.all)] = delta.all;
+        state.usage_pct[@backingInt(typ.Opts.Cpu.user)] = delta.user;
+        state.usage_pct[@backingInt(typ.Opts.Cpu.sys)] = delta.sys;
+        state.usage_pct[@backingInt(typ.Opts.Cpu.iowait)] = delta.iowait;
     }
     if (state.enabled.abs) {
         const deltaN = curr_cpu.deltaN(prev_cpu, @intCast(curr.nr_cpux_entries));
-        state.usage_abs[@intFromEnum(typ.Opts.Cpu.all)] = deltaN.all;
-        state.usage_abs[@intFromEnum(typ.Opts.Cpu.user)] = deltaN.user;
-        state.usage_abs[@intFromEnum(typ.Opts.Cpu.sys)] = deltaN.sys;
-        state.usage_abs[@intFromEnum(typ.Opts.Cpu.iowait)] = deltaN.iowait;
+        state.usage_abs[@backingInt(typ.Opts.Cpu.all)] = deltaN.all;
+        state.usage_abs[@backingInt(typ.Opts.Cpu.user)] = deltaN.user;
+        state.usage_abs[@backingInt(typ.Opts.Cpu.sys)] = deltaN.sys;
+        state.usage_abs[@backingInt(typ.Opts.Cpu.iowait)] = deltaN.iowait;
     }
     if (state.enabled.brl) {
         const sample = cpuUsageRank(curr_cpu, prev_cpu, BRL.RANGE);
@@ -561,7 +561,7 @@ pub fn widget(
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        const bit = typ.optBit(part.opt);
+        const bit = part.opt.toBit();
         if (bit & (typ.Opts.Cpu.USAGE_MASK | typ.Opts.Cpu.STATS_MASK) != 0) {
             var negative = false;
             var nu: unt.NumUnit = undefined;
@@ -569,15 +569,15 @@ pub fn widget(
             if (bit & typ.Opts.Cpu.USAGE_MASK != 0) {
                 nu = .{
                     .n = if (part.flags.pct)
-                        state.usage_pct[part.opt]
+                        state.usage_pct[part.opt.u]
                     else
-                        state.usage_abs[part.opt],
+                        state.usage_abs[part.opt.u],
                     .u = .percent,
                 };
             } else {
                 const value, negative = typ.calcWithOverflow(
-                    curr.stats[part.opt - typ.Opts.Cpu.STATS_OFF],
-                    prev.stats[part.opt - typ.Opts.Cpu.STATS_OFF],
+                    curr.stats[part.opt.u - typ.Opts.Cpu.STATS_OFF],
+                    prev.stats[part.opt.u - typ.Opts.Cpu.STATS_OFF],
                     interval,
                     part.flags,
                 );
@@ -591,7 +591,7 @@ pub fn widget(
         const buffer = writer.buffer;
         var pos = writer.end;
 
-        const opt = typ.optAs(typ.Opts.Cpu.Special, part.opt);
+        const opt = part.opt.toEnum(typ.Opts.Cpu.Special);
         switch (opt) {
             .brlbars, .blkbars => {
                 var need = curr.nr_cpux_entries * BAR_WIDTH;

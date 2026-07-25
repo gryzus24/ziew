@@ -11,13 +11,13 @@ const Mount = struct {
     fields: [8]u64,
 
     // zig fmt: off
-    const kb_total  = @intFromEnum(typ.Opts.Disk.total);
-    const kb_free   = @intFromEnum(typ.Opts.Disk.free);
-    const kb_avail  = @intFromEnum(typ.Opts.Disk.available);
-    const kb_used   = @intFromEnum(typ.Opts.Disk.used);
-    const ino_total = @intFromEnum(typ.Opts.Disk.ino_total);
-    const ino_free  = @intFromEnum(typ.Opts.Disk.ino_free);
-    const ino_used  = @intFromEnum(typ.Opts.Disk.ino_used);
+    const kb_total  = @backingInt(typ.Opts.Disk.total);
+    const kb_free   = @backingInt(typ.Opts.Disk.free);
+    const kb_avail  = @backingInt(typ.Opts.Disk.available);
+    const kb_used   = @backingInt(typ.Opts.Disk.used);
+    const ino_total = @backingInt(typ.Opts.Disk.ino_total);
+    const ino_free  = @backingInt(typ.Opts.Disk.ino_free);
+    const ino_used  = @backingInt(typ.Opts.Disk.ino_used);
 
     comptime {
         std.debug.assert(kb_total  == 0);
@@ -41,16 +41,16 @@ const MountPair = struct {
 
     pub fn checkPairs(
         self: *const @This(),
-        opt: u8,
+        opt: typ.Opt,
         pct: bool,
         pairs: []const color.Active.Pair,
     ) color.Hex {
         _ = pct;
         const mount = &self.pair[self.curr];
         const value = unt.Percent(
-            mount.fields[opt],
+            mount.fields[opt.u],
             mount.fields[
-                if (typ.optBit(opt) & typ.Opts.Disk.INO_MASK != 0)
+                if (opt.toBit() & typ.Opts.Disk.INO_MASK != 0)
                     Mount.ino_total
                 else
                     Mount.kb_total
@@ -133,14 +133,14 @@ pub fn widget(
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        const bit = typ.optBit(part.opt);
+        const bit = part.opt.toBit();
 
         var negative = false;
         var nu: unt.NumUnit = undefined;
 
         if (part.flags.pct) {
             nu = unt.Percent(
-                curr.fields[part.opt],
+                curr.fields[part.opt.u],
                 curr.fields[
                     if (bit & typ.Opts.Disk.INO_MASK != 0)
                         Mount.ino_total
@@ -150,8 +150,8 @@ pub fn widget(
             );
         } else {
             const value, negative = typ.calcWithOverflow(
-                curr.fields[part.opt],
-                prev.fields[part.opt],
+                curr.fields[part.opt.u],
+                prev.fields[part.opt.u],
                 interval,
                 part.flags,
             );

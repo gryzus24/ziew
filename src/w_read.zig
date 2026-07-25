@@ -58,7 +58,7 @@ pub fn widget(
     var bg = w.bg.static;
 
     for (parts) |*part| {
-        if (typ.optAs(typ.Opts.Read, part.opt) == .content) {
+        if (part.opt.toEnum(typ.Opts.Read) == .content) {
             fg, pos = acceptColor(data, pos, .fg);
             bg, pos = acceptColor(data, pos, .bg);
             if (pos < data.len and data[pos] <= ' ') pos += 1;
@@ -70,7 +70,7 @@ pub fn widget(
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        const opt = typ.optAs(typ.Opts.Read, part.opt);
+        const opt = part.opt.toEnum(typ.Opts.Read);
 
         var src = data;
         if (opt == .content)

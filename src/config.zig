@@ -226,14 +226,14 @@ fn acceptFormat(
         option.parts[part] = field[cur..field.len];
 
         const hash = typ.widOptHash(option.parts[Option.name]);
-        const opt: u8 = blk: for (
-            typ.WID__OPTIONS_PCT_PREFIX_SUPPORTED[@intFromEnum(wid)],
-            typ.WID__OPTION_HASHES[@intFromEnum(wid)],
+        const opt: typ.Opt = blk: for (
+            typ.WID__OPTIONS_PCT_PREFIX_SUPPORTED[@backingInt(wid)],
+            typ.WID__OPTION_HASHES[@backingInt(wid)],
             0..,
         ) |pct_prefix_supported, opt_hash, j| {
             // An implication in the wild!
             if ((!pct_prefix or pct_prefix_supported) and hash == opt_hash)
-                break :blk @intCast(j);
+                break :blk .{ .u = @intCast(j) };
         } else {
             return .fail("unknown option", split.opt);
         };
@@ -342,7 +342,7 @@ fn strColorIdentifier(str: []const u8) ?ColorIdentifier {
 
 const ColorOptResult = union(enum) {
     ok: struct {
-        opt: u8,
+        opt: typ.Opt,
         pct: bool,
     },
     err: struct {
@@ -355,13 +355,13 @@ fn strColorOpt(wid: typ.Widget.Id.ActiveColorSupported, str: []const u8) ColorOp
     const pct = acceptPrefix(str, '%');
     const hash = typ.widOptHash(str[@intFromBool(pct)..]);
     for (
-        typ.WID__OPTIONS_COLOR_SUPPORT[@intFromEnum(wid)],
-        typ.WID__OPTION_HASHES[@intFromEnum(wid)],
+        typ.WID__OPTIONS_COLOR_SUPPORT[@backingInt(wid)],
+        typ.WID__OPTION_HASHES[@backingInt(wid)],
         0..,
     ) |support, opt_hash, opt| {
         if (hash == opt_hash) {
             if ((support.bare and !pct) or (support.pct and pct)) {
-                return .{ .ok = .{ .opt = @intCast(opt), .pct = pct } };
+                return .{ .ok = .{ .opt = .{ .u = @intCast(opt) }, .pct = pct } };
             }
             return .{ .err = .{ .str = str, .what = .unsupported } };
         }

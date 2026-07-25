@@ -19,14 +19,14 @@ inline fn HUMAN_UNIT(f: F5608, comptime steps: [4]NumUnit.Unit) NumUnit {
         @as(u6, @intFromBool(f.u >= G8)) * 10;
 
     const unit =
-        @as(u64, @intFromEnum(steps[0])) |
-        @as(u64, @intFromEnum(steps[1])) << 10 |
-        @as(u64, @intFromEnum(steps[2])) << 20 |
-        @as(u64, @intFromEnum(steps[3])) << 30;
+        @as(u64, @backingInt(steps[0])) |
+        @as(u64, @backingInt(steps[1])) << 10 |
+        @as(u64, @backingInt(steps[2])) << 20 |
+        @as(u64, @backingInt(steps[3])) << 30;
 
     return .{
         .n = .{ .u = f.u >> shift },
-        .u = @enumFromInt((unit >> shift) & 0xff),
+        .u = @fromBackingInt(@intCast((unit >> shift) & 0xff)),
     };
 }
 
@@ -257,7 +257,7 @@ pub const NumUnit = struct {
             i -= pad;
 
         // Store preemptively to avoid branching.
-        var u: u8 = @intFromEnum(self.u);
+        var u = @backingInt(self.u);
         buf[i - 1] = u;
 
         if (!flags.abbreviate)

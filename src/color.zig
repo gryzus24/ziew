@@ -1,3 +1,4 @@
+const typ = @import("type.zig");
 const umem = @import("util/mem.zig");
 
 pub const Hex = struct {
@@ -18,7 +19,7 @@ pub const Hex = struct {
 };
 
 pub const Active = struct {
-    opt: u8,
+    opt: typ.Opt,
     pct: bool,
     pairs: umem.MemSlice(Pair),
 

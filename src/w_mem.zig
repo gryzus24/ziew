@@ -139,14 +139,14 @@ pub const State = struct {
 
     pub fn checkPairs(
         self: *const @This(),
-        opt: u8,
+        opt: typ.Opt,
         pct: bool,
         pairs: []const color.Active.Pair,
     ) color.Hex {
         _ = pct;
         const mi = &self.meminfos[self.curr];
         const value = unt.Percent(
-            mi.fields[opt],
+            mi.fields[opt.u],
             mi.total(),
         ).n.roundU24AndTruncate();
         return color.firstColorGEThreshold(value, pairs);
@@ -183,9 +183,9 @@ pub fn widget(
         var nu: unt.NumUnit = undefined;
 
         if (part.flags.pct) {
-            nu = unt.Percent(curr.fields[part.opt], curr.total());
+            nu = unt.Percent(curr.fields[part.opt.u], curr.total());
         } else {
-            const new, const old = .{ curr.fields[part.opt], prev.fields[part.opt] };
+            const new, const old = .{ curr.fields[part.opt.u], prev.fields[part.opt.u] };
             const result, negative =
                 typ.calcWithOverflow(new, old, interval, part.flags);
             nu = unt.SizeKb(result);

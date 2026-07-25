@@ -71,14 +71,14 @@ const __widgets_present: [typ.Widget.NR_WIDGETS]bool = blk: {
     if (CONFIG) |ok| {
         var present: [typ.Widget.NR_WIDGETS]bool = @splat(false);
         for (ok.embedWidgetIds()) |wid|
-            present[@intFromEnum(wid)] = true;
+            present[@backingInt(wid)] = true;
         break :blk present;
     }
     break :blk @splat(true);
 };
 
 inline fn hasWid(comptime wid: typ.Widget.Id) bool {
-    return __widgets_present[@intFromEnum(wid)];
+    return __widgets_present[@backingInt(wid)];
 }
 
 const Args = struct {
@@ -307,7 +307,7 @@ fn sleepInterval(intervals: []const typ.UDeciSec) typ.DeciSec {
 }
 
 inline fn windex(wid: typ.Widget.Id) u32 {
-    return @intFromEnum(wid) -% 1;
+    return @backingInt(wid) -% 1;
 }
 inline fn wbit(wid: typ.Widget.Id) u32 {
     return @as(u32, 1) << @intCast(windex(wid));

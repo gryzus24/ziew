@@ -49,15 +49,15 @@ const Battery = struct {
     fields: [4]u64,
 
     // zig fmt: off
-    const state       = @intFromEnum(Parser.Key.status);
-    const full_design = @intFromEnum(Parser.Key.full_design);
-    const full_now    = @intFromEnum(Parser.Key.full);
-    const now         = @intFromEnum(Parser.Key.now);
+    const state       = @backingInt(Parser.Key.status);
+    const full_design = @backingInt(Parser.Key.full_design);
+    const full_now    = @backingInt(Parser.Key.full);
+    const now         = @backingInt(Parser.Key.now);
 
     comptime {
-        std.debug.assert(state       == @intFromEnum(typ.Opts.Bat.state));
-        std.debug.assert(full_design == @intFromEnum(typ.Opts.Bat.fulldesign));
-        std.debug.assert(full_now    == @intFromEnum(typ.Opts.Bat.fullnow));
+        std.debug.assert(state       == @backingInt(typ.Opts.Bat.state));
+        std.debug.assert(full_design == @backingInt(typ.Opts.Bat.fulldesign));
+        std.debug.assert(full_now    == @backingInt(typ.Opts.Bat.fullnow));
         // N/A
 
         std.debug.assert(state       == 0);
@@ -77,11 +77,11 @@ const Battery = struct {
 
         const names: [5][WIDTH]u8 = blk: {
             var t: [5][WIDTH]u8 = undefined;
-            t[@intFromEnum(Battery.State.discharging)] = "Discharging ".*;
-            t[@intFromEnum(Battery.State.charging)]    = "Charging    ".*;
-            t[@intFromEnum(Battery.State.full)]        = "Full        ".*;
-            t[@intFromEnum(Battery.State.notcharging)] = "Not-charging".*;
-            t[@intFromEnum(Battery.State.unknown)]     = "Unknown     ".*;
+            t[@backingInt(Battery.State.discharging)] = "Discharging ".*;
+            t[@backingInt(Battery.State.charging)]    = "Charging    ".*;
+            t[@backingInt(Battery.State.full)]        = "Full        ".*;
+            t[@backingInt(Battery.State.notcharging)] = "Not-charging".*;
+            t[@backingInt(Battery.State.unknown)]     = "Unknown     ".*;
             break :blk t;
         };
     };
@@ -93,12 +93,12 @@ const Battery = struct {
 
     pub fn checkPairs(
         self: *const @This(),
-        opt: u8,
+        opt: typ.Opt,
         pct: bool,
         pairs: []const color.Active.Pair,
     ) color.Hex {
         _ = pct;
-        return switch (typ.optAs(typ.Opts.Bat.ColorSupported, opt)) {
+        return switch (opt.toEnum(typ.Opts.Bat.ColorSupported)) {
             .state => color.firstColorEQThreshold(
                 @intCast(self.fields[Battery.state]),
                 pairs,
@@ -106,7 +106,7 @@ const Battery = struct {
             .fulldesign, .fullnow => color.firstColorGEThreshold(
                 unt.Percent(
                     self.fields[Battery.now],
-                    self.fields[opt],
+                    self.fields[opt.u],
                 ).n.roundU24AndTruncate(),
                 pairs,
             ),
@@ -153,14 +153,14 @@ fn parseLine(line: []const u8, state: usize) !Parser {
             const vstr = line[eq + 1 ..];
             // zig fmt: off
             const state_lut: [8]u8 = .{
-                @intFromEnum(Battery.State.unknown),
-                @intFromEnum(Battery.State.charging),    // vstr[0] == 'C'
-                @intFromEnum(Battery.State.discharging), // vstr[0] == 'D'
-                @intFromEnum(Battery.State.full),        // vstr[0] == 'F'
-                @intFromEnum(Battery.State.unknown),
-                @intFromEnum(Battery.State.unknown),
-                @intFromEnum(Battery.State.unknown),
-                @intFromEnum(Battery.State.notcharging), // vstr[0] == 'N'
+                @backingInt(Battery.State.unknown),
+                @backingInt(Battery.State.charging),    // vstr[0] == 'C'
+                @backingInt(Battery.State.discharging), // vstr[0] == 'D'
+                @backingInt(Battery.State.full),        // vstr[0] == 'F'
+                @backingInt(Battery.State.unknown),
+                @backingInt(Battery.State.unknown),
+                @backingInt(Battery.State.unknown),
+                @backingInt(Battery.State.notcharging), // vstr[0] == 'N'
             };
             // zig fmt: on
             const value: usize = switch (key) {
@@ -175,8 +175,8 @@ fn parseLine(line: []const u8, state: usize) !Parser {
             // structure to account for them and would get too complicated
             // even for this questionable exercise of SIMD uevent parsing.
             var advance: usize = 0;
-            if (state == @intFromEnum(key)) advance += 1;
-            if (state == @intFromEnum(Parser.Key.now)) advance += 1;
+            if (state == @backingInt(key)) advance += 1;
+            if (state == @backingInt(Parser.Key.now)) advance += 1;
             return .{
                 .key = key,
                 .value = value,
@@ -224,7 +224,7 @@ pub fn widget(
             error.Continue => continue,
             error.InvalidUevent => log.fatal(&.{ "BAT: ", @errorName(e) }),
         };
-        bat.fields[@intFromEnum(ret.key)] = ret.value;
+        bat.fields[@backingInt(ret.key)] = ret.value;
         state = ret.state;
     }
 
@@ -233,7 +233,7 @@ pub fn widget(
     for (parts) |*part| {
         part.str.writeBytes(writer, base);
 
-        switch (typ.optAs(typ.Opts.Bat, part.opt)) {
+        switch (part.opt.toEnum(typ.Opts.Bat)) {
             .state => {
                 if (Battery.State.WIDTH > writer.unusedCapacityLen()) {
                     @branchHint(.unlikely);
@@ -245,9 +245,9 @@ pub fn widget(
             },
             .fulldesign, .fullnow => {
                 const nu = if (part.flags.pct)
-                    unt.Percent(bat.fields[Battery.now], bat.fields[part.opt])
+                    unt.Percent(bat.fields[Battery.now], bat.fields[part.opt.u])
                 else
-                    unt.UnitSI(bat.fields[part.opt]);
+                    unt.UnitSI(bat.fields[part.opt.u]);
                 nu.write(writer, part.wopts);
             },
         }
