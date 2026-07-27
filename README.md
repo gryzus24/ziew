@@ -16,7 +16,7 @@
 The configuration file of *ziew* resides at `$XDG_CONFIG_HOME/ziew/config` (usually `~/.config/ziew/config`). See the example configuration file (config) and copy it to this location.
 
 ### Prebuilt binary
-You can [download the prebuilt binary](https://github.com/gryzus24/ziew/releases/download/v0.0.13/ziew) from the Releases page.
+You can [download the prebuilt binary](https://github.com/gryzus24/ziew/releases/download/v0.0.14/ziew) from the Releases page.
 
 ### Building from source
 To build it you will need `Zig 0.16.0`. Once inside the cloned repository run:
