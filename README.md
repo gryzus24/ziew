@@ -46,37 +46,35 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
 
     WIDGET INTERVAL [arg "ARGUMENT"] [format "FORMAT"]
 
-    WIDGET   - uppercase name of the widget,
-    INTERVAL - refresh interval in deciseconds (1/10 of a second),
-    ARGUMENT - optional widget specific argument enclosed in double quotes,
-    FORMAT   - optional widget specific format enclosed in double quotes.
+    * WIDGET   - uppercase name of the widget,
+    * INTERVAL - refresh interval in deciseconds (1/10 of a second),
+    * ARGUMENT - widget-specific argument,
+    * FORMAT   - widget-specific format.
 
-               Format, apart from plain text may contain options which tell the
-               widget what information to display. Options are enclosed in
-               squirrelly brackets and may contain specifiers that influence
-               the formatting of numeric data.
+    The widget-specific format, apart from plain text, may contain options
+    which tell the widget what information to display. Options are enclosed
+    in squirrelly brackets and may contain specifiers which influence the
+    formatting of numeric data:
 
-                OPTION[@FLAGS...]:[ALIGNMENT][WIDTH][.PRECISION]
+      OPTION[@FLAGS...]:[ALIGNMENT][WIDTH][.PRECISION]
 
-              * OPTION    - widget specific option name,
-              * FLAGS     - option specific flag changing what/how a value is
-                            displayed.
-                              * a - use an abbreviated notation, i.e. replace
-                                    the decimal point with the unit symbol,
-                              * d - difference since last refresh instead of
-                                    a total,
-                              * s - average difference per second as opposed
-                                    to "since last refresh" (implies @d flag),
-                              * q - do not display values equal to zero.
-              * ALIGNMENT - alignment and padding up to WIDTH.
-                              * < - left alignment,
-                              * > - right alignment (default if unspecified),
-                              * ^ - no alignment and no padding.
-              * WIDTH     - number of cells available for the integral part
-                            of a number (4 if unspecified),
-              * PRECISION - number from 0 to 3 inclusive - specifies digits
-                            of precision (adjusted automatically based on
-                            width if unspecified).
+      * OPTION    - widget-specific option name,
+      * FLAGS     - option-specific flag changing what/how a value is
+                    displayed.
+                      * a - use an abbreviated notation, i.e. replace the
+                            decimal point with the unit symbol,
+                      * d - difference since last refresh instead of a total,
+                      * s - average difference per second as opposed to
+                            "since last refresh" (implies @d flag),
+                      * q - do not display values equal to zero.
+      * ALIGNMENT - alignment and padding up to WIDTH.
+                      * < - left alignment,
+                      * > - right alignment (default if unspecified),
+                      * ^ - no alignment and no padding.
+      * WIDTH     - number of cells available for the integral part of a number
+                    (4 if unspecified),
+      * PRECISION - number from 0 to 3 inclusive, specifies digits of precision
+                    (adjusted automatically based on width if unspecified).
 
     Example
       CPU 25 format "CPU {%all:3} {blkbars} {forks@dq:^}"
@@ -96,7 +94,7 @@ The configuration file consists of *Widget* lines and *Color* lines. Lines consi
     FG|BG OPTION [THRESHOLD:COLOR...]
 
     FG|BG     - either FG for foreground color or BG for background color,
-    OPTION    - name of the option that can be compared (widget specific),
+    OPTION    - name of the option that can be compared (widget-specific),
     THRESHOLD - if OPTION's value is greater than or equal to THRESHOLD
                 widget's color (FG or BG) will be set to COLOR,
     COLOR     - hexadecimal RGB color value, or either left blank or "default"
