@@ -20,6 +20,7 @@ const w_time = @import("w_time.zig");
 
 const linux = std.os.linux;
 const mem = std.mem;
+const meta = std.meta;
 const process = std.process;
 const time = std.time;
 
@@ -33,40 +34,43 @@ var g_refresh_all = false;
 
 const I3BAR_HEADER = "{\"version\":1}\n[[]";
 
-const WRITE_FAIL_CHECK = true;
-const CONFIG_EMBEDDED = @import("config").is_embedding_config;
+const WidgetSeq = []const typ.Widget;
 
-const WidgetSeq = blk: {
-    if (CONFIG_EMBEDDED) {
-        const __widg = @embedFile("config.widgets");
-        const len = @divExact(__widg.len, @sizeOf(typ.Widget));
-        break :blk *const [len]typ.Widget;
-    }
-    break :blk []const typ.Widget;
-};
+fn Embed(comptime prefix: []const u8) type {
+    return struct {
+        const widgets_len = embedWidgets().len;
 
-fn embedWidgets() WidgetSeq {
-    const __widg = @embedFile("config.widgets");
-    const __widg_aligned: [__widg.len]u8 align(@alignOf(typ.Widget)) = __widg.*;
-    return @ptrCast(&__widg_aligned);
+        fn __embed(comptime suffix: []const u8, comptime RetType: type) RetType {
+            const a = @embedFile(prefix ++ "." ++ suffix);
+            const a_aligned: [a.len]u8 align(@alignOf(meta.Child(RetType))) = a.*;
+            return @ptrCast(&a_aligned);
+        }
+
+        fn embedWidgets() WidgetSeq {
+            return __embed("widgets", WidgetSeq);
+        }
+        fn embedData() []const u8 {
+            return __embed("data", []const u8);
+        }
+        fn embedIntervals() *const [widgets_len]typ.DeciSec {
+            return __embed("intervals", *const [widgets_len]typ.DeciSec);
+        }
+        fn embedWidgetIds() *const [widgets_len]typ.Widget.Id {
+            return __embed("widget_ids", *const [widgets_len]typ.Widget.Id);
+        }
+    };
 }
 
-fn embedIntervals() *const [embedWidgets().len]typ.DeciSec {
-    const __intr = @embedFile("config.intervals");
-    const __intr_aligned: [__intr.len]u8 align(@alignOf(typ.DeciSec)) = __intr.*;
-    return @ptrCast(&__intr_aligned);
-}
-
-fn embedWidgetIds() *const [embedWidgets().len]typ.Widget.Id {
-    const __wids = @embedFile("config.widget_ids");
-    const __wids_aligned: [__wids.len]u8 align(@alignOf(typ.Widget.Id)) = __wids.*;
-    return @ptrCast(&__wids_aligned);
-}
+const CONFIG: ?type =
+    if (@import("config").is_embedding_config)
+        Embed("config")
+    else
+        null;
 
 const __widgets_present: [typ.Widget.NR_WIDGETS]bool = blk: {
-    if (CONFIG_EMBEDDED) {
+    if (CONFIG) |ok| {
         var present: [typ.Widget.NR_WIDGETS]bool = @splat(false);
-        for (embedWidgetIds()) |wid|
+        for (ok.embedWidgetIds()) |wid|
             present[@intFromEnum(wid)] = true;
         break :blk present;
     }
@@ -188,6 +192,12 @@ fn fatalConfig(diag: cfg.ParseResult.Diagnostic) noreturn {
     unreachable;
 }
 
+fn defaultConfig(reg: *umem.Region) WidgetSeq {
+    const c = Embed("default-config");
+    _ = reg.writeStr(c.embedData(), .front) catch unreachable;
+    return c.embedWidgets();
+}
+
 fn loadConfig(reg: *umem.Region, config_path: ?[:0]const u8) WidgetSeq {
     const fd = blk: {
         var path: [:0]const u8 = undefined;
@@ -197,7 +207,7 @@ fn loadConfig(reg: *umem.Region, config_path: ?[:0]const u8) WidgetSeq {
             path, const path_sp = getConfigPath(reg) catch |e| switch (e) {
                 error.NoPath => {
                     log.warn(&.{"config: unknown path: using default config"});
-                    return cfg.defaultConfig(reg);
+                    return defaultConfig(reg);
                 },
                 error.NoSpaceLeft => log.fatal(&.{"config: path too long"}),
             };
@@ -210,7 +220,7 @@ fn loadConfig(reg: *umem.Region, config_path: ?[:0]const u8) WidgetSeq {
             error.FileNotFound, error.AccessDenied => {
                 log.warn(&.{ "config: ", @errorName(e), ": ", path });
                 log.warn(&.{"using default config"});
-                return cfg.defaultConfig(reg);
+                return defaultConfig(reg);
             },
             else => log.fatal(&.{ "config: open: ", @errorName(e) }),
         };
@@ -236,7 +246,7 @@ fn loadConfig(reg: *umem.Region, config_path: ?[:0]const u8) WidgetSeq {
 
     if (widgets.len == 0) {
         log.warn(&.{"config: no widgets loaded: using default config"});
-        return cfg.defaultConfig(reg);
+        return defaultConfig(reg);
     }
     return widgets;
 }
@@ -430,7 +440,7 @@ fn write(buf: []const u8) bool {
         if (ret >= 0) return false;
         if (ret == -ext.c.EINTR) {
             if (g_refresh_all) return true;
-        } else if (WRITE_FAIL_CHECK) {
+        } else if (true) {
             log.fatalSys(&.{"main: write: "}, ret);
         }
     }
@@ -454,16 +464,16 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
     try setupSignals();
 
     var reg: umem.Region = blk: {
-        if (CONFIG_EMBEDDED) {
+        if (CONFIG) |_| {
             var stack: [g_bss.len]u8 align(16) = undefined;
             break :blk .init(&stack, "main");
         }
         break :blk .init(&g_bss, "main");
     };
     const widgets = blk: {
-        if (CONFIG_EMBEDDED) {
-            _ = try reg.writeStr(@embedFile("config.data"), .front);
-            break :blk comptime embedWidgets();
+        if (CONFIG) |ok| {
+            _ = try reg.writeStr(ok.embedData(), .front);
+            break :blk ok.embedWidgets();
         }
         const args: Args = .read(argv[0..@intCast(argc)]);
         break :blk loadConfig(&reg, mem.sliceTo(args.config_path, 0));
@@ -471,8 +481,8 @@ pub fn main(argc: c_int, argv: [*]const [*:0]const u8) callconv(.c) c_int {
     const base = reg.head.ptr;
 
     const sleep_dsec = blk: {
-        if (CONFIG_EMBEDDED) {
-            break :blk comptime sleepInterval(@ptrCast(embedIntervals()));
+        if (CONFIG) |ok| {
+            break :blk comptime sleepInterval(@ptrCast(ok.embedIntervals()));
         }
         const sp = reg.save(typ.DeciSec, .front);
         var intervals = try reg.allocMany(typ.DeciSec, widgets.len, .front);

@@ -1,12 +1,13 @@
 #!/bin/bash
 
 usage() {
-    printf '%s: [debug|small|fast|safe|glibc|strip|native|omit-fp|
-             no-oom-check|config=<file>|trace|release|test...] \n' "$0"
+    printf '%s: [debug|small|fast|safe|glibc|strip|native|omit-fp|no-oom-check|
+             config=<file>|default-config=<file>|trace|release|test...] \n' "$0"
 }
 
 CACHE_DIR=/tmp/zig-ziew
 
+DEFAULT_CONFIG_SPECIFIED=
 TEST=
 declare -a FLAGS
 for arg in "$@"; do
@@ -21,6 +22,10 @@ for arg in "$@"; do
         omit-fp)      FLAGS+=(-Domit-frame-pointer) ;;
         no-oom-check) FLAGS+=(-Dmem-no-oom-check) ;;
         config=*)     FLAGS+=("-D$arg") ;;
+        default-config=*)
+                      FLAGS+=("-D${arg/\~/"$HOME"}")
+                      DEFAULT_CONFIG_SPECIFIED=1
+                      ;;
         trace)        FLAGS+=(-Dmem-trace-allocations) ;;
         release)      FLAGS+=(-Doptimize=ReleaseSmall -Dstrip) ;;
         test)         TEST=1 ;;
@@ -30,6 +35,10 @@ for arg in "$@"; do
             exit 1
     esac
 done
+
+if [[ -z "$DEFAULT_CONFIG_SPECIFIED" ]]; then
+    FLAGS+=(-Ddefault-config=config)
+fi
 
 if [[ -n "$TEST" ]]; then
     set -x

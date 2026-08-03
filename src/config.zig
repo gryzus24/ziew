@@ -499,41 +499,6 @@ fn parseLine(tmp: *umem.Region, line: []const u8) !ParseLineResult {
 
 // == public ==================================================================
 
-pub fn defaultConfig(reg: *umem.Region) []typ.Widget {
-    const config =
-        \\NET 20 arg eth0 format "{arg} {inet}"
-        \\FG state 0:a44 1:4a4
-        \\
-        \\NET 20 arg eth0 format "{rx_bytes@a:<} {rx_pkts@ad:2} ↓↑ {tx_pkts@ad:<2} {tx_bytes@a}"
-        \\FG 7a7
-        \\
-        \\DISK 200 arg / format "{arg} {available:^}{ino_used@dq}"
-        \\FG %used 80:aa0 90:a20
-        \\
-        \\CPU 20 format "FIC {forks@adq:2} {intr@adq:3} {ctxt@adq:3}"
-        \\FG forks 100:aa0
-        \\
-        \\CPU 20 format "{brlbars} {%all@a:3} {%sys@a:2} {blkgraph:3}"
-        \\FG %all 0:999 48: 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-        \\
-        \\MEM 20 format "MEM {%used@a} {free@a} [{cached@a}]"
-        \\FG %used 60:ff0 66:fc0 72:f90 78:f60 84:f30 90:f00
-        \\
-        \\MEM 20 format "{dirty@aq:.0}:{writeback@aq:.0}"
-        \\FG 999
-        \\
-        \\BAT 300 arg BAT0 format "BAT {%fulldesign:.2} {state}"
-        \\FG state 1:4a4 2:4a4
-        \\BG %fulldesign 0:a00 15:220 25:
-        \\
-        \\TIME 20 arg "%A %d.%m - %H:%M:%S" format "{time}.{3}"
-        \\FG aa8
-    ;
-    var buffer: uio.Buffer = .fixed(config);
-    var scratch: [128]u8 align(16) = undefined;
-    return (parse(reg, &buffer, &scratch) catch unreachable).ok;
-}
-
 pub const ParseResult = union(enum) {
     ok: []typ.Widget,
     err: Diagnostic,

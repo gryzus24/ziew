@@ -1,5 +1,33 @@
 const std = @import("std");
 
+fn run_dump_config(
+    b: *std.Build,
+    main_mod: *std.Build.Module,
+    dump_mod: *std.Build.Module,
+    path: []const u8,
+    linkage: std.builtin.LinkMode,
+    comptime prefix: []const u8,
+) void {
+    const dump_exe_run = b.addRunArtifact(
+        b.addExecutable(.{
+            .name = "dump-config",
+            .root_module = dump_mod,
+            .linkage = linkage,
+        }),
+    );
+    // User might update the config file without changing the
+    // -D{default-,}config option - prevent caching the run step.
+    dump_exe_run.has_side_effects = true;
+
+    dump_exe_run.addArg(path);
+    inline for (.{ "data", "widgets", "intervals", "widget_ids" }) |suffix| {
+        const name = prefix ++ "." ++ suffix;
+        main_mod.addAnonymousImport(name, .{
+            .root_source_file = dump_exe_run.addOutputFileArg(name),
+        });
+    }
+}
+
 pub fn build(b: *std.Build) !void {
     const glibc = b.option(bool, "glibc", "Link dynamically against glibc") orelse false;
     const strip = b.option(bool, "strip", "Strip debug symbols") orelse false;
@@ -18,6 +46,11 @@ pub fn build(b: *std.Build) !void {
         "config",
         "Embed a configuration file into the executable to reduce its size",
     ) orelse null;
+    const default_config_path = b.option(
+        []const u8,
+        "default-config",
+        "(REQUIRED) Default configuration file to embed",
+    ) orelse @panic("No default configuration specified");
 
     const triple, const linkage: std.builtin.LinkMode = blk: {
         if (glibc) {
@@ -79,30 +112,9 @@ pub fn build(b: *std.Build) !void {
     const main_mod, const dump_mod = modules;
 
     if (config_path) |ok| {
-        const dump_exe_run = b.addRunArtifact(
-            b.addExecutable(.{
-                .name = "dump-config",
-                .root_module = dump_mod,
-                .linkage = linkage,
-            }),
-        );
-        // User might update the config file without changing
-        // the -Dconfig option - prevent caching the run step.
-        dump_exe_run.has_side_effects = true;
-
-        dump_exe_run.addArg(ok);
-        main_mod.addAnonymousImport("config.data", .{
-            .root_source_file = dump_exe_run.addOutputFileArg("config.data"),
-        });
-        main_mod.addAnonymousImport("config.widgets", .{
-            .root_source_file = dump_exe_run.addOutputFileArg("config.widgets"),
-        });
-        main_mod.addAnonymousImport("config.intervals", .{
-            .root_source_file = dump_exe_run.addOutputFileArg("config.intervals"),
-        });
-        main_mod.addAnonymousImport("config.widget_ids", .{
-            .root_source_file = dump_exe_run.addOutputFileArg("config.widget_ids"),
-        });
+        run_dump_config(b, main_mod, dump_mod, ok, linkage, "config");
+    } else {
+        run_dump_config(b, main_mod, dump_mod, default_config_path, linkage, "default-config");
     }
 
     const main_exe = b.addExecutable(.{
