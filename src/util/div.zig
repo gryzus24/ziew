@@ -47,7 +47,7 @@ pub fn DivConstant(comptime d: u32, comptime dividend_max: comptime_int) MultShf
         var steps = prec + 1;
 
         while (true) : (steps -= 1) {
-            const denom: f64 = 1 << base << prec;
+            const denom: f64 = (1 << base) << prec;
             const ratio = mult / denom;
             const diff = target - ratio;
 

@@ -209,9 +209,9 @@ pub const LineReader = struct {
     pub const Termination = AbnormalTermination || error{EOF};
 
     pub fn init(b: *Buffer) @This() {
-        const eof = b.read(b, b.buf.len) catch |e| switch (e) {
+        const eof = (b.read(b, b.buf.len) catch |e| switch (e) {
             error.ReadError => 0,
-        } == 0;
+        }) == 0;
         return .{
             .nit = .init(b.buffered()),
             .buffer = b,

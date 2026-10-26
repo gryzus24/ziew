@@ -9,9 +9,9 @@ const ustr = @import("util/str.zig");
 
 // Sounds ominous...
 inline fn HUMAN_UNIT(f: F5608, comptime steps: [4]NumUnit.Unit) NumUnit {
-    const K8 = 8192 << F5608.FRAC_SHIFT;
-    const M8 = 8192 * 1024 << F5608.FRAC_SHIFT;
-    const G8 = 8192 * 1024 * 1024 << F5608.FRAC_SHIFT;
+    const K8 = (8 << 10) << F5608.FRAC_SHIFT;
+    const M8 = (8 << 20) << F5608.FRAC_SHIFT;
+    const G8 = (8 << 30) << F5608.FRAC_SHIFT;
 
     const shift =
         @as(u6, @intFromBool(f.u >= K8)) * 10 +
@@ -19,10 +19,10 @@ inline fn HUMAN_UNIT(f: F5608, comptime steps: [4]NumUnit.Unit) NumUnit {
         @as(u6, @intFromBool(f.u >= G8)) * 10;
 
     const unit =
-        @as(u64, @backingInt(steps[0])) |
-        @as(u64, @backingInt(steps[1])) << 10 |
-        @as(u64, @backingInt(steps[2])) << 20 |
-        @as(u64, @backingInt(steps[3])) << 30;
+        (@as(u64, @backingInt(steps[0]))) |
+        (@as(u64, @backingInt(steps[1])) << 10) |
+        (@as(u64, @backingInt(steps[2])) << 20) |
+        (@as(u64, @backingInt(steps[3])) << 30);
 
     return .{
         .n = .{ .u = f.u >> shift },
