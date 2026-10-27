@@ -6,6 +6,7 @@ usage() {
 }
 
 CACHE_DIR=/tmp/zig-ziew
+ZIG="${ZIG:-zig}"
 
 DEFAULT_CONFIG_SPECIFIED=
 TEST=
@@ -42,10 +43,10 @@ fi
 
 if [[ -n "$TEST" ]]; then
     set -x
-    zig build --cache-dir "$CACHE_DIR" "${FLAGS[@]}" test
+    "$ZIG" build --cache-dir "$CACHE_DIR" "${FLAGS[@]}" test
     set +x
 else
-    zig build \
+    "$ZIG" build \
         --summary none \
         --error-style minimal \
         --cache-dir "$CACHE_DIR" \
